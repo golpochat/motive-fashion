@@ -31,11 +31,41 @@ type ProductSeed = {
   openingQty: number;
 };
 
+function fabricFor(p: ProductSeed) {
+  if (p.slug.includes('satin')) return 'satin';
+  if (p.slug.includes('jersey')) return 'jersey';
+  if (p.slug.includes('chiffon')) return 'chiffon';
+  if (p.slug.includes('linen')) return 'linen';
+  if (p.slug.includes('wool')) return 'wool-blend';
+  if (p.slug.includes('silk')) return 'silk-blend';
+  if (p.slug.includes('bamboo')) return 'bamboo';
+  if (p.slug.includes('cotton') || p.slug.includes('undercap')) return 'cotton';
+  if (p.category === 'accessories') return 'metal';
+  if (p.category === 'niqabs') return 'crepe';
+  if (p.category === 'abayas' || p.category === 'jilbabs' || p.category === 'khimars') return 'nida crepe';
+  return 'crepe';
+}
+
+function weightGramsFor(category: string) {
+  const weights: Record<string, number> = {
+    hijabs: 90,
+    abayas: 520,
+    dresses: 420,
+    jilbabs: 580,
+    niqabs: 45,
+    khimars: 260,
+    'prayer-sets': 320,
+    undercaps: 35,
+    accessories: 25,
+  };
+  return weights[category] ?? 200;
+}
+
 const PRODUCTS: ProductSeed[] = [
   {
     slug: 'everyday-chiffon-hijab',
     title: 'Everyday chiffon hijab',
-    description: 'Light chiffon hijab with a soft drape. Everyday coverage for Dublin weather.',
+    description: 'Light chiffon with a soft drape. Everyday coverage for Dublin weather, in four quiet colours.',
     category: 'hijabs',
     occasion: 'daily',
     coverage: 'full',
@@ -47,9 +77,37 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 40,
   },
   {
+    slug: 'satin-square-hijab',
+    title: 'Satin square hijab',
+    description: 'A 90cm satin square with a quiet sheen. Pins cleanly for work and jummah.',
+    category: 'hijabs',
+    occasion: 'eid',
+    coverage: 'full',
+    origin: 'TR',
+    cost: 520,
+    price: 2800,
+    sizes: ['OS'],
+    colors: ['Navy', 'Champagne', 'Black'],
+    openingQty: 24,
+  },
+  {
+    slug: 'jersey-instant-hijab',
+    title: 'Jersey instant hijab',
+    description: 'Stretch jersey pull-on hijab with a sewn undercap. For school runs and travel days.',
+    category: 'hijabs',
+    occasion: 'daily',
+    coverage: 'full',
+    origin: 'TR',
+    cost: 400,
+    price: 2200,
+    sizes: ['OS'],
+    colors: ['Sage', 'Black', 'Charcoal'],
+    openingQty: 30,
+  },
+  {
     slug: 'premium-crepe-abaya',
     title: 'Premium crepe abaya',
-    description: 'Nida crepe abaya with a clean front and modest sleeve. Photography-first drape.',
+    description: 'Nida crepe abaya with a clean front and modest sleeve. Photographed for drape.',
     category: 'abayas',
     occasion: 'eid',
     coverage: 'full',
@@ -63,7 +121,7 @@ const PRODUCTS: ProductSeed[] = [
   {
     slug: 'luxury-silk-abaya',
     title: 'Luxury silk-blend abaya',
-    description: 'Limited luxury abaya with a quiet sheen. Eid and occasion wear.',
+    description: 'Limited silk-blend abaya with a quiet sheen. Eid and occasion wear.',
     category: 'abayas',
     occasion: 'eid',
     coverage: 'full',
@@ -73,6 +131,20 @@ const PRODUCTS: ProductSeed[] = [
     sizes: ['S', 'M', 'L'],
     colors: ['Black', 'Deep emerald'],
     openingQty: 4,
+  },
+  {
+    slug: 'everyday-nida-abaya',
+    title: 'Everyday nida abaya',
+    description: 'A tailored black nida abaya for work and collection days. Lightweight, not see-through.',
+    category: 'abayas',
+    occasion: 'daily',
+    coverage: 'full',
+    origin: 'SA',
+    cost: 2100,
+    price: 7900,
+    sizes: ['S', 'M', 'L', 'XL'],
+    colors: ['Black'],
+    openingQty: 10,
   },
   {
     slug: 'summer-linen-dress',
@@ -89,9 +161,23 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 6,
   },
   {
+    slug: 'winter-wool-modest-dress',
+    title: 'Winter wool modest dress',
+    description: 'Wool-blend modest dress with long sleeves. Cut for Dublin winters over a base layer.',
+    category: 'dresses',
+    occasion: 'winter',
+    coverage: 'full',
+    origin: 'TR',
+    cost: 2600,
+    price: 9500,
+    sizes: ['S', 'M', 'L'],
+    colors: ['Olive', 'Charcoal'],
+    openingQty: 6,
+  },
+  {
     slug: 'french-jilbab',
     title: 'French jilbab',
-    description: 'One-piece jilbab with integrated khimar. Prayer-ready.',
+    description: 'One-piece jilbab with integrated khimar. Prayer-ready and easy to travel in.',
     category: 'jilbabs',
     occasion: 'prayer',
     coverage: 'full',
@@ -104,9 +190,24 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 8,
   },
   {
+    slug: 'two-piece-jilbab',
+    title: 'Two-piece jilbab',
+    description: 'Khimar and skirt overlay in matte nida. Wear together or as separates.',
+    category: 'jilbabs',
+    occasion: 'daily',
+    coverage: 'full',
+    origin: 'PK',
+    prayerReady: true,
+    cost: 2400,
+    price: 8900,
+    sizes: ['S', 'M', 'L'],
+    colors: ['Taupe', 'Black'],
+    openingQty: 6,
+  },
+  {
     slug: 'everyday-niqab',
     title: 'Everyday niqab',
-    description: 'Two-layer niqab in breathable fabric.',
+    description: 'Two-layer niqab in breathable fabric with a soft nose bridge.',
     category: 'niqabs',
     occasion: 'daily',
     coverage: 'face',
@@ -118,9 +219,23 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 25,
   },
   {
+    slug: 'half-niqab',
+    title: 'Half niqab',
+    description: 'Single-layer half niqab that sits under the eyes. Ties at the crown.',
+    category: 'niqabs',
+    occasion: 'daily',
+    coverage: 'face',
+    origin: 'SA',
+    cost: 280,
+    price: 1400,
+    sizes: ['OS'],
+    colors: ['Black'],
+    openingQty: 20,
+  },
+  {
     slug: 'khimar-shoulder',
     title: 'Shoulder khimar',
-    description: 'Knee-length khimar with a snug cap.',
+    description: 'Shoulder-length khimar with a snug cap. Easy over an abaya.',
     category: 'khimars',
     occasion: 'prayer',
     coverage: 'full',
@@ -133,9 +248,24 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 10,
   },
   {
+    slug: 'long-khimar',
+    title: 'Long khimar',
+    description: 'Knee-length khimar in opaque crepe. Prayer-ready coverage without extra pins.',
+    category: 'khimars',
+    occasion: 'prayer',
+    coverage: 'full',
+    origin: 'ID',
+    prayerReady: true,
+    cost: 1200,
+    price: 5500,
+    sizes: ['OS'],
+    colors: ['Black', 'Charcoal'],
+    openingQty: 8,
+  },
+  {
     slug: 'prayer-set',
     title: 'Travel prayer set',
-    description: 'Lightweight prayer dress and matching mat pouch.',
+    description: 'Lightweight prayer dress with a matching mat pouch. Packs into a tote.',
     category: 'prayer-sets',
     occasion: 'prayer',
     coverage: 'full',
@@ -148,9 +278,24 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 10,
   },
   {
+    slug: 'ramadan-prayer-dress',
+    title: 'Ramadan prayer dress',
+    description: 'Soft prayer dress cut for sujood. A Ramadan staple in blush and white.',
+    category: 'prayer-sets',
+    occasion: 'prayer',
+    coverage: 'full',
+    origin: 'ID',
+    prayerReady: true,
+    cost: 1300,
+    price: 5900,
+    sizes: ['OS'],
+    colors: ['Blush', 'White'],
+    openingQty: 8,
+  },
+  {
     slug: 'cotton-undercap',
     title: 'Cotton undercap',
-    description: 'Stay-put cotton undercap for hijab days.',
+    description: 'Stay-put cotton undercap for hijab days. Three everyday shades.',
     category: 'undercaps',
     occasion: 'daily',
     origin: 'CN',
@@ -161,9 +306,22 @@ const PRODUCTS: ProductSeed[] = [
     openingQty: 50,
   },
   {
+    slug: 'bamboo-undercap',
+    title: 'Bamboo undercap',
+    description: 'Breathable bamboo-blend undercap that sits smooth under chiffon.',
+    category: 'undercaps',
+    occasion: 'daily',
+    origin: 'CN',
+    cost: 120,
+    price: 900,
+    sizes: ['OS'],
+    colors: ['Ivory', 'Charcoal'],
+    openingQty: 30,
+  },
+  {
     slug: 'hijab-magnets',
     title: 'Hijab magnets (pair)',
-    description: 'Strong coated magnets. No pin holes.',
+    description: 'Strong coated magnets. No pin holes in silk or chiffon.',
     category: 'accessories',
     occasion: 'daily',
     origin: 'CN',
@@ -172,6 +330,19 @@ const PRODUCTS: ProductSeed[] = [
     sizes: ['OS'],
     colors: ['Gold', 'Silver'],
     openingQty: 40,
+  },
+  {
+    slug: 'pearl-hijab-pins',
+    title: 'Pearl hijab pins',
+    description: 'A set of six small pearl pins with gold findings. For square hijabs.',
+    category: 'accessories',
+    occasion: 'eid',
+    origin: 'CN',
+    cost: 90,
+    price: 1200,
+    sizes: ['OS'],
+    colors: ['Pearl'],
+    openingQty: 20,
   },
 ];
 
@@ -333,10 +504,14 @@ async function main() {
   await prisma.refreshToken.deleteMany();
   await prisma.pushToken.deleteMany();
   await prisma.address.deleteMany();
+  await prisma.userMembership.deleteMany();
+  await prisma.rolePermission.deleteMany();
+  await prisma.role.deleteMany();
+  await prisma.permission.deleteMany();
   await prisma.user.deleteMany();
 
   const passwordHash = await bcrypt.hash('MotiveAdmin!2026', 12);
-  await prisma.user.create({
+  const adminUser = await prisma.user.create({
     data: {
       email: 'hello@motivefashion.ie',
       name: 'Motive Admin',
@@ -345,6 +520,107 @@ async function main() {
       gdprConsentAt: new Date(),
     },
   });
+
+  for (const row of [
+    { key: '*', name: 'All permissions', group: 'System' },
+    { key: 'dashboard.super', name: 'Open super-admin console', group: 'Dashboards' },
+    { key: 'dashboard.admin', name: 'Open admin console', group: 'Dashboards' },
+    { key: 'dashboard.staff', name: 'Open staff console', group: 'Dashboards' },
+    { key: 'dashboard.customer', name: 'Open customer account', group: 'Dashboards' },
+    { key: 'rbac.roles.write', name: 'Create and edit roles', group: 'Access' },
+    { key: 'rbac.users.assign', name: 'Assign roles to users', group: 'Access' },
+    { key: 'analytics.read', name: 'View analytics', group: 'Commerce' },
+    { key: 'catalog.read', name: 'View products', group: 'Commerce' },
+    { key: 'catalog.write', name: 'Create and edit products', group: 'Commerce' },
+    { key: 'inventory.read', name: 'View inventory', group: 'Shop floor' },
+    { key: 'inventory.adjust', name: 'Adjust and transfer stock', group: 'Shop floor' },
+    { key: 'orders.read', name: 'View orders', group: 'Shop floor' },
+    { key: 'orders.pack', name: 'Change order status', group: 'Shop floor' },
+    { key: 'orders.refund', name: 'Issue refunds', group: 'Commerce' },
+    { key: 'customers.read', name: 'View customers', group: 'Commerce' },
+    { key: 'procurement.write', name: 'Suppliers and purchase orders', group: 'Commerce' },
+    { key: 'locations.read', name: 'View locations', group: 'Shop floor' },
+    { key: 'pos.sale', name: 'Take POS sales', group: 'Shop floor' },
+    { key: 'marketing.write', name: 'Marketing calendar', group: 'Commerce' },
+    { key: 'whatsapp.broadcast', name: 'WhatsApp broadcast', group: 'Commerce' },
+  ]) {
+    await prisma.permission.upsert({ where: { key: row.key }, create: row, update: { name: row.name, group: row.group } });
+  }
+  const perms = await prisma.permission.findMany();
+  const byKey = Object.fromEntries(perms.map((p) => [p.key, p.id]));
+  const roleMap: Record<string, string[]> = {
+    'super-admin': ['*'],
+    admin: [
+      'dashboard.admin',
+      'dashboard.staff',
+      'analytics.read',
+      'catalog.read',
+      'catalog.write',
+      'inventory.read',
+      'inventory.adjust',
+      'orders.read',
+      'orders.pack',
+      'orders.refund',
+      'customers.read',
+      'procurement.write',
+      'locations.read',
+      'pos.sale',
+      'marketing.write',
+      'whatsapp.broadcast',
+    ],
+    staff: [
+      'dashboard.staff',
+      'inventory.read',
+      'inventory.adjust',
+      'orders.read',
+      'orders.pack',
+      'locations.read',
+      'pos.sale',
+    ],
+    customer: ['dashboard.customer'],
+  };
+  const roleIds: Record<string, string> = {};
+  for (const [slug, keys] of Object.entries(roleMap)) {
+    const name = slug
+      .split('-')
+      .map((p) => p[0]!.toUpperCase() + p.slice(1))
+      .join(' ');
+    const role = await prisma.role.upsert({
+      where: { slug },
+      create: { slug, name, system: true, description: `System ${name} role` },
+      update: { system: true },
+    });
+    roleIds[slug] = role.id;
+    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+    await prisma.rolePermission.createMany({
+      data: keys.filter((k) => byKey[k]).map((k) => ({ roleId: role.id, permissionId: byKey[k]! })),
+    });
+  }
+  await prisma.userMembership.create({ data: { userId: adminUser.id, roleId: roleIds['super-admin']! } });
+
+  const staffHash = await bcrypt.hash('MotiveStaff!2026', 12);
+  const staffUser = await prisma.user.create({
+    data: {
+      email: 'floor@motivefashion.ie',
+      name: 'Shop Floor',
+      role: 'STAFF',
+      passwordHash: staffHash,
+      gdprConsentAt: new Date(),
+    },
+  });
+  await prisma.userMembership.create({ data: { userId: staffUser.id, roleId: roleIds.staff! } });
+
+  const customerHash = await bcrypt.hash('MotiveUser!2026', 12);
+  const customerUser = await prisma.user.create({
+    data: {
+      email: 'guest@motivefashion.ie',
+      name: 'Guest Customer',
+      role: 'CUSTOMER',
+      passwordHash: customerHash,
+      gdprConsentAt: new Date(),
+    },
+  });
+  await prisma.userMembership.create({ data: { userId: customerUser.id, roleId: roleIds.customer! } });
 
   const warehouse = await prisma.location.create({
     data: { code: 'warehouse', name: 'Dublin warehouse', type: LocationType.WAREHOUSE, address: 'Dublin' },
@@ -371,7 +647,7 @@ async function main() {
   const eid = await prisma.collection.create({
     data: { slug: 'eid', name: 'Eid', season: CampaignSeason.EID, description: 'Occasion abayas and sets.' },
   });
-  await prisma.collection.create({
+  const winter = await prisma.collection.create({
     data: { slug: 'winter', name: 'Winter', season: CampaignSeason.WINTER },
   });
 
@@ -390,22 +666,28 @@ async function main() {
         care: 'Gentle cold wash. Hang dry.',
         images: {
           create: {
-            url: `https://placehold.co/900x1200/1c1917/f5f0e8?text=${encodeURIComponent(p.title)}`,
+            url: `/products/${p.slug}.jpg`,
             alt: p.title,
           },
         },
       },
     });
-    if (p.occasion === 'eid' || p.slug.includes('abaya')) {
+    if (p.occasion === 'eid' || p.category === 'abayas') {
       await prisma.productCollection.create({ data: { productId: product.id, collectionId: eid.id } });
     }
-    if (p.prayerReady) {
+    if (p.prayerReady || p.occasion === 'prayer') {
       await prisma.productCollection.create({ data: { productId: product.id, collectionId: ramadan.id } });
+    }
+    if (p.occasion === 'winter') {
+      await prisma.productCollection.create({ data: { productId: product.id, collectionId: winter.id } });
     }
     const ids: string[] = [];
     for (const size of p.sizes) {
       for (const color of p.colors) {
-        const sku = `${p.slug.slice(0, 8)}-${size}-${color.slice(0, 3)}`.toUpperCase().replace(/\s/g, '');
+        const sku = `MF-${p.slug}-${size}-${color}`
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
         const variant = await prisma.productVariant.create({
           data: {
             productId: product.id,
@@ -414,7 +696,8 @@ async function main() {
             color,
             costCents: p.cost,
             priceCents: p.price,
-            fabric: 'crepe',
+            fabric: fabricFor(p),
+            weightGrams: weightGramsFor(p.category),
           },
         });
         await prisma.inventoryLevel.create({
@@ -437,6 +720,21 @@ async function main() {
       data: { ...s, example: true, notes: 'Seed example contact — verify before outreach.' },
     });
     if (!suppliersByCountry.has(s.country)) suppliersByCountry.set(s.country, row.id);
+  }
+
+  for (const p of PRODUCTS) {
+    const supplierId = suppliersByCountry.get(p.origin ?? 'TR');
+    const product = await prisma.product.findUnique({ where: { slug: p.slug } });
+    if (!supplierId || !product) continue;
+    await prisma.supplierProduct.create({
+      data: {
+        supplierId,
+        productId: product.id,
+        unitCostCents: p.cost,
+        moq: p.category === 'hijabs' || p.category === 'undercaps' ? 50 : p.category === 'accessories' ? 100 : 10,
+        leadDays: p.origin === 'CN' ? 35 : p.origin === 'TR' ? 18 : 21,
+      },
+    });
   }
 
   for (const po of YEAR1_POS) {

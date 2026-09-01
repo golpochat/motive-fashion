@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
@@ -10,9 +10,9 @@ export class SquarePosAdapter implements PosAdapter {
   name = 'square';
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly stock: StockService,
-    private readonly orders: OrdersService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StockService) private readonly stock: StockService,
+    @Inject(OrdersService) private readonly orders: OrdersService,
   ) {}
 
   async onSale(input: PosSaleInput) {

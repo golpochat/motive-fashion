@@ -13,13 +13,18 @@ import { ProcurementModule } from './modules/procurement/procurement.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { PosModule } from './modules/pos/pos.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
+import { MailModule } from './common/mail.module';
+import { JobsModule } from './jobs/jobs.module';
+import { RbacModule } from './modules/rbac/rbac.module';
 import { HealthController } from './health.controller';
+import { OpenApiController } from './openapi.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', '../../.env'] }),
     PrismaModule,
     AuthModule,
+    RbacModule,
     CatalogModule,
     InventoryModule,
     CartModule,
@@ -31,7 +36,9 @@ import { HealthController } from './health.controller';
     WhatsappModule,
     PosModule,
     MarketingModule,
+    JobsModule,
+    MailModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, OpenApiController],
 })
 export class AppModule {}

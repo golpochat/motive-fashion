@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { SalesChannel, WhatsappSessionState } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
+import { isProduction } from '../../common/security-config';
+import { metaSignatureValid } from '../../common/webhook-signature';
 
 interface WaMessage {
   from: string;
@@ -14,17 +16,34 @@ interface WaMessage {
 @Injectable()
 export class WhatsappService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly carts: CartService,
-    private readonly orders: OrdersService,
-    private readonly payments: PaymentsService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(CartService) private readonly carts: CartService,
+    @Inject(OrdersService) private readonly orders: OrdersService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
 
   verify(mode: string, token: string, challenge: string) {
-    if (mode === 'subscribe' && token === (process.env.WHATSAPP_VERIFY_TOKEN ?? 'change-me')) {
+    const expected = process.env.WHATSAPP_VERIFY_TOKEN;
+    if (!expected || expected === 'change-me') {
+      throw new ForbiddenException('WhatsApp verify token is not configured');
+    }
+    if (mode === 'subscribe' && token === expected) {
       return challenge;
     }
-    return null;
+    throw new ForbiddenException();
+  }
+
+  assertInboundSignature(rawBody: Buffer, header: string | undefined) {
+    const secret = process.env.WHATSAPP_APP_SECRET;
+    if (!secret) {
+      if (isProduction()) {
+        throw new UnauthorizedException('WhatsApp app secret is not configured');
+      }
+      return;
+    }
+    if (!metaSignatureValid(rawBody, header, secret)) {
+      throw new UnauthorizedException('Invalid WhatsApp signature');
+    }
   }
 
   async inbound(payload: { entry?: { changes?: { value?: { messages?: WaMessage[] } }[] }[] }) {
@@ -81,8 +100,9 @@ export class WhatsappService {
         cartId: session.cartId ?? undefined,
         sessionKey: `wa:${msg.from}`,
         channel: SalesChannel.WHATSAPP,
+        internal: true,
       });
-      const updated = await this.carts.add(cart.id, variant.id, 1, SalesChannel.WHATSAPP);
+      const updated = await this.carts.add(cart.id, variant.id, 1, SalesChannel.WHATSAPP, { internal: true });
       await this.prisma.whatsappSession.update({
         where: { id: session.id },
         data: { cartId: updated.id, state: WhatsappSessionState.CART },
@@ -96,7 +116,7 @@ export class WhatsappService {
 
     if (text === 'cart') {
       const cart = session.cartId
-        ? await this.carts.getOrCreate({ cartId: session.cartId, channel: SalesChannel.WHATSAPP })
+        ? await this.carts.getOrCreate({ cartId: session.cartId, channel: SalesChannel.WHATSAPP, internal: true })
         : null;
       if (!cart?.items.length) return this.reply(session.id, msg.from, 'Your cart is empty. Reply MENU.');
       const lines = cart.items.map((i) => `• ${i.title} × ${i.quantity}`).join('\n');
@@ -105,7 +125,7 @@ export class WhatsappService {
 
     if (text === 'checkout') {
       if (!session.cartId) return this.reply(session.id, msg.from, 'Cart is empty. Reply MENU.');
-      const cart = await this.carts.getOrCreate({ cartId: session.cartId });
+      const cart = await this.carts.getOrCreate({ cartId: session.cartId, internal: true });
       const user = await this.prisma.user.findUnique({ where: { phone: msg.from } });
       const order = await this.orders.checkout(
         {
@@ -138,22 +158,7 @@ export class WhatsappService {
     });
     await this.prisma.outboundMessage.create({ data: { sessionId: session.id, template, body } });
     if (process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
-      await fetch(
-        `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to,
-            type: 'text',
-            text: { body },
-          }),
-        },
-      );
+      await this.sendText(to, body);
     }
     return { queued: true };
   }
@@ -181,8 +186,28 @@ export class WhatsappService {
     await this.prisma.whatsappSession.update({ where: { id }, data: { state } });
   }
 
+  private async sendText(to: string, body: string) {
+    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    if (!token || !phoneId) return;
+    await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body },
+      }),
+    });
+  }
+
   private async reply(sessionId: string, to: string, body: string) {
     await this.prisma.outboundMessage.create({ data: { sessionId, body } });
+    await this.sendText(to, body);
     return { to, body };
   }
 }

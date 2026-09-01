@@ -10,13 +10,16 @@ export default async function OrderPage({
 }) {
   const { id } = await params;
   const { token } = await searchParams;
+  if (!token) {
+    return <p>This order link is missing its tracking token.</p>;
+  }
   const order = await api<{
     id: string;
     status: string;
     totalCents: number;
     fulfillment: string;
     items: { title: string; quantity: number }[];
-  }>(`/orders/${id}/track${token ? `?token=${token}` : ''}`);
+  }>(`/orders/${id}/track?token=${encodeURIComponent(token)}`);
   return (
     <div>
       <h1 className="font-serif text-4xl">Order {order.id.slice(0, 8)}</h1>

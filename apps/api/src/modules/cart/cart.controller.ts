@@ -1,13 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
 import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
 import { CartService } from './cart.service';
-import { cartAddSchema } from '@motive-fashion/validation';
+import { cartAddSchema, cartQtySchema } from '@motive-fashion/validation';
 
 @Controller('cart')
 @UseGuards(OptionalJwtGuard)
 export class CartController {
-  constructor(private readonly carts: CartService) {}
+  constructor(@Inject(CartService) private readonly carts: CartService) {}
 
   @Get()
   get(
@@ -24,18 +24,41 @@ export class CartController {
   }
 
   @Post(':id/items')
-  add(@Param('id') id: string, @Body() body: unknown) {
+  add(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Query('sessionKey') sessionKey?: string,
+    @CurrentUser() user?: { sub: string },
+  ) {
     const dto = cartAddSchema.parse(body);
-    return this.carts.add(id, dto.variantId, dto.quantity);
+    return this.carts.add(id, dto.variantId, dto.quantity, SalesChannel.WEB, {
+      userId: user?.sub,
+      sessionKey,
+    });
   }
 
   @Post(':id/items/:itemId')
-  setQty(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: { quantity: number }) {
-    return this.carts.setQty(id, itemId, body.quantity);
+  setQty(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() body: unknown,
+    @Query('sessionKey') sessionKey?: string,
+    @CurrentUser() user?: { sub: string },
+  ) {
+    const dto = cartQtySchema.parse(body);
+    return this.carts.setQty(id, itemId, dto.quantity, SalesChannel.WEB, {
+      userId: user?.sub,
+      sessionKey,
+    });
   }
 
   @Delete(':id/items/:itemId')
-  remove(@Param('id') id: string, @Param('itemId') itemId: string) {
-    return this.carts.remove(id, itemId);
+  remove(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Query('sessionKey') sessionKey?: string,
+    @CurrentUser() user?: { sub: string },
+  ) {
+    return this.carts.remove(id, itemId, SalesChannel.WEB, { userId: user?.sub, sessionKey });
   }
 }

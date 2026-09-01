@@ -1,21 +1,23 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { OrderStatus, ReturnStatus, UserRole } from '@prisma/client';
-import { CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../../common/auth';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { OrderStatus, UserRole } from '@prisma/client';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { productCreateSchema } from '@motive-fashion/validation';
+import { productCreateSchema, productPatchSchema, variantCreateSchema, promoCreateSchema, orderStatusSchema, refundSchema, resolveReturnSchema } from '@motive-fashion/validation';
 import { slugify } from '@motive-fashion/utils';
+import { customerPublicSelect } from '../../common/user-select';
+import { writeAudit } from '../../common/audit';
 
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.STAFF)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AdminController {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly orders: OrdersService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(OrdersService) private readonly orders: OrdersService,
   ) {}
 
   @Get('analytics')
+  @RequirePermissions('analytics.read')
   async analytics() {
     const [orderAgg, orders, low] = await Promise.all([
       this.prisma.order.aggregate({
@@ -48,6 +50,7 @@ export class AdminController {
   }
 
   @Get('products')
+  @RequirePermissions('catalog.read')
   products() {
     return this.prisma.product.findMany({
       include: { category: true, variants: true, images: true },
@@ -56,39 +59,54 @@ export class AdminController {
   }
 
   @Post('products')
+  @RequirePermissions('catalog.write')
   createProduct(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = productCreateSchema.parse(body);
     return this.prisma.product.create({
       data: { ...dto, slug: dto.slug || slugify(dto.title) },
     }).then(async (product) => {
-      await this.prisma.auditLog.create({
-        data: { actorId: user.sub, action: 'product.create', entity: 'Product', entityId: product.id },
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'product.create',
+        entity: 'Product',
+        entityId: product.id,
       });
       return product;
     });
   }
 
   @Patch('products/:id')
-  updateProduct(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.prisma.product.update({ where: { id }, data: body });
+  @RequirePermissions('catalog.write')
+  async updateProduct(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = productPatchSchema.parse(body);
+    const product = await this.prisma.product.update({ where: { id }, data: dto });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'product.update',
+      entity: 'Product',
+      entityId: id,
+      meta: dto,
+    });
+    return product;
   }
 
   @Post('products/:id/variants')
-  addVariant(
-    @Param('id') productId: string,
-    @Body()
-    body: {
-      sku: string;
-      size: string;
-      color: string;
-      costCents: number;
-      priceCents: number;
-    },
-  ) {
-    return this.prisma.productVariant.create({ data: { ...body, productId } });
+  @RequirePermissions('catalog.write')
+  async addVariant(@Param('id') productId: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = variantCreateSchema.parse(body);
+    const variant = await this.prisma.productVariant.create({ data: { ...dto, productId } });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'product.variant.create',
+      entity: 'ProductVariant',
+      entityId: variant.id,
+      meta: { productId, sku: dto.sku },
+    });
+    return variant;
   }
 
   @Get('inventory')
+  @RequirePermissions('inventory.read')
   inventory() {
     return this.prisma.inventoryLevel.findMany({
       include: { variant: { include: { product: true } }, location: true },
@@ -96,67 +114,75 @@ export class AdminController {
   }
 
   @Get('orders')
+  @RequirePermissions('orders.read')
   orderList(@Query('status') status?: OrderStatus) {
     return this.orders.listAdmin(status);
   }
 
   @Post('orders/:id/status')
-  setStatus(
-    @Param('id') id: string,
-    @Body() body: { status: OrderStatus },
-    @CurrentUser() user: { sub: string },
-  ) {
-    return this.orders.transition(id, body.status, user.sub);
+  @RequirePermissions('orders.pack')
+  setStatus(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = orderStatusSchema.parse(body);
+    return this.orders.transition(id, dto.status, user.sub);
   }
 
   @Post('orders/:id/refund')
-  refund(
-    @Param('id') id: string,
-    @Body() body: { amountCents: number; reason: string },
-    @CurrentUser() user: { sub: string },
-  ) {
-    return this.orders.refund(id, body.amountCents, body.reason, user.sub);
+  @RequirePermissions('orders.refund')
+  refund(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = refundSchema.parse(body);
+    return this.orders.refund(id, dto.amountCents, dto.reason, user.sub);
   }
 
   @Get('customers')
+  @RequirePermissions('customers.read')
   customers() {
     return this.prisma.user.findMany({
       where: { role: UserRole.CUSTOMER, deletedAt: null },
+      select: customerPublicSelect,
       take: 200,
       orderBy: { createdAt: 'desc' },
     });
   }
 
   @Get('locations')
+  @RequirePermissions('locations.read')
   locations() {
     return this.prisma.location.findMany();
   }
 
   @Get('returns')
+  @RequirePermissions('orders.read')
   returns() {
     return this.prisma.return.findMany({ include: { items: true, order: true }, orderBy: { createdAt: 'desc' } });
   }
 
   @Post('returns/:id')
-  resolveReturn(
-    @Param('id') id: string,
-    @Body() body: { status: ReturnStatus },
-    @CurrentUser() user: { sub: string },
-  ) {
-    return this.orders.resolveReturn(id, body.status, user.sub);
+  @RequirePermissions('orders.pack')
+  resolveReturn(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = resolveReturnSchema.parse(body);
+    return this.orders.resolveReturn(id, dto.status, user.sub);
   }
 
   @Get('promo-codes')
+  @RequirePermissions('marketing.write')
   promos() {
     return this.prisma.promoCode.findMany();
   }
 
   @Post('promo-codes')
-  createPromo(
-    @Body() body: { code: string; type: 'PERCENT' | 'FIXED'; value: number },
-  ) {
-    return this.prisma.promoCode.create({
-      data: { code: body.code.toUpperCase(), type: body.type, value: body.value },
+  @RequirePermissions('marketing.write')
+  async createPromo(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = promoCreateSchema.parse(body);
+    const promo = await this.prisma.promoCode.create({
+      data: { code: dto.code.toUpperCase(), type: dto.type, value: dto.value, active: dto.active ?? true, maxUses: dto.maxUses },
     });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'promo.create',
+      entity: 'PromoCode',
+      entityId: promo.id,
+      meta: { type: dto.type, value: dto.value },
+    });
+    return promo;
   }
 }

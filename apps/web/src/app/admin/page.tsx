@@ -22,7 +22,7 @@ export default function AdminHome() {
   if (!data) {
     return (
       <p>
-        Sign in as staff at <a href="/account">/account</a> (seed: hello@motivefashion.ie).
+        Sign in with a staff account to view analytics.
       </p>
     );
   }

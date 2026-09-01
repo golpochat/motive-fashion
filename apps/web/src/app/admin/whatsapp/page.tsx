@@ -7,13 +7,19 @@ export default function AdminWhatsapp() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    await fetch(`${API}/admin/whatsapp/broadcast`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: String(form.get('message')) }),
-    });
-    alert('Queued to opted-in numbers only');
+    try {
+      await fetch(`${API}/admin/whatsapp/broadcast`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: String(form.get('message')) }),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error('broadcast');
+      });
+      alert('Queued to opted-in numbers only');
+    } catch {
+      alert('Broadcast failed. Admin only, and the number must be opted in.');
+    }
   }
   return (
     <div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { API } from '@/lib/api';
+import { API, cartSessionKey } from '@/lib/api';
 import { formatEur } from '@motive-fashion/utils';
 
 type Cart = {
@@ -13,15 +13,30 @@ type Cart = {
 
 export default function CartPage() {
   const [cart, setCart] = useState<Cart | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const id = localStorage.getItem('mf_cart');
-    if (!id) return;
-    fetch(`${API}/cart?cartId=${id}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then(setCart)
-      .catch(() => null);
+    const sessionKey = cartSessionKey();
+    const qs = new URLSearchParams({ sessionKey });
+    if (id) qs.set('cartId', id);
+    fetch(`${API}/cart?${qs.toString()}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((next: Cart | null) => {
+        if (next?.id) localStorage.setItem('mf_cart', next.id);
+        setCart(next);
+      })
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="font-serif text-4xl">Cart</h1>
+        <p className="mt-4">Loading…</p>
+      </div>
+    );
+  }
 
   if (!cart?.items.length) {
     return (

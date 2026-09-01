@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { API } from '@/lib/api';
+import { API, cartSessionKey } from '@/lib/api';
 
 type Variant = { id: string; size: string; color: string; available: number };
 
@@ -10,12 +10,16 @@ export function AddToCart({ variants }: { variants: Variant[] }) {
   const [msg, setMsg] = useState('');
 
   async function add() {
+    const sessionKey = cartSessionKey();
     const cartId = localStorage.getItem('mf_cart');
     const created = cartId
       ? { id: cartId }
-      : await fetch(`${API}/cart`, { method: 'POST', credentials: 'include' }).then((r) => r.json());
+      : await fetch(`${API}/cart?sessionKey=${encodeURIComponent(sessionKey)}`, {
+          method: 'POST',
+          credentials: 'include',
+        }).then((r) => r.json());
     localStorage.setItem('mf_cart', created.id);
-    await fetch(`${API}/cart/${created.id}/items`, {
+    await fetch(`${API}/cart/${created.id}/items?sessionKey=${encodeURIComponent(sessionKey)}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

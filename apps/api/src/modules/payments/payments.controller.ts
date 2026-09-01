@@ -1,14 +1,20 @@
-import { Controller, Headers, Param, Post, Req } from '@nestjs/common';
+import { Controller, Headers, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { PaymentsService } from './payments.service';
+import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
 
 @Controller()
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(@Inject(PaymentsService) private readonly payments: PaymentsService) {}
 
   @Post('checkout/:orderId/pay')
-  pay(@Param('orderId') orderId: string) {
-    return this.payments.createCheckoutSession(orderId);
+  @UseGuards(OptionalJwtGuard)
+  pay(
+    @Param('orderId') orderId: string,
+    @Query('token') token?: string,
+    @CurrentUser() user?: { sub: string },
+  ) {
+    return this.payments.createCheckoutSession(orderId, { token, userId: user?.sub });
   }
 
   @Post('webhooks/stripe')

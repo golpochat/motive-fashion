@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, Text } from 'react-native';
 import { Link } from 'expo-router';
 import { api } from '../src/api';
 

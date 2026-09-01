@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { api, type ProductCard } from '@/lib/api';
-import { formatEur } from '@motive-fashion/utils';
+import { ProductTile } from '@/components/product-tile';
 
 export default async function ShopPage({
   searchParams,
@@ -40,11 +40,7 @@ export default async function ShopPage({
       </div>
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {products.map((p) => (
-          <Link key={p.id} href={`/product/${p.slug}`} className="no-underline">
-            <div className="aspect-[3/4] rounded-2xl bg-ink/5" />
-            <p className="mt-3">{p.title}</p>
-            <p className="text-sm text-ink/70">{formatEur(p.variants[0]?.priceCents ?? 0)}</p>
-          </Link>
+          <ProductTile key={p.id} product={p} />
         ))}
       </div>
     </div>

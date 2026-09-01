@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
-    "lint": "echo lint:mobile"
+    "lint": "eslint ."
   },
   "dependencies": {
     "expo": "~52.0.28",
@@ -16,6 +16,7 @@
     "expo-linking": "~7.0.5",
     "expo-notifications": "~0.29.13",
     "expo-router": "~4.0.17",
+    "expo-secure-store": "^14.0.1",
     "expo-status-bar": "~2.0.1",
     "react": "18.3.1",
     "react-native": "0.76.6",

@@ -138,6 +138,44 @@ model User {
   refreshTokens   RefreshToken[]
   returns         Return[]
   pushTokens      PushToken[]
+  memberships     UserMembership[]
+}
+
+model Permission {
+  id    String @id @default(uuid())
+  key   String @unique
+  name  String
+  group String
+  grants RolePermission[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String   @default("")
+  system      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  permissions RolePermission[]
+  members     UserMembership[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserMembership {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
 }
 
 model RefreshToken {

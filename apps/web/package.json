@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "lint": "echo lint:web"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@motive-fashion/config": "workspace:*",

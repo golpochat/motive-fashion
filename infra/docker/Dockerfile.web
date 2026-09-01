@@ -1,0 +1,12 @@
+FROM node:20-alpine
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY packages ./packages
+COPY apps/web ./apps/web
+RUN pnpm install --frozen-lockfile --filter @motive-fashion/web...
+RUN pnpm --filter "./packages/*" build && pnpm --filter @motive-fashion/web build
+WORKDIR /app/apps/web
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["pnpm", "start"]

@@ -1,13 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
-import { CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../../common/auth';
+import { Body, Controller, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { ProcurementService } from './procurement.service';
 
 @Controller('admin/procurement')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.STAFF)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('procurement.write')
 export class ProcurementController {
-  constructor(private readonly procurement: ProcurementService) {}
+  constructor(@Inject(ProcurementService) private readonly procurement: ProcurementService) {}
 
   @Get('suppliers')
   suppliers() {

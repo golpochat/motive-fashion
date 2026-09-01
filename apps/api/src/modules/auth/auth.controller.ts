@@ -1,17 +1,17 @@
-import { Body, Controller, Post, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Inject, Post, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { loginSchema, registerSchema } from '@motive-fashion/validation';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 
   @Post('register')
   async register(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const dto = registerSchema.parse(body);
     const result = await this.auth.register(dto);
-    this.auth.setCookie(res, result.accessToken);
+    this.auth.setAuthCookies(res, result.accessToken, result.refreshToken);
     return result;
   }
 
@@ -19,13 +19,25 @@ export class AuthController {
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const dto = loginSchema.parse(body);
     const result = await this.auth.login(dto);
-    this.auth.setCookie(res, result.accessToken);
+    this.auth.setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Req() req: Request,
+    @Body() body: { refreshToken?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.refresh(this.auth.refreshFromRequest(req, body));
+    this.auth.setAuthCookies(res, result.accessToken, result.refreshToken);
     return result;
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('mf_access');
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.auth.logout(this.auth.refreshFromRequest(req));
+    this.auth.clearAuthCookies(res);
     return { ok: true };
   }
 }

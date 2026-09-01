@@ -1,13 +1,16 @@
+name: motive-fashion
+
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: motive-fashion-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: motive
       POSTGRES_PASSWORD: motive
       POSTGRES_DB: motive_fashion
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - motive_pg:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +21,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: motive-fashion-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -31,4 +35,6 @@ services:
 
 volumes:
   motive_pg:
+    name: motive-fashion-pg
   motive_redis:
+    name: motive-fashion-redis

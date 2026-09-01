@@ -1,23 +1,34 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
 import { BRAND } from '@motive-fashion/config';
 
+type CartAccess = { userId?: string; sessionKey?: string; internal?: boolean; channel?: SalesChannel };
+
 @Injectable()
 export class CartService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly stock: StockService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StockService) private readonly stock: StockService,
   ) {}
 
-  async getOrCreate(opts: { cartId?: string; userId?: string; channel?: SalesChannel; sessionKey?: string }) {
+  async getOrCreate(opts: {
+    cartId?: string;
+    userId?: string;
+    channel?: SalesChannel;
+    sessionKey?: string;
+    internal?: boolean;
+  }) {
     if (opts.cartId) {
       const existing = await this.prisma.cart.findUnique({
         where: { id: opts.cartId },
         include: { items: { include: { variant: { include: { product: true } } } } },
       });
-      if (existing) return this.toDto(existing);
+      if (existing) {
+        await this.assertAccess(existing, { ...opts, internal: opts.internal || opts.channel === SalesChannel.WHATSAPP });
+        return this.toDto(existing);
+      }
     }
     if (opts.sessionKey) {
       const bySession = await this.prisma.cart.findFirst({
@@ -39,9 +50,16 @@ export class CartService {
     return this.toDto(cart);
   }
 
-  async add(cartId: string, variantId: string, quantity: number, channel: SalesChannel = SalesChannel.WEB) {
+  async add(
+    cartId: string,
+    variantId: string,
+    quantity: number,
+    channel: SalesChannel = SalesChannel.WEB,
+    access?: CartAccess,
+  ) {
     const cart = await this.prisma.cart.findUnique({ where: { id: cartId } });
     if (!cart) throw new NotFoundException('Cart not found');
+    this.assertAccess(cart, { ...access, channel });
     const existing = await this.prisma.cartItem.findFirst({ where: { cartId, variantId } });
     const nextQty = (existing?.quantity ?? 0) + quantity;
     await this.stock.reserve({
@@ -64,13 +82,22 @@ export class CartService {
       where: { id: cartId },
       data: { expiresAt: new Date(Date.now() + BRAND.reservationMinutes * 60 * 1000) },
     });
-    return this.getOrCreate({ cartId });
+    return this.getOrCreate({ cartId, ...access, internal: true });
   }
 
-  async setQty(cartId: string, itemId: string, quantity: number, channel: SalesChannel = SalesChannel.WEB) {
+  async setQty(
+    cartId: string,
+    itemId: string,
+    quantity: number,
+    channel: SalesChannel = SalesChannel.WEB,
+    access?: CartAccess,
+  ) {
+    const cart = await this.prisma.cart.findUnique({ where: { id: cartId } });
+    if (!cart) throw new NotFoundException('Cart not found');
+    this.assertAccess(cart, access);
     const item = await this.prisma.cartItem.findFirst({ where: { id: itemId, cartId } });
     if (!item) throw new NotFoundException();
-    if (quantity < 1) return this.remove(cartId, itemId, channel);
+    if (quantity < 1) return this.remove(cartId, itemId, channel, access);
     const delta = quantity - item.quantity;
     if (delta > 0) {
       await this.stock.reserve({ variantId: item.variantId, quantity: delta, channel, refId: cartId });
@@ -78,10 +105,18 @@ export class CartService {
       await this.stock.release({ variantId: item.variantId, quantity: -delta, channel, refId: cartId });
     }
     await this.prisma.cartItem.update({ where: { id: item.id }, data: { quantity } });
-    return this.getOrCreate({ cartId });
+    return this.getOrCreate({ cartId, ...access, internal: true });
   }
 
-  async remove(cartId: string, itemId: string, channel: SalesChannel = SalesChannel.WEB) {
+  async remove(
+    cartId: string,
+    itemId: string,
+    channel: SalesChannel = SalesChannel.WEB,
+    access?: CartAccess,
+  ) {
+    const cart = await this.prisma.cart.findUnique({ where: { id: cartId } });
+    if (!cart) throw new NotFoundException('Cart not found');
+    this.assertAccess(cart, access);
     const item = await this.prisma.cartItem.findFirst({ where: { id: itemId, cartId } });
     if (!item) throw new NotFoundException();
     if (item.reserved) {
@@ -93,7 +128,7 @@ export class CartService {
       });
     }
     await this.prisma.cartItem.delete({ where: { id: item.id } });
-    return this.getOrCreate({ cartId });
+    return this.getOrCreate({ cartId, ...access, internal: true });
   }
 
   async expireStale() {
@@ -115,6 +150,17 @@ export class CartService {
       }
     }
     return { released: stale.length };
+  }
+
+  private assertAccess(
+    cart: { userId: string | null; sessionKey: string | null; channel: SalesChannel },
+    access?: CartAccess,
+  ) {
+    if (access?.internal) return;
+    if (cart.channel === SalesChannel.WHATSAPP || cart.channel === SalesChannel.POS) return;
+    if (cart.userId && access?.userId === cart.userId) return;
+    if (cart.sessionKey && access?.sessionKey === cart.sessionKey) return;
+    throw new ForbiddenException('Cart does not belong to this session');
   }
 
   private toDto(cart: {

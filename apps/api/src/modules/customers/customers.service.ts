@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { gdprUserSelect } from '../../common/user-select';
+import { RbacService } from '../rbac/rbac.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(RbacService) private readonly rbac: RbacService,
+  ) {}
 
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -17,10 +22,23 @@ export class CustomersService {
         marketingOptIn: true,
         whatsappOptIn: true,
         addresses: true,
+        memberships: { include: { role: { select: { id: true, slug: true, name: true } } } },
       },
     });
     if (!user) throw new NotFoundException();
-    return user;
+    const permissions = await this.rbac.permissionsFor(userId);
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+      marketingOptIn: user.marketingOptIn,
+      whatsappOptIn: user.whatsappOptIn,
+      addresses: user.addresses,
+      roles: user.memberships.map((m) => m.role),
+      permissions,
+    };
   }
 
   orders(userId: string) {
@@ -55,12 +73,13 @@ export class CustomersService {
   async gdprExport(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { addresses: true, orders: { include: { items: true } }, wishlist: true },
+      select: gdprUserSelect,
     });
     return { exportedAt: new Date().toISOString(), user };
   }
 
   async gdprDelete(userId: string) {
+    await this.prisma.refreshToken.deleteMany({ where: { userId } });
     await this.prisma.user.update({
       where: { id: userId },
       data: {

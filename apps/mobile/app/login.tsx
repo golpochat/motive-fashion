@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { api } from '../src/api';
+import { setAccessToken } from '../src/session';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,11 +14,16 @@ export default function Login() {
       <TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry style={{ borderWidth: 1, padding: 8 }} />
       <Pressable
         onPress={async () => {
-          const res = await api<{ accessToken: string }>('/auth/login', undefined, {
-            method: 'POST',
-            body: JSON.stringify({ email, password }),
-          });
-          setMsg(res.accessToken ? 'Signed in' : 'Check details');
+          try {
+            const res = await api<{ accessToken: string }>('/auth/login', undefined, {
+              method: 'POST',
+              body: JSON.stringify({ email, password }),
+            });
+            setAccessToken(res.accessToken);
+            setMsg(res.accessToken ? 'Signed in' : 'Check details');
+          } catch {
+            setMsg('Check details');
+          }
         }}
         style={{ backgroundColor: '#1c1917', padding: 14, borderRadius: 999 }}
       >

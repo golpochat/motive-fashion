@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableStock, splitVatInclusive } from '@motive-fashion/utils';
+import { availableStock, promoDiscountCents, splitVatInclusive } from '@motive-fashion/utils';
 import { StockService } from '../src/modules/inventory/stock.service';
 
 describe('availableStock', () => {
@@ -14,6 +14,14 @@ describe('VAT split', () => {
     const { netCents, taxCents, grossCents } = splitVatInclusive(1230, 0.23);
     expect(grossCents).toBe(1230);
     expect(netCents + taxCents).toBe(1230);
+  });
+});
+
+describe('promoDiscountCents', () => {
+  it('treats PERCENT value as basis points (1000 = 10%)', () => {
+    expect(promoDiscountCents(10000, 'PERCENT', 1000)).toBe(1000);
+    expect(promoDiscountCents(10000, 'FIXED', 500)).toBe(500);
+    expect(promoDiscountCents(400, 'FIXED', 500)).toBe(400);
   });
 });
 

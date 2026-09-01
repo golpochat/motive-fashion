@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import {
   FulfillmentMethod,
   OrderStatus,
@@ -7,10 +7,14 @@ import {
   SalesChannel,
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { Prisma } from '@prisma/client';
+import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
-import { splitVatInclusive } from '@motive-fashion/utils';
+import { MailService } from '../../common/mail.service';
+import { promoDiscountCents, splitVatInclusive } from '@motive-fashion/utils';
 import type { CheckoutInput } from '@motive-fashion/validation';
+import { configuredStripeSecret } from '../../common/security-config';
 
 const DUBLIN_COLLECTION = 0;
 const IE_SHIPPING_CENTS = 595;
@@ -19,8 +23,9 @@ const FREE_SHIP_OVER = 12000;
 @Injectable()
 export class OrdersService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly stock: StockService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StockService) private readonly stock: StockService,
+    @Inject(MailService) private readonly mail: MailService,
   ) {}
 
   async checkout(input: CheckoutInput, userId?: string, channel: SalesChannel = SalesChannel.WEB) {
@@ -29,6 +34,11 @@ export class OrdersService {
       include: { items: { include: { variant: { include: { product: true } } } } },
     });
     if (!cart || cart.items.length === 0) throw new BadRequestException('Cart is empty');
+    if (channel === SalesChannel.WEB) {
+      const ownerOk = Boolean(userId && cart.userId === userId);
+      const sessionOk = Boolean(input.sessionKey && cart.sessionKey && input.sessionKey === cart.sessionKey);
+      if (!ownerOk && !sessionOk) throw new ForbiddenException('Cart does not belong to this session');
+    }
     if (input.fulfillment === 'DELIVERY' && !input.address) {
       throw new BadRequestException('Delivery address required');
     }
@@ -46,11 +56,14 @@ export class OrdersService {
     let promoId: string | undefined;
     if (input.promoCode) {
       const promo = await this.prisma.promoCode.findUnique({ where: { code: input.promoCode.toUpperCase() } });
-      if (promo?.active) {
-        discount =
-          promo.type === 'PERCENT'
-            ? Math.round(subtotal * (promo.value / 10000))
-            : promo.value;
+      const now = new Date();
+      const valid =
+        promo?.active &&
+        (!promo.startsAt || promo.startsAt <= now) &&
+        (!promo.endsAt || promo.endsAt >= now) &&
+        (promo.maxUses == null || promo.usedCount < promo.maxUses);
+      if (valid && promo) {
+        discount = promoDiscountCents(subtotal, promo.type, promo.value);
         promoId = promo.id;
       }
     }
@@ -98,59 +111,88 @@ export class OrdersService {
       },
       include: { items: true },
     });
+    if (promoId) {
+      await this.prisma.promoCode.update({
+        where: { id: promoId },
+        data: { usedCount: { increment: 1 } },
+      });
+    }
     return order;
   }
 
   async confirmPaid(orderId: string, providerRef: string, idempotencyKey: string) {
-    const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } });
-    if (existing) {
-      return this.prisma.order.findUniqueOrThrow({ where: { id: existing.orderId }, include: { items: true } });
-    }
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true, cart: { include: { items: true } } },
-    });
-    if (!order) throw new NotFoundException();
-    if (order.status !== OrderStatus.PENDING_PAYMENT) return order;
+    const already = await this.prisma.payment.findUnique({ where: { idempotencyKey } });
+    try {
+      const paid = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.payment.findUnique({ where: { idempotencyKey } });
+        if (existing) {
+          return tx.order.findUniqueOrThrow({ where: { id: existing.orderId }, include: { items: true } });
+        }
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { items: true, cart: { include: { items: true } } },
+        });
+        if (!order) throw new NotFoundException();
+        if (order.status !== OrderStatus.PENDING_PAYMENT) return order;
 
-    for (const item of order.items) {
-      await this.stock.commit({
-        variantId: item.variantId,
-        quantity: item.quantity,
-        channel: order.channel,
-        refId: order.id,
+        for (const item of order.items) {
+          await this.stock.commit(
+            {
+              variantId: item.variantId,
+              quantity: item.quantity,
+              channel: order.channel,
+              refId: order.id,
+            },
+            tx,
+          );
+        }
+        if (order.cart) {
+          await tx.cartItem.updateMany({
+            where: { cartId: order.cart.id },
+            data: { reserved: false },
+          });
+        }
+        await tx.payment.create({
+          data: {
+            orderId: order.id,
+            provider: 'stripe',
+            providerRef,
+            status: PaymentStatus.SUCCEEDED,
+            amountCents: order.totalCents,
+            idempotencyKey,
+          },
+        });
+        return tx.order.update({
+          where: { id: order.id },
+          data: { status: OrderStatus.CONFIRMED },
+          include: { items: true },
+        });
       });
+      if (!already) void this.mail.sendOrderPaid(paid);
+      return paid;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const payment = await this.prisma.payment.findUnique({ where: { idempotencyKey } });
+        if (payment) {
+          return this.prisma.order.findUniqueOrThrow({
+            where: { id: payment.orderId },
+            include: { items: true },
+          });
+        }
+      }
+      throw err;
     }
-    if (order.cart) {
-      await this.prisma.cartItem.updateMany({
-        where: { cartId: order.cart.id },
-        data: { reserved: false },
-      });
-    }
-    await this.prisma.payment.create({
-      data: {
-        orderId: order.id,
-        provider: 'stripe',
-        providerRef,
-        status: PaymentStatus.SUCCEEDED,
-        amountCents: order.totalCents,
-        idempotencyKey,
-      },
-    });
-    return this.prisma.order.update({
-      where: { id: order.id },
-      data: { status: OrderStatus.CONFIRMED },
-      include: { items: true },
-    });
   }
 
   async track(id: string, token?: string) {
+    if (!token) throw new UnauthorizedException('Tracking token required');
     const order = await this.prisma.order.findFirst({
-      where: token ? { id, trackingToken: token } : { id },
+      where: { id, trackingToken: token },
       include: { items: true, shipments: true },
     });
     if (!order) throw new NotFoundException();
-    return order;
+    const { trackingToken: _, ...safe } = order;
+    return safe;
   }
 
   async listMine(userId: string) {
@@ -206,9 +248,15 @@ export class OrdersService {
     return order;
   }
 
-  async requestReturn(userId: string | undefined, dto: { orderId: string; reason: string; items: { orderItemId: string; quantity: number }[] }) {
+  async requestReturn(
+    userId: string | undefined,
+    dto: { orderId: string; reason: string; items: { orderItemId: string; quantity: number }[]; trackingToken?: string },
+  ) {
     const order = await this.prisma.order.findUnique({ where: { id: dto.orderId }, include: { items: true } });
     if (!order) throw new NotFoundException();
+    const owner = Boolean(userId && order.userId === userId);
+    const tokenOk = Boolean(dto.trackingToken && dto.trackingToken === order.trackingToken);
+    if (!owner && !tokenOk) throw new ForbiddenException('Not allowed to return this order');
     const eligible: OrderStatus[] = [OrderStatus.DELIVERED, OrderStatus.COLLECTED];
     if (!eligible.includes(order.status)) throw new BadRequestException('Order not eligible for return');
     return this.prisma.return.create({
@@ -251,12 +299,32 @@ export class OrdersService {
 
   async refund(orderId: string, amountCents: number, reason: string, actorId?: string) {
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    const key = configuredStripeSecret();
+    if (key && order.stripeSessionId) {
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
+      const intent = session.payment_intent;
+      if (typeof intent === 'string') {
+        await stripe.refunds.create({ payment_intent: intent, amount: amountCents });
+      } else if (intent?.id) {
+        await stripe.refunds.create({ payment_intent: intent.id, amount: amountCents });
+      }
+    }
+    await this.prisma.payment.updateMany({
+      where: { orderId, status: PaymentStatus.SUCCEEDED },
+      data: {
+        status: amountCents >= order.totalCents ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
+      },
+    });
     await this.prisma.refund.create({ data: { orderId, amountCents, reason } });
     const nextStatus =
       amountCents >= order.totalCents ? OrderStatus.REFUNDED : order.status;
     await this.prisma.auditLog.create({
       data: { actorId, action: 'order.refund', entity: 'Order', entityId: orderId, meta: { amountCents } },
     });
-    return this.prisma.order.update({ where: { id: orderId }, data: { status: nextStatus } });
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { status: nextStatus },
+    });
   }
 }

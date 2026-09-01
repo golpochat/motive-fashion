@@ -1,13 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Prisma, SalesChannel, StockMovementType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { availableStock } from '@motive-fashion/utils';
+import { writeAudit } from '../../common/audit';
 
 const DEFAULT_LOCATION = 'warehouse';
 
 @Injectable()
 export class StockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   available(onHand: number, reserved: number) {
     return availableStock(onHand, reserved);
@@ -30,18 +31,22 @@ export class StockService {
     if (params.quantity < 1) throw new BadRequestException('Quantity must be positive');
     return this.prisma.$transaction(async (tx) => {
       const location = await this.resolveLocation(params.locationId, tx);
-      const level = await tx.inventoryLevel.findUnique({
-        where: { variantId_locationId: { variantId: params.variantId, locationId: location.id } },
-      });
-      if (!level) throw new BadRequestException('SKU not stocked at location');
-      const free = this.available(level.onHand, level.reserved);
-      if (free < params.quantity) {
+      const rows = await tx.$queryRaw<Array<{ id: string; onHand: number; reserved: number }>>`
+        UPDATE "InventoryLevel"
+        SET reserved = reserved + ${params.quantity}
+        WHERE "variantId" = ${params.variantId}
+          AND "locationId" = ${location.id}
+          AND ("onHand" - reserved) >= ${params.quantity}
+        RETURNING id, "onHand", reserved
+      `;
+      const updated = rows[0];
+      if (!updated) {
+        const exists = await tx.inventoryLevel.findUnique({
+          where: { variantId_locationId: { variantId: params.variantId, locationId: location.id } },
+        });
+        if (!exists) throw new BadRequestException('SKU not stocked at location');
         throw new BadRequestException(`Insufficient stock for ${params.variantId}`);
       }
-      const updated = await tx.inventoryLevel.update({
-        where: { id: level.id },
-        data: { reserved: { increment: params.quantity } },
-      });
       await tx.stockMovement.create({
         data: {
           variantId: params.variantId,
@@ -65,9 +70,7 @@ export class StockService {
   }) {
     return this.prisma.$transaction(async (tx) => {
       const location = await this.resolveLocation(params.locationId, tx);
-      const level = await tx.inventoryLevel.findUniqueOrThrow({
-        where: { variantId_locationId: { variantId: params.variantId, locationId: location.id } },
-      });
+      const level = await this.lockLevel(tx, params.variantId, location.id);
       const nextReserved = Math.max(0, level.reserved - params.quantity);
       const updated = await tx.inventoryLevel.update({
         where: { id: level.id },
@@ -87,30 +90,31 @@ export class StockService {
     });
   }
 
-  async commit(params: {
-    variantId: string;
-    quantity: number;
-    channel: SalesChannel;
-    refId: string;
-    locationId?: string;
-  }) {
-    return this.prisma.$transaction(async (tx) => {
-      const location = await this.resolveLocation(params.locationId, tx);
-      const level = await tx.inventoryLevel.findUniqueOrThrow({
-        where: { variantId_locationId: { variantId: params.variantId, locationId: location.id } },
-      });
+  async commit(
+    params: {
+      variantId: string;
+      quantity: number;
+      channel: SalesChannel;
+      refId: string;
+      locationId?: string;
+    },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const run = async (client: Prisma.TransactionClient) => {
+      const location = await this.resolveLocation(params.locationId, client);
+      const level = await this.lockLevel(client, params.variantId, location.id);
       if (level.onHand < params.quantity) {
         throw new BadRequestException('Cannot commit more than on-hand');
       }
       const nextReserved = Math.max(0, level.reserved - params.quantity);
-      const updated = await tx.inventoryLevel.update({
+      const updated = await client.inventoryLevel.update({
         where: { id: level.id },
         data: {
           onHand: { decrement: params.quantity },
           reserved: nextReserved,
         },
       });
-      await tx.stockMovement.create({
+      await client.stockMovement.create({
         data: {
           variantId: params.variantId,
           locationId: location.id,
@@ -120,7 +124,7 @@ export class StockService {
           refId: params.refId,
         },
       });
-      await tx.stockMovement.create({
+      await client.stockMovement.create({
         data: {
           variantId: params.variantId,
           locationId: location.id,
@@ -131,7 +135,9 @@ export class StockService {
         },
       });
       return updated;
-    });
+    };
+    if (tx) return run(tx);
+    return this.prisma.$transaction((inner) => run(inner));
   }
 
   async receive(params: {
@@ -212,19 +218,13 @@ export class StockService {
     fromLocationId: string;
     toLocationId: string;
     quantity: number;
+    actorId?: string;
   }) {
     if (params.fromLocationId === params.toLocationId) {
       throw new BadRequestException('Locations must differ');
     }
     return this.prisma.$transaction(async (tx) => {
-      const from = await tx.inventoryLevel.findUniqueOrThrow({
-        where: {
-          variantId_locationId: {
-            variantId: params.variantId,
-            locationId: params.fromLocationId,
-          },
-        },
-      });
+      const from = await this.lockLevel(tx, params.variantId, params.fromLocationId);
       if (this.available(from.onHand, from.reserved) < params.quantity) {
         throw new BadRequestException('Not enough free stock to transfer');
       }
@@ -258,6 +258,13 @@ export class StockService {
           type: StockMovementType.TRANSFER_IN,
           quantity: params.quantity,
         },
+      });
+      await writeAudit(tx, {
+        actorId: params.actorId,
+        action: 'inventory.transfer',
+        entity: 'InventoryLevel',
+        entityId: from.id,
+        meta: { toLocationId: params.toLocationId, quantity: params.quantity },
       });
     });
   }
@@ -293,6 +300,18 @@ export class StockService {
         };
       })
       .filter((row) => row.needsRestock);
+  }
+
+  private async lockLevel(tx: Prisma.TransactionClient, variantId: string, locationId: string) {
+    const rows = await tx.$queryRaw<Array<{ id: string; onHand: number; reserved: number }>>`
+      SELECT id, "onHand", reserved
+      FROM "InventoryLevel"
+      WHERE "variantId" = ${variantId} AND "locationId" = ${locationId}
+      FOR UPDATE
+    `;
+    const row = rows[0];
+    if (!row) throw new BadRequestException('SKU not stocked at location');
+    return row;
   }
 
   private async resolveLocation(locationId?: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {

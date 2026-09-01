@@ -1,11 +1,17 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { API } from '@/lib/api';
+import { FormEvent, useEffect, useState } from 'react';
+import { API, cartSessionKey } from '@/lib/api';
 
 export default function CheckoutPage() {
   const [fulfillment, setFulfillment] = useState<'DELIVERY' | 'COLLECTION'>('COLLECTION');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('cancelled')) {
+      setError('Payment was cancelled. Your cart is still reserved for 15 minutes.');
+    }
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -17,6 +23,7 @@ export default function CheckoutPage() {
     }
     const payload = {
       cartId,
+      sessionKey: cartSessionKey(),
       fulfillment,
       email: String(form.get('email')),
       name: String(form.get('name')),
@@ -32,24 +39,36 @@ export default function CheckoutPage() {
             }
           : undefined,
     };
-    const order = await fetch(`${API}/checkout/session`, {
+    const orderRes = await fetch(`${API}/checkout/session`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then((r) => r.json());
-    const pay = await fetch(`${API}/checkout/${order.id}/pay`, {
-      method: 'POST',
-      credentials: 'include',
-    }).then((r) => r.json());
+    });
+    const order = (await orderRes.json()) as { id?: string; trackingToken?: string; message?: string };
+    if (!orderRes.ok || !order.id) {
+      setError(typeof order.message === 'string' ? order.message : 'Checkout failed');
+      return;
+    }
+    const payRes = await fetch(
+      `${API}/checkout/${order.id}/pay?token=${encodeURIComponent(order.trackingToken ?? '')}`,
+      {
+        method: 'POST',
+        credentials: 'include',
+      },
+    );
+    const pay = (await payRes.json()) as { url?: string; message?: string };
     if (pay.url) window.location.href = pay.url;
-    else setError(JSON.stringify(pay));
+    else setError(pay.message ?? JSON.stringify(pay));
   }
 
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-lg space-y-4">
       <h1 className="font-serif text-4xl">Checkout</h1>
-      <p className="text-sm text-ink/70">Guest checkout is available. Prices include VAT.</p>
+      <p className="text-sm text-ink/70">
+        Guest checkout is available. Prices include VAT (23%). 14-day cooling-off after delivery or collection. Unworn
+        items with tags.
+      </p>
       <input name="name" required placeholder="Name" className="w-full rounded-xl border px-3 py-2" />
       <input name="email" type="email" required placeholder="Email" className="w-full rounded-xl border px-3 py-2" />
       <input name="phone" placeholder="Phone" className="w-full rounded-xl border px-3 py-2" />

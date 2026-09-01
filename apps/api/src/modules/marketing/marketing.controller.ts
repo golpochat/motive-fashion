@@ -1,17 +1,14 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { CampaignSeason, ContentChannel, UserRole } from '@prisma/client';
-import { JwtAuthGuard, Roles, RolesGuard } from '../../common/auth';
+import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { campaignCreateSchema, calendarItemSchema } from '@motive-fashion/validation';
+import { writeAudit } from '../../common/audit';
 
 @Controller('admin/marketing')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.STAFF)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('marketing.write')
 export class MarketingController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly wa: WhatsappService,
-  ) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   @Get('campaigns')
   campaigns() {
@@ -19,16 +16,16 @@ export class MarketingController {
   }
 
   @Post('campaigns')
-  create(
-    @Body()
-    body: {
-      name: string;
-      season: CampaignSeason;
-      audience?: string;
-      landingSlug?: string;
-    },
-  ) {
-    return this.prisma.campaign.create({ data: body });
+  async create(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = campaignCreateSchema.parse(body);
+    const campaign = await this.prisma.campaign.create({ data: dto });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'campaign.create',
+      entity: 'Campaign',
+      entityId: campaign.id,
+    });
+    return campaign;
   }
 
   @Get('calendar')
@@ -37,28 +34,22 @@ export class MarketingController {
   }
 
   @Post('calendar')
-  addItem(
-    @Body()
-    body: {
-      campaignId?: string;
-      channel: ContentChannel;
-      caption: string;
-      assetUrl?: string;
-      publishOn: string;
-    },
-  ) {
-    return this.prisma.contentCalendarItem.create({
-      data: { ...body, publishOn: new Date(body.publishOn) },
+  async addItem(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = calendarItemSchema.parse(body);
+    const item = await this.prisma.contentCalendarItem.create({
+      data: { ...dto, publishOn: new Date(dto.publishOn) },
     });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'calendar.create',
+      entity: 'ContentCalendarItem',
+      entityId: item.id,
+    });
+    return item;
   }
 
   @Post('email/abandoned-cart')
   abandoned() {
-    return { queued: true, flow: 'abandoned_cart', provider: process.env.RESEND_API_KEY ? 'resend' : 'log' };
-  }
-
-  @Post('whatsapp/broadcast')
-  broadcast(@Body() body: { message: string }) {
-    return this.wa.broadcast(body.message, 'marketing');
+    return { queued: false, flow: 'abandoned_cart', message: 'Email provider is not wired' };
   }
 }

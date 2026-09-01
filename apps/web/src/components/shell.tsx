@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BRAND } from '@motive-fashion/config';
+import { HeaderAccount } from '@/components/header-account';
 
 const nav = [
   { href: '/shop', label: 'Shop' },
@@ -24,9 +25,7 @@ export function Header() {
           ))}
         </nav>
         <div className="flex gap-4 text-sm">
-          <Link href="/account" className="no-underline hover:underline">
-            Account
-          </Link>
+          <HeaderAccount />
           <Link href="/cart" className="no-underline hover:underline">
             Cart
           </Link>
@@ -42,6 +41,7 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-3">
         <p className="font-serif text-xl">{BRAND.name}, {BRAND.city}</p>
         <div className="flex flex-col gap-2 text-sm">
+          <Link href="/contact">Contact</Link>
           <Link href="/legal/returns">14-day returns</Link>
           <Link href="/legal/privacy">Privacy</Link>
           <Link href="/legal/terms">Terms</Link>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
 import { OrdersService } from './orders.service';
 import { checkoutSchema, returnRequestSchema } from '@motive-fashion/validation';
@@ -6,7 +6,7 @@ import { SalesChannel } from '@prisma/client';
 
 @Controller()
 export class OrdersController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(@Inject(OrdersService) private readonly orders: OrdersService) {}
 
   @Post('checkout/session')
   @UseGuards(OptionalJwtGuard)

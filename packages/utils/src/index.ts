@@ -23,3 +23,16 @@ export function slugify(value: string): string {
     .trim()
     .replace(/[\s_]+/g, '-');
 }
+
+/** PERCENT `value` is basis points (1000 = 10%, 10000 = 100%). FIXED is EUR cents. */
+export function promoDiscountCents(
+  subtotalCents: number,
+  type: 'PERCENT' | 'FIXED',
+  value: number,
+) {
+  if (subtotalCents < 1 || value < 1) return 0;
+  if (type === 'PERCENT') {
+    return Math.min(subtotalCents, Math.round(subtotalCents * (value / 10000)));
+  }
+  return Math.min(subtotalCents, value);
+}

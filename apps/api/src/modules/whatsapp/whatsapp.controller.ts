@@ -1,11 +1,18 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
-import { JwtAuthGuard, Roles, RolesGuard } from '../../common/auth';
+import { Body, Controller, Get, Headers, Inject, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { WhatsappService } from './whatsapp.service';
+import { requestRawBody } from '../../common/webhook-signature';
+import { whatsappBroadcastSchema } from '@motive-fashion/validation';
+import { writeAudit } from '../../common/audit';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Controller()
 export class WhatsappController {
-  constructor(private readonly wa: WhatsappService) {}
+  constructor(
+    @Inject(WhatsappService) private readonly wa: WhatsappService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+  ) {}
 
   @Get('webhooks/whatsapp')
   verify(
@@ -13,18 +20,30 @@ export class WhatsappController {
     @Query('hub.verify_token') token: string,
     @Query('hub.challenge') challenge: string,
   ) {
-    return this.wa.verify(mode, token, challenge) ?? 'forbidden';
+    return this.wa.verify(mode, token, challenge);
   }
 
   @Post('webhooks/whatsapp')
-  inbound(@Body() body: Parameters<WhatsappService['inbound']>[0]) {
-    return this.wa.inbound(body);
+  inbound(@Req() req: Request, @Headers('x-hub-signature-256') signature?: string) {
+    const raw = requestRawBody(req as Request & { rawBody?: Buffer });
+    this.wa.assertInboundSignature(raw, signature);
+    const payload = JSON.parse(raw.toString('utf8')) as Parameters<WhatsappService['inbound']>[0];
+    return this.wa.inbound(payload);
   }
 
   @Post('admin/whatsapp/broadcast')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  broadcast(@Body() body: { message: string; template?: string }) {
-    return this.wa.broadcast(body.message, body.template ?? 'broadcast');
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('whatsapp.broadcast')
+  async broadcast(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = whatsappBroadcastSchema.parse(body);
+    const result = await this.wa.broadcast(dto.message, dto.template ?? 'broadcast');
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'whatsapp.broadcast',
+      entity: 'User',
+      entityId: user.sub,
+      meta: { sent: result.sent },
+    });
+    return result;
   }
 }

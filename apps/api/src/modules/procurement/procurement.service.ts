@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InboundShipmentStatus, PurchaseOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
@@ -6,8 +6,8 @@ import { StockService } from '../inventory/stock.service';
 @Injectable()
 export class ProcurementService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly stock: StockService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StockService) private readonly stock: StockService,
   ) {}
 
   suppliers() {

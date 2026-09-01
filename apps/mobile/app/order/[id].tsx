@@ -4,11 +4,14 @@ import { Text, View } from 'react-native';
 import { api } from '../../src/api';
 
 export default function OrderDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, token } = useLocalSearchParams<{ id: string; token?: string }>();
   const [order, setOrder] = useState<{ status: string; totalCents: number } | null>(null);
   useEffect(() => {
-    if (id) api(`/orders/${id}/track`).then(setOrder).catch(() => null);
-  }, [id]);
+    if (!id || !token) return;
+    api<{ status: string; totalCents: number }>(`/orders/${id}/track?token=${encodeURIComponent(token)}`)
+      .then(setOrder)
+      .catch(() => null);
+  }, [id, token]);
   return (
     <View style={{ padding: 24 }}>
       <Text>Order {id}</Text>

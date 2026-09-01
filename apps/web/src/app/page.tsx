@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { api, type ProductCard } from '@/lib/api';
-import { formatEur } from '@motive-fashion/utils';
+import { ProductTile } from '@/components/product-tile';
 
 export default async function HomePage() {
   let products: ProductCard[] = [];
@@ -9,6 +9,19 @@ export default async function HomePage() {
   } catch {
     products = [];
   }
+  const featuredSlugs = [
+    'luxury-silk-abaya',
+    'everyday-chiffon-hijab',
+    'french-jilbab',
+    'summer-linen-dress',
+    'prayer-set',
+    'premium-crepe-abaya',
+  ];
+  const featured = featuredSlugs
+    .map((slug) => products.find((p) => p.slug === slug))
+    .filter((p): p is ProductCard => Boolean(p));
+  const hero =
+    products.find((p) => p.slug === 'luxury-silk-abaya')?.images[0] ?? products[0]?.images[0];
   return (
     <div>
       <section className="grid gap-10 py-12 md:grid-cols-2 md:items-center">
@@ -28,21 +41,16 @@ export default async function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="aspect-[3/4] rounded-3xl bg-moss/20" />
+        <div className="aspect-[3/4] overflow-hidden rounded-3xl bg-moss/20">
+          {hero ? (
+            <img src={hero.url} alt={hero.alt} className="h-full w-full object-cover" />
+          ) : null}
+        </div>
       </section>
       <h2 className="font-serif text-3xl">In stock now</h2>
       <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {products.slice(0, 6).map((p) => (
-          <Link key={p.id} href={`/product/${p.slug}`} className="group no-underline">
-            <div className="aspect-[3/4] overflow-hidden rounded-2xl bg-ink/5">
-              {p.images[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.images[0].url} alt={p.images[0].alt} className="h-full w-full object-cover" />
-              ) : null}
-            </div>
-            <p className="mt-3 font-medium">{p.title}</p>
-            <p className="text-sm text-ink/70">{formatEur(p.variants[0]?.priceCents ?? 0)}</p>
-          </Link>
+        {featured.map((p) => (
+          <ProductTile key={p.id} product={p} />
         ))}
       </div>
     </div>

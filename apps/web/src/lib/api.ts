@@ -1,7 +1,14 @@
-export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+export const API = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
+
+function apiBase() {
+  if (typeof window === 'undefined') {
+    return `${process.env.API_ORIGIN ?? 'http://localhost:4000'}/api/v1`;
+  }
+  return API;
+}
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -24,5 +31,22 @@ export type ProductCard = {
   description: string;
   categorySlug: string;
   images: { url: string; alt: string }[];
-  variants: { id: string; sku: string; size: string; color: string; priceCents: number; available: number }[];
+  variants: {
+    id: string;
+    sku: string;
+    size: string;
+    color: string;
+    fabric?: string | null;
+    priceCents: number;
+    available: number;
+  }[];
 };
+
+export function cartSessionKey() {
+  let key = localStorage.getItem('mf_session');
+  if (!key) {
+    key = crypto.randomUUID();
+    localStorage.setItem('mf_session', key);
+  }
+  return key;
+}

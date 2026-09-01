@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  Inject,
   createParamDecorator,
   SetMetadata,
   ForbiddenException,
@@ -10,18 +11,21 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
+import { RbacService } from '../modules/rbac/rbac.service';
 
 export const ROLES_KEY = 'roles';
+export const PERMS_KEY = 'permissions';
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
+export const RequirePermissions = (...perms: string[]) => SetMetadata(PERMS_KEY, perms);
 
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
   const req = ctx.switchToHttp().getRequest();
-  return req.user as { sub: string; role: UserRole; email: string };
+  return req.user as { sub: string; role: UserRole; email: string; permissions?: string[] };
 });
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(@Inject(JwtService) private readonly jwt: JwtService) {}
 
   canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest();
@@ -40,8 +44,29 @@ export class JwtAuthGuard implements CanActivate {
 }
 
 @Injectable()
+export class PermissionsGuard implements CanActivate {
+  constructor(
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(RbacService) private readonly rbac: RbacService,
+  ) {}
+
+  async canActivate(ctx: ExecutionContext) {
+    const handlerPerms = this.reflector.get<string[]>(PERMS_KEY, ctx.getHandler()) ?? [];
+    const classPerms = this.reflector.get<string[]>(PERMS_KEY, ctx.getClass()) ?? [];
+    const needed = [...new Set([...classPerms, ...handlerPerms])];
+    if (!needed.length) return true;
+    const req = ctx.switchToHttp().getRequest();
+    if (!req.user?.sub) throw new UnauthorizedException();
+    const keys = await this.rbac.permissionsFor(req.user.sub);
+    req.user.permissions = keys;
+    if (!this.rbac.has(keys, needed)) throw new ForbiddenException();
+    return true;
+  }
+}
+
+@Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   canActivate(ctx: ExecutionContext) {
     const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
@@ -58,7 +83,7 @@ export class RolesGuard implements CanActivate {
 
 @Injectable()
 export class OptionalJwtGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(@Inject(JwtService) private readonly jwt: JwtService) {}
 
   canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest();

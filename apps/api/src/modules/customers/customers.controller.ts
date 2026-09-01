@@ -1,11 +1,11 @@
-import { Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard } from '../../common/auth';
 import { CustomersService } from './customers.service';
 
 @Controller('account')
 @UseGuards(JwtAuthGuard)
 export class CustomersController {
-  constructor(private readonly customers: CustomersService) {}
+  constructor(@Inject(CustomersService) private readonly customers: CustomersService) {}
 
   @Get('me')
   me(@CurrentUser() user: { sub: string }) {

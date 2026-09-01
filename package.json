@@ -12,9 +12,10 @@
     "dev": "pnpm -r --parallel --filter \"./apps/*\" --filter \"./packages/*\" dev",
     "dev:web": "pnpm --filter @motive-fashion/web dev",
     "dev:api": "pnpm --filter @motive-fashion/api dev",
+    "dev:worker": "pnpm --filter @motive-fashion/api dev:worker",
     "dev:mobile": "pnpm --filter @motive-fashion/mobile start",
     "build": "pnpm --filter \"./packages/*\" build && pnpm --filter @motive-fashion/api build && pnpm --filter @motive-fashion/web build",
-    "lint": "pnpm -r run lint",
+    "lint": "eslint .",
     "test": "pnpm --filter @motive-fashion/api test",
     "typecheck": "pnpm -r run typecheck",
     "db:up": "docker compose -f infra/docker/docker-compose.yml up -d",
@@ -24,7 +25,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.4.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.69.0"
   }
 }

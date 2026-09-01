@@ -1,9 +1,9 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { CatalogService } from './catalog.service';
 
 @Controller('catalog')
 export class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
+  constructor(@Inject(CatalogService) private readonly catalog: CatalogService) {}
 
   @Get('categories')
   categories() {
@@ -21,8 +21,9 @@ export class CatalogController {
     @Query('collection') collection?: string,
     @Query('q') q?: string,
     @Query('occasion') occasion?: string,
+    @Query('sku') sku?: string,
   ) {
-    return this.catalog.list({ category, collection, q, occasion });
+    return this.catalog.list({ category, collection, q, occasion, sku });
   }
 
   @Get('products/:slug')

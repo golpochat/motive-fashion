@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { availableStock } from '@motive-fashion/utils';
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   categories() {
     return this.prisma.category.findMany({ orderBy: { sortOrder: 'asc' } });
@@ -19,6 +19,7 @@ export class CatalogService {
     collection?: string;
     q?: string;
     occasion?: string;
+    sku?: string;
   }) {
     const products = await this.prisma.product.findMany({
       where: {
@@ -36,6 +37,7 @@ export class CatalogService {
         ...(filters.collection
           ? { collections: { some: { collection: { slug: filters.collection } } } }
           : {}),
+        ...(filters.sku ? { variants: { some: { sku: filters.sku } } } : {}),
       },
       include: {
         images: { orderBy: { sortOrder: 'asc' }, take: 1 },
@@ -43,6 +45,7 @@ export class CatalogService {
         variants: { where: { active: true }, include: { inventory: true } },
       },
       orderBy: { title: 'asc' },
+      take: 48,
     });
     return products.map((p) => this.toDto(p));
   }
