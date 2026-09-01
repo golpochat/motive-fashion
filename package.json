@@ -1,0 +1,30 @@
+{
+  "name": "motive-fashion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Motive Fashion — premium modest-wear D2C platform (Dublin)",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" --filter \"./packages/*\" dev",
+    "dev:web": "pnpm --filter @motive-fashion/web dev",
+    "dev:api": "pnpm --filter @motive-fashion/api dev",
+    "dev:mobile": "pnpm --filter @motive-fashion/mobile start",
+    "build": "pnpm --filter \"./packages/*\" build && pnpm --filter @motive-fashion/api build && pnpm --filter @motive-fashion/web build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm --filter @motive-fashion/api test",
+    "typecheck": "pnpm -r run typecheck",
+    "db:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "db:migrate": "pnpm --filter @motive-fashion/api prisma:migrate",
+    "db:seed": "pnpm --filter @motive-fashion/api prisma:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}

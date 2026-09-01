@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@motive-fashion/config": ["../../packages/config/src/index.ts"],
+      "@motive-fashion/types": ["../../packages/types/src/index.ts"],
+      "@motive-fashion/utils": ["../../packages/utils/src/index.ts"],
+      "@motive-fashion/validation": ["../../packages/validation/src/index.ts"]
+    },
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "target": "ES2022",
+    "strictPropertyInitialization": false,
+    "noEmit": false,
+    "declaration": false
+  },
+  "include": ["src"]
+}

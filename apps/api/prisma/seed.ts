@@ -1,0 +1,501 @@
+import { PrismaClient, CampaignSeason, LocationType, PurchaseOrderStatus } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+
+const CATEGORIES = [
+  { slug: 'hijabs', name: 'Hijabs', sortOrder: 1 },
+  { slug: 'abayas', name: 'Abayas', sortOrder: 2 },
+  { slug: 'dresses', name: 'Dresses', sortOrder: 3 },
+  { slug: 'jilbabs', name: 'Jilbabs', sortOrder: 4 },
+  { slug: 'niqabs', name: 'Niqabs', sortOrder: 5 },
+  { slug: 'khimars', name: 'Khimars', sortOrder: 6 },
+  { slug: 'prayer-sets', name: 'Prayer sets', sortOrder: 7 },
+  { slug: 'undercaps', name: 'Undercaps', sortOrder: 8 },
+  { slug: 'accessories', name: 'Accessories', sortOrder: 9 },
+];
+
+type ProductSeed = {
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  occasion?: string;
+  coverage?: string;
+  origin?: string;
+  prayerReady?: boolean;
+  cost: number;
+  price: number;
+  sizes: string[];
+  colors: string[];
+  openingQty: number;
+};
+
+const PRODUCTS: ProductSeed[] = [
+  {
+    slug: 'everyday-chiffon-hijab',
+    title: 'Everyday chiffon hijab',
+    description: 'Light chiffon hijab with a soft drape. Everyday coverage for Dublin weather.',
+    category: 'hijabs',
+    occasion: 'daily',
+    coverage: 'full',
+    origin: 'TR',
+    cost: 350,
+    price: 1800,
+    sizes: ['OS'],
+    colors: ['Black', 'Ivory', 'Sage', 'Navy'],
+    openingQty: 40,
+  },
+  {
+    slug: 'premium-crepe-abaya',
+    title: 'Premium crepe abaya',
+    description: 'Nida crepe abaya with a clean front and modest sleeve. Photography-first drape.',
+    category: 'abayas',
+    occasion: 'eid',
+    coverage: 'full',
+    origin: 'SA',
+    cost: 2800,
+    price: 8900,
+    sizes: ['S', 'M', 'L'],
+    colors: ['Black', 'Charcoal'],
+    openingQty: 8,
+  },
+  {
+    slug: 'luxury-silk-abaya',
+    title: 'Luxury silk-blend abaya',
+    description: 'Limited luxury abaya with a quiet sheen. Eid and occasion wear.',
+    category: 'abayas',
+    occasion: 'eid',
+    coverage: 'full',
+    origin: 'AE',
+    cost: 5500,
+    price: 18900,
+    sizes: ['S', 'M', 'L'],
+    colors: ['Black', 'Deep emerald'],
+    openingQty: 4,
+  },
+  {
+    slug: 'summer-linen-dress',
+    title: 'Summer linen modest dress',
+    description: 'Breathable linen-mix dress, calf length, for Irish summers.',
+    category: 'dresses',
+    occasion: 'daily',
+    coverage: 'full',
+    origin: 'TR',
+    cost: 1800,
+    price: 6900,
+    sizes: ['S', 'M', 'L', 'XL'],
+    colors: ['Sand', 'Olive'],
+    openingQty: 6,
+  },
+  {
+    slug: 'french-jilbab',
+    title: 'French jilbab',
+    description: 'One-piece jilbab with integrated khimar. Prayer-ready.',
+    category: 'jilbabs',
+    occasion: 'prayer',
+    coverage: 'full',
+    origin: 'PK',
+    prayerReady: true,
+    cost: 2200,
+    price: 7500,
+    sizes: ['S', 'M', 'L'],
+    colors: ['Black', 'Taupe'],
+    openingQty: 8,
+  },
+  {
+    slug: 'everyday-niqab',
+    title: 'Everyday niqab',
+    description: 'Two-layer niqab in breathable fabric.',
+    category: 'niqabs',
+    occasion: 'daily',
+    coverage: 'face',
+    origin: 'SA',
+    cost: 400,
+    price: 1900,
+    sizes: ['OS'],
+    colors: ['Black'],
+    openingQty: 25,
+  },
+  {
+    slug: 'khimar-shoulder',
+    title: 'Shoulder khimar',
+    description: 'Knee-length khimar with a snug cap.',
+    category: 'khimars',
+    occasion: 'prayer',
+    coverage: 'full',
+    origin: 'ID',
+    prayerReady: true,
+    cost: 900,
+    price: 3900,
+    sizes: ['OS'],
+    colors: ['Black', 'Grey'],
+    openingQty: 10,
+  },
+  {
+    slug: 'prayer-set',
+    title: 'Travel prayer set',
+    description: 'Lightweight prayer dress and matching mat pouch.',
+    category: 'prayer-sets',
+    occasion: 'prayer',
+    coverage: 'full',
+    origin: 'ID',
+    prayerReady: true,
+    cost: 1100,
+    price: 4500,
+    sizes: ['OS'],
+    colors: ['White', 'Blush'],
+    openingQty: 10,
+  },
+  {
+    slug: 'cotton-undercap',
+    title: 'Cotton undercap',
+    description: 'Stay-put cotton undercap for hijab days.',
+    category: 'undercaps',
+    occasion: 'daily',
+    origin: 'CN',
+    cost: 80,
+    price: 600,
+    sizes: ['OS'],
+    colors: ['Black', 'Nude', 'White'],
+    openingQty: 50,
+  },
+  {
+    slug: 'hijab-magnets',
+    title: 'Hijab magnets (pair)',
+    description: 'Strong coated magnets. No pin holes.',
+    category: 'accessories',
+    occasion: 'daily',
+    origin: 'CN',
+    cost: 40,
+    price: 500,
+    sizes: ['OS'],
+    colors: ['Gold', 'Silver'],
+    openingQty: 40,
+  },
+];
+
+/** Example contacts only — not verified. */
+const SUPPLIERS = [
+  { name: 'Moda Eşarp', country: 'TR', phone: '+90 532 612 44 89' },
+  { name: 'Sena Hijab', country: 'TR', phone: '+90 535 410 22 17' },
+  { name: 'Mira Moda', country: 'TR', phone: '+90 531 987 44 10' },
+  { name: 'Bursa Tekstil', country: 'TR', phone: '+90 541 220 11 98' },
+  { name: 'Ottoman Textile', country: 'TR', email: 'ottomantex@gmail.com' },
+  { name: 'Konya Eşarp', country: 'TR', phone: '+90 555 210 77 44' },
+  { name: 'Hijab Konya', country: 'TR', phone: '+90 552 330 11 22' },
+  { name: 'Izmir Fashion', country: 'TR', phone: '+90 531 440 88 22' },
+  { name: 'Al Muraqqabat', country: 'AE', phone: '+971 52 880 4411' },
+  { name: 'Dubai Abaya Centre', country: 'AE', phone: '+971 50 667 9910' },
+  { name: 'Sharjah Souq', country: 'AE', phone: '+971 55 330 2211' },
+  { name: 'Ajman Factory', country: 'AE', phone: '+971 56 990 4411' },
+  { name: 'Riyadh Niqab Zone', country: 'SA', phone: '+966 53 220 9911' },
+  { name: 'Al Olaya Workshops', country: 'SA', phone: '+966 55 440 8822' },
+  { name: 'Jeddah Ladies Souq', country: 'SA', phone: '+966 50 330 7711' },
+  { name: 'Medina Islamic Market', country: 'SA', phone: '+966 54 220 6611' },
+  { name: 'Karachi Jilbab Exporters', country: 'PK', phone: '+92 331 220 9911' },
+  { name: 'Karachi Niqab Manufacturers', country: 'PK', phone: '+92 345 550 7711' },
+  { name: 'Lahore French Jilbab Factory', country: 'PK', phone: '+92 300 440 8822' },
+  { name: 'Dhaka Modest Wear Factory', country: 'BD', phone: '+880 171 220 6611' },
+  { name: 'Bandung Prayer Set Factory', country: 'ID', phone: '+62 812 220 9911' },
+  { name: 'Jakarta Khimar House', country: 'ID', phone: '+62 813 440 7711' },
+  { name: 'Yiwu Hijab Market', country: 'CN', phone: '+86 138 2200 9911' },
+  { name: 'Guangzhou Modest Wear Factory', country: 'CN', phone: '+86 139 4400 7711' },
+];
+
+const YEAR1_POS: { bucket: string; country: string; lines: { slug: string; qty: number }[] }[] = [
+  {
+    bucket: 'Y1-M01-02',
+    country: 'TR',
+    lines: [
+      { slug: 'everyday-chiffon-hijab', qty: 300 },
+      { slug: 'summer-linen-dress', qty: 40 },
+      { slug: 'premium-crepe-abaya', qty: 30 },
+    ],
+  },
+  { bucket: 'Y1-M01-02', country: 'PK', lines: [{ slug: 'french-jilbab', qty: 40 }] },
+  {
+    bucket: 'Y1-M01-02',
+    country: 'SA',
+    lines: [
+      { slug: 'everyday-niqab', qty: 100 },
+      { slug: 'premium-crepe-abaya', qty: 20 },
+    ],
+  },
+  { bucket: 'Y1-M01-02', country: 'AE', lines: [{ slug: 'luxury-silk-abaya', qty: 20 }] },
+  {
+    bucket: 'Y1-M01-02',
+    country: 'ID',
+    lines: [
+      { slug: 'prayer-set', qty: 20 },
+      { slug: 'khimar-shoulder', qty: 20 },
+    ],
+  },
+  { bucket: 'Y1-M01-02', country: 'CN', lines: [{ slug: 'cotton-undercap', qty: 200 }] },
+  {
+    bucket: 'Y1-M03-04',
+    country: 'TR',
+    lines: [
+      { slug: 'everyday-chiffon-hijab', qty: 300 },
+      { slug: 'premium-crepe-abaya', qty: 40 },
+      { slug: 'summer-linen-dress', qty: 20 },
+    ],
+  },
+  { bucket: 'Y1-M03-04', country: 'PK', lines: [{ slug: 'french-jilbab', qty: 60 }] },
+  { bucket: 'Y1-M03-04', country: 'SA', lines: [{ slug: 'everyday-niqab', qty: 100 }] },
+  { bucket: 'Y1-M03-04', country: 'ID', lines: [{ slug: 'khimar-shoulder', qty: 30 }] },
+  {
+    bucket: 'Y1-M05-06',
+    country: 'AE',
+    lines: [{ slug: 'luxury-silk-abaya', qty: 30 }],
+  },
+  {
+    bucket: 'Y1-M05-06',
+    country: 'SA',
+    lines: [{ slug: 'premium-crepe-abaya', qty: 20 }],
+  },
+  { bucket: 'Y1-M05-06', country: 'PK', lines: [{ slug: 'french-jilbab', qty: 20 }] },
+  { bucket: 'Y1-M05-06', country: 'TR', lines: [{ slug: 'summer-linen-dress', qty: 50 }] },
+  {
+    bucket: 'Y1-M07-08',
+    country: 'TR',
+    lines: [
+      { slug: 'everyday-chiffon-hijab', qty: 300 },
+      { slug: 'premium-crepe-abaya', qty: 40 },
+    ],
+  },
+  {
+    bucket: 'Y1-M07-08',
+    country: 'ID',
+    lines: [
+      { slug: 'prayer-set', qty: 20 },
+      { slug: 'khimar-shoulder', qty: 20 },
+    ],
+  },
+  {
+    bucket: 'Y1-M07-08',
+    country: 'CN',
+    lines: [
+      { slug: 'cotton-undercap', qty: 200 },
+      { slug: 'hijab-magnets', qty: 100 },
+    ],
+  },
+  { bucket: 'Y1-M09-10', country: 'ID', lines: [{ slug: 'prayer-set', qty: 60 }] },
+  { bucket: 'Y1-M09-10', country: 'SA', lines: [{ slug: 'premium-crepe-abaya', qty: 30 }, { slug: 'everyday-niqab', qty: 100 }] },
+  { bucket: 'Y1-M09-10', country: 'AE', lines: [{ slug: 'luxury-silk-abaya', qty: 30 }] },
+  {
+    bucket: 'Y1-M11-12',
+    country: 'TR',
+    lines: [
+      { slug: 'summer-linen-dress', qty: 60 },
+      { slug: 'everyday-chiffon-hijab', qty: 300 },
+    ],
+  },
+  { bucket: 'Y1-M11-12', country: 'PK', lines: [{ slug: 'french-jilbab', qty: 60 }] },
+  { bucket: 'Y1-M11-12', country: 'SA', lines: [{ slug: 'premium-crepe-abaya', qty: 30 }] },
+];
+
+async function main() {
+  await prisma.webhookEvent.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.contentCalendarItem.deleteMany();
+  await prisma.campaign.deleteMany();
+  await prisma.posSale.deleteMany();
+  await prisma.posDevice.deleteMany();
+  await prisma.outboundMessage.deleteMany();
+  await prisma.whatsappSession.deleteMany();
+  await prisma.inboundShipment.deleteMany();
+  await prisma.purchaseOrderLine.deleteMany();
+  await prisma.purchaseOrder.deleteMany();
+  await prisma.supplierProduct.deleteMany();
+  await prisma.supplier.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.returnItem.deleteMany();
+  await prisma.return.deleteMany();
+  await prisma.shipment.deleteMany();
+  await prisma.refund.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.promoCode.deleteMany();
+  await prisma.cartItem.deleteMany();
+  await prisma.cart.deleteMany();
+  await prisma.stockMovement.deleteMany();
+  await prisma.inventoryLevel.deleteMany();
+  await prisma.productCollection.deleteMany();
+  await prisma.productImage.deleteMany();
+  await prisma.productVariant.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.collection.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.location.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.pushToken.deleteMany();
+  await prisma.address.deleteMany();
+  await prisma.user.deleteMany();
+
+  const passwordHash = await bcrypt.hash('MotiveAdmin!2026', 12);
+  await prisma.user.create({
+    data: {
+      email: 'hello@motivefashion.ie',
+      name: 'Motive Admin',
+      role: 'ADMIN',
+      passwordHash,
+      gdprConsentAt: new Date(),
+    },
+  });
+
+  const warehouse = await prisma.location.create({
+    data: { code: 'warehouse', name: 'Dublin warehouse', type: LocationType.WAREHOUSE, address: 'Dublin' },
+  });
+  const shop = await prisma.location.create({
+    data: { code: 'dublin_shop', name: 'Dublin shop / collection', type: LocationType.SHOP, address: 'Dublin city' },
+  });
+  await prisma.location.create({
+    data: { code: 'popup', name: 'Pop-up', type: LocationType.POPUP },
+  });
+  await prisma.posDevice.create({
+    data: { locationId: shop.id, name: 'Till 1', externalId: 'tablet-pwa-1' },
+  });
+
+  const cats = new Map<string, string>();
+  for (const c of CATEGORIES) {
+    const row = await prisma.category.create({ data: c });
+    cats.set(c.slug, row.id);
+  }
+
+  const ramadan = await prisma.collection.create({
+    data: { slug: 'ramadan', name: 'Ramadan', season: CampaignSeason.RAMADAN, description: 'Quiet luxury for the month.' },
+  });
+  const eid = await prisma.collection.create({
+    data: { slug: 'eid', name: 'Eid', season: CampaignSeason.EID, description: 'Occasion abayas and sets.' },
+  });
+  await prisma.collection.create({
+    data: { slug: 'winter', name: 'Winter', season: CampaignSeason.WINTER },
+  });
+
+  const variantByProduct = new Map<string, string[]>();
+  for (const p of PRODUCTS) {
+    const product = await prisma.product.create({
+      data: {
+        slug: p.slug,
+        title: p.title,
+        description: p.description,
+        categoryId: cats.get(p.category)!,
+        occasion: p.occasion,
+        coverage: p.coverage,
+        originCountry: p.origin,
+        prayerReady: p.prayerReady ?? false,
+        care: 'Gentle cold wash. Hang dry.',
+        images: {
+          create: {
+            url: `https://placehold.co/900x1200/1c1917/f5f0e8?text=${encodeURIComponent(p.title)}`,
+            alt: p.title,
+          },
+        },
+      },
+    });
+    if (p.occasion === 'eid' || p.slug.includes('abaya')) {
+      await prisma.productCollection.create({ data: { productId: product.id, collectionId: eid.id } });
+    }
+    if (p.prayerReady) {
+      await prisma.productCollection.create({ data: { productId: product.id, collectionId: ramadan.id } });
+    }
+    const ids: string[] = [];
+    for (const size of p.sizes) {
+      for (const color of p.colors) {
+        const sku = `${p.slug.slice(0, 8)}-${size}-${color.slice(0, 3)}`.toUpperCase().replace(/\s/g, '');
+        const variant = await prisma.productVariant.create({
+          data: {
+            productId: product.id,
+            sku,
+            size,
+            color,
+            costCents: p.cost,
+            priceCents: p.price,
+            fabric: 'crepe',
+          },
+        });
+        await prisma.inventoryLevel.create({
+          data: {
+            variantId: variant.id,
+            locationId: warehouse.id,
+            onHand: p.openingQty,
+            reorderPoint: Math.max(4, Math.round(p.openingQty / 5)),
+          },
+        });
+        ids.push(variant.id);
+      }
+    }
+    variantByProduct.set(p.slug, ids);
+  }
+
+  const suppliersByCountry = new Map<string, string>();
+  for (const s of SUPPLIERS) {
+    const row = await prisma.supplier.create({
+      data: { ...s, example: true, notes: 'Seed example contact — verify before outreach.' },
+    });
+    if (!suppliersByCountry.has(s.country)) suppliersByCountry.set(s.country, row.id);
+  }
+
+  for (const po of YEAR1_POS) {
+    const supplierId = suppliersByCountry.get(po.country);
+    if (!supplierId) continue;
+    const created = await prisma.purchaseOrder.create({
+      data: {
+        supplierId,
+        monthBucket: po.bucket,
+        status: PurchaseOrderStatus.DRAFT,
+        notes: `Year 1 plan ${po.bucket} / ${po.country}`,
+      },
+    });
+    for (const line of po.lines) {
+      const variantId = variantByProduct.get(line.slug)?.[0];
+      const product = await prisma.product.findUnique({ where: { slug: line.slug } });
+      if (!variantId || !product) continue;
+      const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+      await prisma.purchaseOrderLine.create({
+        data: {
+          purchaseOrderId: created.id,
+          variantId,
+          quantity: line.qty,
+          unitCostCents: variant?.costCents ?? 0,
+        },
+      });
+    }
+  }
+
+  await prisma.promoCode.create({
+    data: { code: 'EID10', type: 'PERCENT', value: 1000, active: true },
+  });
+
+  const campaign = await prisma.campaign.create({
+    data: {
+      name: 'Ramadan / Eid Year 1',
+      season: CampaignSeason.RAMADAN,
+      audience: 'Dublin opted-in customers',
+      landingSlug: 'ramadan',
+    },
+  });
+  await prisma.contentCalendarItem.create({
+    data: {
+      campaignId: campaign.id,
+      channel: 'INSTAGRAM',
+      caption: 'Ramadan edit is live. Modest, photographed, Dublin collection available.',
+      publishOn: new Date(),
+    },
+  });
+
+  const totalLines = await prisma.purchaseOrderLine.aggregate({ _sum: { quantity: true } });
+  console.log(`Seeded. Planned PO units: ${totalLines._sum.quantity ?? 0}`);
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
