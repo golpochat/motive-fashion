@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { DataTable, Field, Panel, PrimaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
 
 export default function AdminMarketing() {
   const [items, setItems] = useState<{ id: string; channel: string; caption: string; publishOn: string }[]>([]);
@@ -29,29 +31,42 @@ export default function AdminMarketing() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl">Content calendar</h1>
-      <p className="text-sm">Captions only. Publish TikTok/Instagram yourself or via Buffer later.</p>
-      <form onSubmit={onSubmit} className="mt-6 max-w-lg space-y-3">
-        <select name="channel" className="w-full rounded-xl border px-3 py-2">
-          <option>INSTAGRAM</option>
-          <option>TIKTOK</option>
-          <option>EMAIL</option>
-          <option>WHATSAPP</option>
-        </select>
-        <textarea name="caption" required className="w-full rounded-xl border px-3 py-2" />
-        <input name="publishOn" type="datetime-local" required className="w-full rounded-xl border px-3 py-2" />
-        <button className="rounded-full bg-ink px-4 py-2 text-cream" type="submit">
-          Add item
-        </button>
-      </form>
-      <ul className="mt-8 space-y-3 text-sm">
-        {items.map((i) => (
-          <li key={i.id} className="border-b py-2">
-            {i.channel} · {new Date(i.publishOn).toLocaleString('en-IE')}
-            <div>{i.caption}</div>
-          </li>
-        ))}
-      </ul>
+      <PageHeader title="Marketing" description="Captions only. Publish TikTok and Instagram yourself or via Buffer later." />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr]">
+        <Panel title="Add item">
+          <form onSubmit={onSubmit} className="space-y-3">
+            <Field label="Channel">
+              <Select
+                name="channel"
+                className={fieldClass}
+                defaultValue="INSTAGRAM"
+                options={[
+                  { value: 'INSTAGRAM', label: 'INSTAGRAM' },
+                  { value: 'TIKTOK', label: 'TIKTOK' },
+                  { value: 'EMAIL', label: 'EMAIL' },
+                  { value: 'WHATSAPP', label: 'WHATSAPP' },
+                ]}
+              />
+            </Field>
+            <Field label="Caption">
+              <textarea name="caption" required className={fieldClass} />
+            </Field>
+            <Field label="Publish on">
+              <input name="publishOn" type="datetime-local" required className={fieldClass} />
+            </Field>
+            <PrimaryButton type="submit">Add item</PrimaryButton>
+          </form>
+        </Panel>
+        <DataTable headers={['Channel', 'When', 'Caption']}>
+          {items.map((i) => (
+            <tr key={i.id} className="hover:bg-ink/[0.02]">
+              <Td>{i.channel}</Td>
+              <Td muted>{new Date(i.publishOn).toLocaleString('en-IE')}</Td>
+              <Td>{i.caption}</Td>
+            </tr>
+          ))}
+        </DataTable>
+      </div>
     </div>
   );
 }

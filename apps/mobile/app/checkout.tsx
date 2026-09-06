@@ -13,12 +13,17 @@ export default function Checkout() {
       <Text style={{ fontSize: 24 }}>Checkout</Text>
       <TextInput placeholder="Name" value={name} onChangeText={setName} style={{ borderWidth: 1, padding: 8 }} />
       <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={{ borderWidth: 1, padding: 8 }} />
+      <Text>
+        Change of mind after dispatch: we refund the items. You pay return postage to us. Cancel before we ship: full
+        refund. Faulty goods: we cover the return.
+      </Text>
       <Pressable
         onPress={async () => {
           try {
             const cartId = getCartId();
             const sessionKey = getSessionKey();
-            const qs = new URLSearchParams({ sessionKey });
+            const qs = new URLSearchParams();
+            qs.set('sessionKey', sessionKey);
             if (cartId) qs.set('cartId', cartId);
             const cart = await api<{ id: string }>(`/cart?${qs.toString()}`, undefined, {
               method: cartId ? 'GET' : 'POST',
@@ -32,6 +37,7 @@ export default function Checkout() {
                 fulfillment: 'COLLECTION',
                 email,
                 name,
+                returnPolicyAck: true,
               }),
             });
             const pay = await api<{ url: string }>(

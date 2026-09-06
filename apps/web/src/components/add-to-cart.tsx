@@ -1,53 +1,48 @@
 'use client';
 
 import { useState } from 'react';
-import { API, cartSessionKey } from '@/lib/api';
+import { addCartItem } from '@/lib/cart-store';
+import { Select } from '@/components/select';
 
 type Variant = { id: string; size: string; color: string; available: number };
 
 export function AddToCart({ variants }: { variants: Variant[] }) {
   const [variantId, setVariantId] = useState(variants[0]?.id ?? '');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function add() {
-    const sessionKey = cartSessionKey();
-    const cartId = localStorage.getItem('mf_cart');
-    const created = cartId
-      ? { id: cartId }
-      : await fetch(`${API}/cart?sessionKey=${encodeURIComponent(sessionKey)}`, {
-          method: 'POST',
-          credentials: 'include',
-        }).then((r) => r.json());
-    localStorage.setItem('mf_cart', created.id);
-    await fetch(`${API}/cart/${created.id}/items?sessionKey=${encodeURIComponent(sessionKey)}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ variantId, quantity: 1 }),
-    });
-    setMsg('Reserved in your cart for 15 minutes.');
+    setBusy(true);
+    setMsg('');
+    try {
+      await addCartItem(variantId, 1);
+      setMsg('Reserved in your cart for 15 minutes.');
+    } catch {
+      setMsg('Could not add that piece. Try another size.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="mt-6 space-y-3">
       <label className="block text-sm">
         Size / colour
-        <select
+        <Select
           className="mt-1 w-full rounded-xl border border-ink/15 bg-white px-3 py-2"
           value={variantId}
-          onChange={(e) => setVariantId(e.target.value)}
-        >
-          {variants.map((v) => (
-            <option key={v.id} value={v.id} disabled={v.available < 1}>
-              {v.size} / {v.color} {v.available < 1 ? '(sold out)' : ''}
-            </option>
-          ))}
-        </select>
+          onChange={setVariantId}
+          options={variants.map((v) => ({
+            value: v.id,
+            label: `${v.size} / ${v.color}${v.available < 1 ? ' (sold out)' : ''}`,
+            disabled: v.available < 1,
+          }))}
+        />
       </label>
-      <button type="button" onClick={add} className="rounded-full bg-ink px-6 py-3 text-cream">
-        Add to cart
+      <button type="button" onClick={() => void add()} disabled={busy} className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50">
+        {busy ? 'Adding…' : 'Add to cart'}
       </button>
-      {msg ? <p className="text-sm text-moss">{msg}</p> : null}
+      {msg ? <p className="text-sm text-ink/70">{msg}</p> : null}
     </div>
   );
 }

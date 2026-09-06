@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { PermissionGate } from '@/components/permission-gate';
+import { PageHeader } from '@/components/page-header';
+import { DataTable, Td } from '@/components/dashboard-ui';
 import { API } from '@/lib/api';
 
 type Role = { id: string; slug: string; name: string };
@@ -50,45 +52,35 @@ export default function SuperAdminUsers() {
 
   return (
     <PermissionGate allow="rbac.users.assign">
-    <div>
-      <h1 className="font-serif text-3xl">Users</h1>
-      <p className="mt-2 text-sm text-ink/70">A user can hold several roles. Permissions are the union.</p>
-      {notice ? <p className="mt-3 text-sm">{notice}</p> : null}
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr>
-              <th>Person</th>
-              {roles.map((r) => (
-                <th key={r.id}>{r.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {people.map((p) => {
-              const held = new Set(p.memberships.map((m) => m.role.id));
-              return (
-                <tr key={p.id} className="border-t">
-                  <td className="py-2">
-                    {p.name}
-                    <div className="text-ink/50">{p.email}</div>
-                  </td>
-                  {roles.map((r) => (
-                    <td key={r.id}>
-                      <input
-                        type="checkbox"
-                        checked={held.has(r.id)}
-                        onChange={(e) => toggle(p.id, r.id, e.target.checked)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div>
+        <PageHeader
+          title="Users"
+          description="A person can hold several roles. Permissions are the union of every role they have."
+        />
+        {notice ? <p className="mb-4 text-sm">{notice}</p> : null}
+        <DataTable headers={['Person', ...roles.map((r) => r.name)]}>
+          {people.map((p) => {
+            const held = new Set(p.memberships.map((m) => m.role.id));
+            return (
+              <tr key={p.id} className="hover:bg-ink/[0.02]">
+                <Td>
+                  <span className="block font-medium">{p.name}</span>
+                  <span className="text-ink/55">{p.email}</span>
+                </Td>
+                {roles.map((r) => (
+                  <Td key={r.id}>
+                    <input
+                      type="checkbox"
+                      checked={held.has(r.id)}
+                      onChange={(e) => toggle(p.id, r.id, e.target.checked)}
+                    />
+                  </Td>
+                ))}
+              </tr>
+            );
+          })}
+        </DataTable>
       </div>
-    </div>
     </PermissionGate>
   );
 }

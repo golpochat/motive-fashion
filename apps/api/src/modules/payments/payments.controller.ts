@@ -17,6 +17,16 @@ export class PaymentsController {
     return this.payments.createCheckoutSession(orderId, { token, userId: user?.sub });
   }
 
+  @Post('checkout/:orderId/sync')
+  @UseGuards(OptionalJwtGuard)
+  sync(
+    @Param('orderId') orderId: string,
+    @Query('token') token?: string,
+    @CurrentUser() user?: { sub: string },
+  ) {
+    return this.payments.syncPaid(orderId, { token, userId: user?.sub });
+  }
+
   @Post('webhooks/stripe')
   stripe(@Req() req: Request, @Headers('stripe-signature') signature?: string) {
     const raw = (req as Request & { rawBody?: Buffer }).rawBody ?? (req.body as Buffer);

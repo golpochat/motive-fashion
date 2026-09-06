@@ -47,6 +47,10 @@ export const openapiSpec = {
           name: { type: 'string' },
           phone: { type: 'string' },
           promoCode: { type: 'string' },
+          paymentMethod: { type: 'string', enum: ['CARD', 'CASH'] },
+          returnPolicyAck: { type: 'boolean' },
+          addressId: { type: 'string', format: 'uuid' },
+          county: { type: 'string' },
           sessionKey: { type: 'string' },
           giftNote: { type: 'string' },
           address: { type: 'object', additionalProperties: true },
@@ -137,6 +141,20 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' } },
       },
     },
+    '/checkout/options': {
+      get: {
+        tags: ['Checkout'],
+        summary: 'Published fulfilment, public payments, and county rates',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/checkout/quote': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Live cart quote (shipping, promo, totals)',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Invalid promo or method' } },
+      },
+    },
     '/checkout/session': {
       post: {
         tags: ['Checkout'],
@@ -149,6 +167,17 @@ export const openapiSpec = {
       post: {
         tags: ['Checkout'],
         summary: 'Stripe Checkout Session or mock pay',
+        parameters: [
+          { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'token', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/checkout/{orderId}/sync': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Confirm paid from Stripe session (success page, before webhook)',
         parameters: [
           { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
           { name: 'token', in: 'query', schema: { type: 'string' } },
@@ -217,6 +246,15 @@ export const openapiSpec = {
       post: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Create product', responses: { '200': { description: 'OK' } } },
     },
     '/admin/orders': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List orders', responses: { '200': { description: 'OK' } } } },
+    '/admin/orders/{id}/status': {
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Advance fulfilment (pack / ship / collect)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not the next step' } },
+      },
+    },
     '/admin/whatsapp/broadcast': {
       post: {
         tags: ['Admin'],

@@ -1,6 +1,7 @@
-import { Controller, Delete, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard } from '../../common/auth';
 import { CustomersService } from './customers.service';
+import { addressCreateSchema, addressPatchSchema } from '@motive-fashion/validation';
 
 @Controller('account')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +21,31 @@ export class CustomersController {
   @Get('wishlist')
   wishlist(@CurrentUser() user: { sub: string }) {
     return this.customers.wishlist(user.sub);
+  }
+
+  @Get('addresses')
+  addresses(@CurrentUser() user: { sub: string }) {
+    return this.customers.addresses(user.sub);
+  }
+
+  @Post('addresses')
+  addAddress(@CurrentUser() user: { sub: string }, @Body() body: unknown) {
+    return this.customers.addAddress(user.sub, addressCreateSchema.parse(body));
+  }
+
+  @Patch('addresses/:id')
+  patchAddress(@CurrentUser() user: { sub: string }, @Param('id') id: string, @Body() body: unknown) {
+    return this.customers.patchAddress(user.sub, id, addressPatchSchema.parse(body));
+  }
+
+  @Post('addresses/:id/default')
+  setDefault(@CurrentUser() user: { sub: string }, @Param('id') id: string) {
+    return this.customers.setDefaultAddress(user.sub, id);
+  }
+
+  @Delete('addresses/:id')
+  removeAddress(@CurrentUser() user: { sub: string }, @Param('id') id: string) {
+    return this.customers.removeAddress(user.sub, id);
   }
 
   @Post('wishlist/:productId')

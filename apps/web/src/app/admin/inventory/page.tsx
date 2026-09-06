@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { DataTable, Field, Panel, PrimaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
 
 type Level = {
   id: string;
@@ -89,87 +91,94 @@ export default function AdminInventory() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl">Inventory</h1>
-      <p className="text-sm text-ink/70">available = on hand − reserved</p>
-      {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
-      {notice ? <p className="mt-3 text-sm">{notice}</p> : null}
+      <PageHeader
+        title="Inventory"
+        description="Available equals on hand minus reserved. Adjustments and transfers share this ledger."
+      />
+      {error ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
+      {notice ? <p className="mb-4 text-sm text-moss">{notice}</p> : null}
 
-      <div className="mt-6 grid gap-8 md:grid-cols-2">
-        <form onSubmit={onAdjust} className="max-w-md space-y-3">
-          <h2 className="font-serif text-xl">Adjust on-hand</h2>
-          <select name="level" required className="w-full rounded-xl border px-3 py-2">
-            <option value="">SKU at location</option>
-            {rows.map((r) => (
-              <option key={r.id} value={`${r.variantId}|${r.locationId}`}>
-                {r.variant.sku} · {r.location.code}
-              </option>
-            ))}
-          </select>
-          <input name="delta" type="number" required placeholder="Delta (e.g. -2 or 5)" className="w-full rounded-xl border px-3 py-2" />
-          <input name="reason" required minLength={3} placeholder="Reason" className="w-full rounded-xl border px-3 py-2" />
-          <button className="rounded-full bg-ink px-4 py-2 text-cream" type="submit">
-            Apply
-          </button>
-        </form>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Adjust on-hand">
+          <form onSubmit={onAdjust} className="space-y-3">
+            <Field label="SKU at location">
+              <Select
+                name="level"
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={rows.map((r) => ({
+                  value: `${r.variantId}|${r.locationId}`,
+                  label: `${r.variant.sku} · ${r.location.code}`,
+                }))}
+              />
+            </Field>
+            <Field label="Delta">
+              <input name="delta" type="number" required placeholder="e.g. -2 or 5" className={fieldClass} />
+            </Field>
+            <Field label="Reason">
+              <input name="reason" required minLength={3} className={fieldClass} />
+            </Field>
+            <PrimaryButton type="submit">Apply</PrimaryButton>
+          </form>
+        </Panel>
 
-        <form onSubmit={onTransfer} className="max-w-md space-y-3">
-          <h2 className="font-serif text-xl">Transfer</h2>
-          <select name="variantId" required className="w-full rounded-xl border px-3 py-2">
-            <option value="">SKU</option>
-            {variants.map((r) => (
-              <option key={r.variantId} value={r.variantId}>
-                {r.variant.sku} · {r.variant.product.title}
-              </option>
-            ))}
-          </select>
-          <select name="fromLocationId" required className="w-full rounded-xl border px-3 py-2">
-            <option value="">From</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.code}
-              </option>
-            ))}
-          </select>
-          <select name="toLocationId" required className="w-full rounded-xl border px-3 py-2">
-            <option value="">To</option>
-            {locations.map((l) => (
-              <option key={`to-${l.id}`} value={l.id}>
-                {l.code}
-              </option>
-            ))}
-          </select>
-          <input name="quantity" type="number" min={1} required defaultValue={1} className="w-full rounded-xl border px-3 py-2" />
-          <button className="rounded-full bg-ink px-4 py-2 text-cream" type="submit">
-            Move stock
-          </button>
-        </form>
+        <Panel title="Transfer">
+          <form onSubmit={onTransfer} className="space-y-3">
+            <Field label="SKU">
+              <Select
+                name="variantId"
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={variants.map((r) => ({
+                  value: r.variantId,
+                  label: `${r.variant.sku} · ${r.variant.product.title}`,
+                }))}
+              />
+            </Field>
+            <Field label="From">
+              <Select
+                name="fromLocationId"
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={locations.map((l) => ({ value: l.id, label: l.code }))}
+              />
+            </Field>
+            <Field label="To">
+              <Select
+                name="toLocationId"
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={locations.map((l) => ({ value: l.id, label: l.code }))}
+              />
+            </Field>
+            <Field label="Quantity">
+              <input name="quantity" type="number" min={1} required defaultValue={1} className={fieldClass} />
+            </Field>
+            <PrimaryButton type="submit">Move stock</PrimaryButton>
+          </form>
+        </Panel>
       </div>
 
-      <table className="mt-8 w-full text-left text-sm">
-        <thead>
-          <tr>
-            <th>SKU</th>
-            <th>Location</th>
-            <th>On hand</th>
-            <th>Reserved</th>
-            <th>Free</th>
-          </tr>
-        </thead>
-        <tbody>
+      <div className="mt-6">
+        <DataTable headers={['SKU', 'Location', 'On hand', 'Reserved', 'Free']}>
           {rows.map((r) => (
-            <tr key={r.id} className="border-t">
-              <td className="py-2">
-                {r.variant.sku}
-                <div className="text-ink/60">{r.variant.product.title}</div>
-              </td>
-              <td>{r.location.code}</td>
-              <td>{r.onHand}</td>
-              <td>{r.reserved}</td>
-              <td>{Math.max(0, r.onHand - r.reserved)}</td>
+            <tr key={r.id} className="hover:bg-ink/[0.02]">
+              <Td>
+                <span className="block font-medium">{r.variant.sku}</span>
+                <span className="text-ink/55">{r.variant.product.title}</span>
+              </Td>
+              <Td muted>{r.location.code}</Td>
+              <Td>{r.onHand}</Td>
+              <Td>{r.reserved}</Td>
+              <Td>{Math.max(0, r.onHand - r.reserved)}</Td>
             </tr>
           ))}
-        </tbody>
-      </table>
+        </DataTable>
+      </div>
     </div>
   );
 }

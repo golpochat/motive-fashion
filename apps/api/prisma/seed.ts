@@ -1,5 +1,15 @@
-import { PrismaClient, CampaignSeason, LocationType, PurchaseOrderStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  CampaignSeason,
+  LocationType,
+  PurchaseOrderStatus,
+} from '../generated/prisma';
 import bcrypt from 'bcryptjs';
+import {
+  DEFAULT_COUNTY_RATE_CENTS,
+  DEFAULT_FREE_SHIP_OVER_CENTS,
+  IE_COUNTIES,
+} from '@motive-fashion/config';
 
 const prisma = new PrismaClient();
 
@@ -42,7 +52,8 @@ function fabricFor(p: ProductSeed) {
   if (p.slug.includes('cotton') || p.slug.includes('undercap')) return 'cotton';
   if (p.category === 'accessories') return 'metal';
   if (p.category === 'niqabs') return 'crepe';
-  if (p.category === 'abayas' || p.category === 'jilbabs' || p.category === 'khimars') return 'nida crepe';
+  if (p.category === 'abayas' || p.category === 'jilbabs' || p.category === 'khimars')
+    return 'nida crepe';
   return 'crepe';
 }
 
@@ -65,7 +76,8 @@ const PRODUCTS: ProductSeed[] = [
   {
     slug: 'everyday-chiffon-hijab',
     title: 'Everyday chiffon hijab',
-    description: 'Light chiffon with a soft drape. Everyday coverage for Dublin weather, in four quiet colours.',
+    description:
+      'Light chiffon with a soft drape. Everyday coverage for Dublin weather, in four quiet colours.',
     category: 'hijabs',
     occasion: 'daily',
     coverage: 'full',
@@ -93,7 +105,8 @@ const PRODUCTS: ProductSeed[] = [
   {
     slug: 'jersey-instant-hijab',
     title: 'Jersey instant hijab',
-    description: 'Stretch jersey pull-on hijab with a sewn undercap. For school runs and travel days.',
+    description:
+      'Stretch jersey pull-on hijab with a sewn undercap. For school runs and travel days.',
     category: 'hijabs',
     occasion: 'daily',
     coverage: 'full',
@@ -135,7 +148,8 @@ const PRODUCTS: ProductSeed[] = [
   {
     slug: 'everyday-nida-abaya',
     title: 'Everyday nida abaya',
-    description: 'A tailored black nida abaya for work and collection days. Lightweight, not see-through.',
+    description:
+      'A tailored black nida abaya for work and collection days. Lightweight, not see-through.',
     category: 'abayas',
     occasion: 'daily',
     coverage: 'full',
@@ -163,7 +177,8 @@ const PRODUCTS: ProductSeed[] = [
   {
     slug: 'winter-wool-modest-dress',
     title: 'Winter wool modest dress',
-    description: 'Wool-blend modest dress with long sleeves. Cut for Dublin winters over a base layer.',
+    description:
+      'Wool-blend modest dress with long sleeves. Cut for Dublin winters over a base layer.',
     category: 'dresses',
     occasion: 'winter',
     coverage: 'full',
@@ -452,7 +467,14 @@ const YEAR1_POS: { bucket: string; country: string; lines: { slug: string; qty: 
     ],
   },
   { bucket: 'Y1-M09-10', country: 'ID', lines: [{ slug: 'prayer-set', qty: 60 }] },
-  { bucket: 'Y1-M09-10', country: 'SA', lines: [{ slug: 'premium-crepe-abaya', qty: 30 }, { slug: 'everyday-niqab', qty: 100 }] },
+  {
+    bucket: 'Y1-M09-10',
+    country: 'SA',
+    lines: [
+      { slug: 'premium-crepe-abaya', qty: 30 },
+      { slug: 'everyday-niqab', qty: 100 },
+    ],
+  },
   { bucket: 'Y1-M09-10', country: 'AE', lines: [{ slug: 'luxury-silk-abaya', qty: 30 }] },
   {
     bucket: 'Y1-M11-12',
@@ -469,6 +491,9 @@ const YEAR1_POS: { bucket: string; country: string; lines: { slug: string; qty: 
 async function main() {
   await prisma.webhookEvent.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.deliveryCounty.deleteMany();
+  await prisma.fulfilmentMethodConfig.deleteMany();
+  await prisma.paymentMethodConfig.deleteMany();
   await prisma.contentCalendarItem.deleteMany();
   await prisma.campaign.deleteMany();
   await prisma.posSale.deleteMany();
@@ -541,10 +566,15 @@ async function main() {
     { key: 'procurement.write', name: 'Suppliers and purchase orders', group: 'Commerce' },
     { key: 'locations.read', name: 'View locations', group: 'Shop floor' },
     { key: 'pos.sale', name: 'Take POS sales', group: 'Shop floor' },
+    { key: 'commerce.settings', name: 'Edit checkout methods and county rates', group: 'Commerce' },
     { key: 'marketing.write', name: 'Marketing calendar', group: 'Commerce' },
     { key: 'whatsapp.broadcast', name: 'WhatsApp broadcast', group: 'Commerce' },
   ]) {
-    await prisma.permission.upsert({ where: { key: row.key }, create: row, update: { name: row.name, group: row.group } });
+    await prisma.permission.upsert({
+      where: { key: row.key },
+      create: row,
+      update: { name: row.name, group: row.group },
+    });
   }
   const perms = await prisma.permission.findMany();
   const byKey = Object.fromEntries(perms.map((p) => [p.key, p.id]));
@@ -565,6 +595,7 @@ async function main() {
       'procurement.write',
       'locations.read',
       'pos.sale',
+      'commerce.settings',
       'marketing.write',
       'whatsapp.broadcast',
     ],
@@ -596,7 +627,9 @@ async function main() {
       data: keys.filter((k) => byKey[k]).map((k) => ({ roleId: role.id, permissionId: byKey[k]! })),
     });
   }
-  await prisma.userMembership.create({ data: { userId: adminUser.id, roleId: roleIds['super-admin']! } });
+  await prisma.userMembership.create({
+    data: { userId: adminUser.id, roleId: roleIds['super-admin']! },
+  });
 
   const staffHash = await bcrypt.hash('MotiveStaff!2026', 12);
   const staffUser = await prisma.user.create({
@@ -620,13 +653,89 @@ async function main() {
       gdprConsentAt: new Date(),
     },
   });
-  await prisma.userMembership.create({ data: { userId: customerUser.id, roleId: roleIds.customer! } });
+  await prisma.userMembership.create({
+    data: { userId: customerUser.id, roleId: roleIds.customer! },
+  });
+
+  await prisma.address.create({
+    data: {
+      userId: customerUser.id,
+      label: 'HOME',
+      line1: '1 Grafton Street',
+      city: 'Dublin',
+      county: 'DUBLIN',
+      eircode: 'D02 AF30',
+      country: 'IE',
+      isDefault: true,
+    },
+  });
+
+  await prisma.fulfilmentMethodConfig.createMany({
+    data: [
+      {
+        code: 'DELIVERY',
+        name: 'Ireland delivery',
+        published: true,
+        isDefault: true,
+        sortOrder: 0,
+        feeCents: 0,
+        freeOverCents: DEFAULT_FREE_SHIP_OVER_CENTS,
+      },
+      {
+        code: 'COLLECTION',
+        name: 'Collect in Dublin',
+        published: true,
+        isDefault: false,
+        sortOrder: 1,
+        feeCents: 0,
+      },
+    ],
+  });
+  await prisma.deliveryCounty.createMany({
+    data: IE_COUNTIES.map((row, index) => ({
+      code: row.code,
+      name: row.name,
+      published: true,
+      rateCents: DEFAULT_COUNTY_RATE_CENTS,
+      sortOrder: index,
+    })),
+  });
+  await prisma.paymentMethodConfig.createMany({
+    data: [
+      {
+        code: 'CARD',
+        name: 'Card',
+        published: true,
+        isDefault: true,
+        publicChannel: true,
+        sortOrder: 0,
+      },
+      {
+        code: 'CASH',
+        name: 'Cash',
+        published: true,
+        isDefault: false,
+        publicChannel: false,
+        sortOrder: 1,
+      },
+    ],
+  });
 
   const warehouse = await prisma.location.create({
-    data: { code: 'warehouse', name: 'Dublin warehouse', type: LocationType.WAREHOUSE, address: 'Dublin' },
+    data: {
+      code: 'warehouse',
+      name: 'Dublin warehouse',
+      type: LocationType.WAREHOUSE,
+      address: 'Dublin',
+    },
   });
   const shop = await prisma.location.create({
-    data: { code: 'dublin_shop', name: 'Dublin shop / collection', type: LocationType.SHOP, address: 'Dublin city' },
+    data: {
+      code: 'dublin_shop',
+      name: 'Dublin shop / collection',
+      type: LocationType.SHOP,
+      address: 'Dublin city',
+    },
   });
   await prisma.location.create({
     data: { code: 'popup', name: 'Pop-up', type: LocationType.POPUP },
@@ -642,10 +751,20 @@ async function main() {
   }
 
   const ramadan = await prisma.collection.create({
-    data: { slug: 'ramadan', name: 'Ramadan', season: CampaignSeason.RAMADAN, description: 'Quiet luxury for the month.' },
+    data: {
+      slug: 'ramadan',
+      name: 'Ramadan',
+      season: CampaignSeason.RAMADAN,
+      description: 'Quiet luxury for the month.',
+    },
   });
   const eid = await prisma.collection.create({
-    data: { slug: 'eid', name: 'Eid', season: CampaignSeason.EID, description: 'Occasion abayas and sets.' },
+    data: {
+      slug: 'eid',
+      name: 'Eid',
+      season: CampaignSeason.EID,
+      description: 'Occasion abayas and sets.',
+    },
   });
   const winter = await prisma.collection.create({
     data: { slug: 'winter', name: 'Winter', season: CampaignSeason.WINTER },
@@ -673,13 +792,19 @@ async function main() {
       },
     });
     if (p.occasion === 'eid' || p.category === 'abayas') {
-      await prisma.productCollection.create({ data: { productId: product.id, collectionId: eid.id } });
+      await prisma.productCollection.create({
+        data: { productId: product.id, collectionId: eid.id },
+      });
     }
     if (p.prayerReady || p.occasion === 'prayer') {
-      await prisma.productCollection.create({ data: { productId: product.id, collectionId: ramadan.id } });
+      await prisma.productCollection.create({
+        data: { productId: product.id, collectionId: ramadan.id },
+      });
     }
     if (p.occasion === 'winter') {
-      await prisma.productCollection.create({ data: { productId: product.id, collectionId: winter.id } });
+      await prisma.productCollection.create({
+        data: { productId: product.id, collectionId: winter.id },
+      });
     }
     const ids: string[] = [];
     for (const size of p.sizes) {
@@ -731,7 +856,12 @@ async function main() {
         supplierId,
         productId: product.id,
         unitCostCents: p.cost,
-        moq: p.category === 'hijabs' || p.category === 'undercaps' ? 50 : p.category === 'accessories' ? 100 : 10,
+        moq:
+          p.category === 'hijabs' || p.category === 'undercaps'
+            ? 50
+            : p.category === 'accessories'
+              ? 100
+              : 10,
         leadDays: p.origin === 'CN' ? 35 : p.origin === 'TR' ? 18 : 21,
       },
     });

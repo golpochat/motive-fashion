@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import { formatEur } from '@motive-fashion/utils';
+import { OrderReceipt, type TrackedOrder } from './order-receipt';
 
 export default async function OrderPage({
   params,
@@ -11,28 +11,13 @@ export default async function OrderPage({
   const { id } = await params;
   const { token } = await searchParams;
   if (!token) {
-    return <p>This order link is missing its tracking token.</p>;
+    return (
+      <div className="mx-auto max-w-lg">
+        <h1 className="font-serif text-4xl">Order link</h1>
+        <p className="mt-4 text-sm text-ink/70">This order link is missing its tracking token.</p>
+      </div>
+    );
   }
-  const order = await api<{
-    id: string;
-    status: string;
-    totalCents: number;
-    fulfillment: string;
-    items: { title: string; quantity: number }[];
-  }>(`/orders/${id}/track?token=${encodeURIComponent(token)}`);
-  return (
-    <div>
-      <h1 className="font-serif text-4xl">Order {order.id.slice(0, 8)}</h1>
-      <p className="mt-4">Status: {order.status.replaceAll('_', ' ')}</p>
-      <p>Fulfillment: {order.fulfillment}</p>
-      <ul className="mt-6">
-        {order.items.map((i, idx) => (
-          <li key={idx}>
-            {i.title} × {i.quantity}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-4">{formatEur(order.totalCents)} inc. VAT</p>
-    </div>
-  );
+  const order = await api<TrackedOrder>(`/orders/${id}/track?token=${encodeURIComponent(token)}`);
+  return <OrderReceipt initial={order} token={token} />;
 }

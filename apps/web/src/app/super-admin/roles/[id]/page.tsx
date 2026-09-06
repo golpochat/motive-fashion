@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { Field, PrimaryButton, fieldClass } from '@/components/dashboard-ui';
 
 type Perm = { id: string; key: string; name: string; group: string };
 type Role = {
@@ -56,22 +58,30 @@ export default function SuperAdminRoleEdit() {
 
   return (
     <form onSubmit={onSave}>
-      <h1 className="font-serif text-3xl">{role.name}</h1>
-      <p className="text-sm text-ink/60">{role.slug}{role.system ? ' · system role' : ''}</p>
+      <PageHeader
+        title={role.name}
+        description={`${role.slug}${role.system ? ' · system role' : ''}. Super-admin always has every permission (*).`}
+      />
       {role.slug === 'super-admin' ? (
         <p className="mt-3 text-sm text-ink/70">Super-admin always has every permission (*). That grant cannot be edited.</p>
       ) : null}
       {notice ? <p className="mt-3 text-sm">{notice}</p> : null}
+      <div className="max-w-xl space-y-3">
+      <Field label="Name">
       <input
-        className="mt-4 w-full max-w-md rounded-xl border px-3 py-2"
+        className={fieldClass}
         value={role.name}
         onChange={(e) => setRole({ ...role, name: e.target.value })}
       />
+      </Field>
+      <Field label="Description">
       <textarea
-        className="mt-3 w-full max-w-md rounded-xl border px-3 py-2"
+        className={fieldClass}
         value={role.description}
         onChange={(e) => setRole({ ...role, description: e.target.value })}
       />
+      </Field>
+      </div>
       {role.slug === 'super-admin' ? null : groups.map((group) => (
         <div key={group} className="mt-6">
           <h2 className="font-serif text-xl">{group}</h2>
@@ -103,9 +113,9 @@ export default function SuperAdminRoleEdit() {
           </ul>
         </div>
       ))}
-      <button className="mt-6 rounded-full bg-ink px-4 py-2 text-cream" type="submit">
+      <PrimaryButton type="submit" className="mt-6">
         {role.slug === 'super-admin' ? 'Save name' : 'Save permissions'}
-      </button>
+      </PrimaryButton>
     </form>
   );
 }

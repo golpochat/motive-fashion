@@ -1,8 +1,18 @@
 import { z } from 'zod';
+import { isValidEircode, normalizeEircode, PASSWORD_MIN_LENGTH } from '@motive-fashion/config';
+
+const ieEircode = z
+  .string({ required_error: 'Enter an Eircode.' })
+  .trim()
+  .min(1, 'Enter an Eircode.')
+  .transform(normalizeEircode)
+  .refine(isValidEircode, 'Enter a valid Eircode, like D02 AF30.');
+
+const addressLabel = z.enum(['HOME', 'WORK', 'FAMILY', 'OTHER']);
 
 export const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(10),
+  password: z.string().min(PASSWORD_MIN_LENGTH),
   name: z.string().min(2).max(80),
   phone: z.string().min(8).optional(),
   gdprConsent: z.literal(true),
@@ -28,20 +38,75 @@ export const checkoutSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2),
   phone: z.string().min(8).optional(),
+  addressId: z.string().uuid().optional(),
   address: z
     .object({
-      line1: z.string().min(3),
+      line1: z.string({ required_error: 'Enter the first line of the address.' }).min(3, 'Enter the first line of the address.'),
       line2: z.string().optional(),
-      city: z.string().min(2),
-      county: z.string().optional(),
-      eircode: z.string().optional(),
+      city: z.string({ required_error: 'Enter a town or city.' }).min(2, 'Enter a town or city.'),
+      county: z.string({ required_error: 'Choose a county.' }).min(2, 'Choose a county.').max(40),
+      eircode: ieEircode,
       country: z.string().default('IE'),
+      label: addressLabel.optional(),
     })
     .optional(),
+  county: z.string().min(2).max(40).optional(),
   giftNote: z.string().max(240).optional(),
   promoCode: z.string().max(40).optional(),
+  paymentMethod: z.enum(['CARD', 'CASH']).optional(),
+  returnPolicyAck: z.boolean().optional(),
   sessionKey: z.string().min(8).max(80).optional(),
 });
+
+export const checkoutQuoteSchema = z.object({
+  cartId: z.string().uuid(),
+  sessionKey: z.string().min(8).max(80).optional(),
+  fulfillment: z.enum(['DELIVERY', 'COLLECTION']),
+  county: z.string().min(2).max(40).optional(),
+  promoCode: z.string().max(40).optional(),
+});
+
+const addressFields = z.object({
+  label: addressLabel,
+  line1: z.string({ required_error: 'Enter the first line of the address.' }).min(3, 'Enter the first line of the address.'),
+  line2: z.string().optional(),
+  city: z.string({ required_error: 'Enter a town or city.' }).min(2, 'Enter a town or city.'),
+  county: z.string({ required_error: 'Choose a county.' }).min(2, 'Choose a county.').max(40),
+  eircode: ieEircode,
+  country: z.literal('IE').optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export const addressCreateSchema = addressFields.extend({
+  label: addressLabel.default('HOME'),
+});
+
+export const addressPatchSchema = addressFields.partial().strict();
+
+export const fulfilmentPatchSchema = z
+  .object({
+    name: z.string().min(2).max(80).optional(),
+    published: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
+    feeCents: z.number().int().min(0).optional(),
+    freeOverCents: z.number().int().min(0).nullable().optional(),
+  })
+  .strict();
+
+export const countyPatchSchema = z
+  .object({
+    published: z.boolean().optional(),
+    rateCents: z.number().int().min(0).optional(),
+  })
+  .strict();
+
+export const paymentPatchSchema = z
+  .object({
+    name: z.string().min(2).max(80).optional(),
+    published: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
+  })
+  .strict();
 
 export const inventoryAdjustSchema = z.object({
   variantId: z.string().uuid(),
@@ -157,17 +222,9 @@ export const posSaleSchema = z.object({
 });
 
 export const orderStatusSchema = z.object({
-  status: z.enum([
-    'PENDING_PAYMENT',
-    'CONFIRMED',
-    'PACKING',
-    'SHIPPED',
-    'READY_FOR_COLLECTION',
-    'DELIVERED',
-    'COLLECTED',
-    'CANCELLED',
-    'REFUNDED',
-  ]),
+  status: z.enum(['PACKING', 'SHIPPED', 'READY_FOR_COLLECTION', 'DELIVERED', 'COLLECTED']),
+  carrier: z.string().min(1).max(40).optional(),
+  trackingNo: z.string().min(4).max(80).optional(),
 });
 
 export const refundSchema = z.object({
@@ -199,3 +256,6 @@ export const userRolesSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+export type CheckoutQuoteInput = z.infer<typeof checkoutQuoteSchema>;
+export type AddressCreateInput = z.infer<typeof addressCreateSchema>;
+export type AddressPatchInput = z.infer<typeof addressPatchSchema>;

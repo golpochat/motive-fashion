@@ -12,7 +12,8 @@ export default function TermsPage() {
       </p>
       <p>
         You have 14 days from delivery or collection to withdraw, except sealed goods opened for hygiene where the seal
-        is broken. See <a href="/legal/returns">Returns</a>.
+        is broken. Change of mind after dispatch: we refund the items; you pay return postage to us. Cancel before we
+        ship: full refund. Faulty goods: we cover the return. See <a href="/legal/returns">Returns</a>.
       </p>
       <p>Ireland delivery and Dublin collection only at launch. We may refuse an order if stock cannot be fulfilled.</p>
       <p>Governing law: Ireland. Nothing here limits your statutory rights.</p>

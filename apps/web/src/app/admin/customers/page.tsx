@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { DataTable, Td } from '@/components/dashboard-ui';
 
 export default function AdminCustomers() {
   const [rows, setRows] = useState<{ id: string; email: string; name: string }[]>([]);
@@ -12,14 +14,15 @@ export default function AdminCustomers() {
   }, []);
   return (
     <div>
-      <h1 className="font-serif text-3xl">Customers</h1>
-      <ul className="mt-4 text-sm">
+      <PageHeader title="Customers" description="People with an account. Password hashes are never returned." />
+      <DataTable headers={['Name', 'Email']}>
         {rows.map((c) => (
-          <li key={c.id} className="border-b py-2">
-            {c.name} — {c.email}
-          </li>
+          <tr key={c.id} className="hover:bg-ink/[0.02]">
+            <Td>{c.name}</Td>
+            <Td muted>{c.email}</Td>
+          </tr>
         ))}
-      </ul>
+      </DataTable>
     </div>
   );
 }

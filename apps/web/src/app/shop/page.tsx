@@ -25,14 +25,17 @@ export default async function ShopPage({
     <div>
       <h1 className="font-serif text-4xl">Shop</h1>
       <div className="mt-6 flex flex-wrap gap-2">
-        <Link href="/shop" className="rounded-full border px-3 py-1 text-sm no-underline">
+        <Link
+          href="/shop"
+          className={`rounded-full border px-3 py-1 text-sm no-underline ${q.category ? 'border-ink/15 hover:border-accent' : 'border-accent bg-accent/15'}`}
+        >
           All
         </Link>
         {categories.map((c) => (
           <Link
             key={c.slug}
             href={`/shop/${c.slug}`}
-            className="rounded-full border px-3 py-1 text-sm no-underline"
+            className={`rounded-full border px-3 py-1 text-sm no-underline ${q.category === c.slug ? 'border-accent bg-accent/15' : 'border-ink/15 hover:border-accent'}`}
           >
             {c.name}
           </Link>

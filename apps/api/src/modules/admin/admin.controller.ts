@@ -3,7 +3,8 @@ import { OrderStatus, UserRole } from '@prisma/client';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { productCreateSchema, productPatchSchema, variantCreateSchema, promoCreateSchema, orderStatusSchema, refundSchema, resolveReturnSchema } from '@motive-fashion/validation';
+import { CommerceService } from '../commerce/commerce.service';
+import { productCreateSchema, productPatchSchema, variantCreateSchema, promoCreateSchema, orderStatusSchema, refundSchema, resolveReturnSchema, fulfilmentPatchSchema, countyPatchSchema, paymentPatchSchema } from '@motive-fashion/validation';
 import { slugify } from '@motive-fashion/utils';
 import { customerPublicSelect } from '../../common/user-select';
 import { writeAudit } from '../../common/audit';
@@ -14,6 +15,7 @@ export class AdminController {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(OrdersService) private readonly orders: OrdersService,
+    @Inject(CommerceService) private readonly commerce: CommerceService,
   ) {}
 
   @Get('analytics')
@@ -123,7 +125,10 @@ export class AdminController {
   @RequirePermissions('orders.pack')
   setStatus(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = orderStatusSchema.parse(body);
-    return this.orders.transition(id, dto.status, user.sub);
+    return this.orders.transition(id, dto.status, user.sub, {
+      carrier: dto.carrier,
+      trackingNo: dto.trackingNo,
+    });
   }
 
   @Post('orders/:id/refund')
@@ -184,5 +189,56 @@ export class AdminController {
       meta: { type: dto.type, value: dto.value },
     });
     return promo;
+  }
+
+  @Get('commerce')
+  @RequirePermissions('commerce.settings')
+  commerceSettings() {
+    return this.commerce.adminSnapshot();
+  }
+
+  @Patch('commerce/fulfilment/:id')
+  @RequirePermissions('commerce.settings')
+  async patchFulfilment(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = fulfilmentPatchSchema.parse(body);
+    const row = await this.commerce.patchFulfilment(id, dto);
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'commerce.fulfilment.update',
+      entity: 'FulfilmentMethodConfig',
+      entityId: id,
+      meta: dto,
+    });
+    return row;
+  }
+
+  @Patch('commerce/counties/:id')
+  @RequirePermissions('commerce.settings')
+  async patchCounty(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = countyPatchSchema.parse(body);
+    const row = await this.commerce.patchCounty(id, dto);
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'commerce.county.update',
+      entity: 'DeliveryCounty',
+      entityId: id,
+      meta: dto,
+    });
+    return row;
+  }
+
+  @Patch('commerce/payments/:id')
+  @RequirePermissions('commerce.settings')
+  async patchPayment(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = paymentPatchSchema.parse(body);
+    const row = await this.commerce.patchPayment(id, dto);
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'commerce.payment.update',
+      entity: 'PaymentMethodConfig',
+      entityId: id,
+      meta: dto,
+    });
+    return row;
   }
 }

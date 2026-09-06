@@ -1,56 +1,185 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { API } from '@/lib/api';
-import { hasPerm, type Me } from '@/lib/rbac';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { hasPerm } from '@/lib/rbac';
+import { navActive, workspaceById, type WorkspaceId } from '@/lib/workspaces';
+import { ProfileMenu } from '@/components/profile-menu';
+import { useSession } from '@/components/session-provider';
+import { ConsoleFooter } from '@/components/dashboard-ui';
+import { Icon } from '@/components/icons';
+import { BrandMark } from '@/components/brand-logo';
+import { BRAND } from '@motive-fashion/config';
 
-type NavLink = { href: string; label: string; perm?: string };
+const COLLAPSE_KEY = 'mf_sidebar_collapsed';
+
+function MenuGlyph({ mobileOpen, collapsed }: { mobileOpen: boolean; collapsed: boolean }) {
+  const desktopOpen = !collapsed;
+  return (
+    <span className="relative block h-3.5 w-4" aria-hidden>
+      <span
+        className={`absolute left-0 top-0 h-0.5 w-4 bg-primary transition-transform duration-300 ${mobileOpen ? 'translate-y-[6px] rotate-45' : ''} ${desktopOpen ? 'md:translate-y-[6px] md:rotate-45' : 'md:translate-y-0 md:rotate-0'}`}
+      />
+      <span
+        className={`absolute left-0 top-[6px] h-0.5 w-4 bg-primary transition-opacity duration-200 ${mobileOpen ? 'opacity-0' : 'opacity-100'} ${desktopOpen ? 'md:opacity-0' : 'md:opacity-100'}`}
+      />
+      <span
+        className={`absolute left-0 top-[12px] h-0.5 w-4 bg-primary transition-transform duration-300 ${mobileOpen ? '-translate-y-[6px] -rotate-45' : ''} ${desktopOpen ? 'md:-translate-y-[6px] md:-rotate-45' : 'md:translate-y-0 md:rotate-0'}`}
+      />
+    </span>
+  );
+}
 
 export function DashboardShell({
-  title,
-  links,
+  workspace,
   children,
 }: {
-  title: string;
-  links: NavLink[];
+  workspace: WorkspaceId;
   children: React.ReactNode;
 }) {
-  const [me, setMe] = useState<Me | null>(null);
+  const pathname = usePathname();
+  const { me, logout } = useSession();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const ws = workspaceById(workspace);
+
+  const visibleLinks = useMemo(
+    () => ws.nav.filter((item) => !item.perm || hasPerm(me, item.perm)),
+    [me, ws.nav],
+  );
+
+  const sections = useMemo(() => {
+    const names = [...new Set(visibleLinks.map((l) => l.section))];
+    return names.map((name) => ({ name, items: visibleLinks.filter((l) => l.section === name) }));
+  }, [visibleLinks]);
 
   useEffect(() => {
-    fetch(`${API}/account/me`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setMe);
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1');
+    } catch {
+      /* ignore */
+    }
   }, []);
 
-  const consoles = [
-    hasPerm(me, 'rbac.roles.write') ? { href: '/super-admin', label: 'Super-admin' } : null,
-    hasPerm(me, 'dashboard.admin') ? { href: '/admin', label: 'Admin' } : null,
-    hasPerm(me, 'dashboard.staff') ? { href: '/staff', label: 'Staff' } : null,
-    { href: '/user', label: 'Account' },
-  ].filter(Boolean) as { href: string; label: string }[];
+  function persistCollapsed(next: boolean) {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function toggleNav() {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+      persistCollapsed(!collapsed);
+      return;
+    }
+    setMobileOpen((open) => !open);
+  }
+
+  const current = visibleLinks.find((item) => navActive(pathname, item));
+  const narrow = collapsed;
 
   return (
-    <div className="grid gap-8 md:grid-cols-[200px_1fr]">
-      <aside className="flex flex-col gap-2 text-sm">
-        <p className="font-serif text-lg">{title}</p>
-        <div className="mb-4 flex flex-col gap-1 text-xs uppercase tracking-widest text-ink/50">
-          {consoles.map((c) => (
-            <Link key={c.href} href={c.href} className="no-underline hover:underline">
-              {c.label}
-            </Link>
-          ))}
+    <div data-theme={workspace} className="flex h-dvh overflow-hidden bg-surface">
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-primary/40 transition-opacity duration-300 md:hidden"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-fg transition-[transform,width] duration-300 ease-in-out md:relative md:inset-auto md:h-full md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${narrow ? 'md:w-16' : 'md:w-64'}`}
+      >
+        <div className={`flex shrink-0 items-center border-b border-sidebar-fg/10 ${narrow ? 'justify-center px-2 py-4' : 'gap-2.5 px-4 py-4'}`}>
+          <BrandMark className="h-8 w-8 shrink-0" />
+          {narrow ? (
+            <span className="sr-only">
+              {BRAND.name}, {ws.label}
+            </span>
+          ) : (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium tracking-[0.02em]">{BRAND.name}</span>
+              <span className="mt-0.5 block truncate text-[10px] uppercase tracking-[0.18em] text-accent">{ws.label}</span>
+            </span>
+          )}
         </div>
-        {links
-          .filter((l) => !l.perm || hasPerm(me, l.perm))
-          .map((l) => (
-            <Link key={l.href} href={l.href} className="no-underline hover:underline">
-              {l.label}
-            </Link>
+
+        <nav className="sidebar-nav min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2">
+          {sections.map((section) => (
+            <div key={section.name} className="mb-2 last:mb-0">
+              {narrow ? null : (
+                <p className="px-2 pb-1 text-[10px] uppercase tracking-widest text-sidebar-fg/40">{section.name}</p>
+              )}
+              <ul className="space-y-0.5">
+                {section.items.map((item) => {
+                  const active = navActive(pathname, item);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        title={item.label}
+                        className={`flex items-center gap-3 rounded-lg text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2'} ${active ? 'bg-accent/25 text-sidebar-fg' : 'text-sidebar-fg/70 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
+                      >
+                        <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
+                        {narrow ? <span className="sr-only">{item.label}</span> : item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           ))}
+        </nav>
+
+        <div className={`shrink-0 border-t border-sidebar-fg/10 ${narrow ? 'p-2' : 'p-3'}`}>
+          <button
+            type="button"
+            title="Sign out"
+            className={`flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-fg/20 text-sm text-sidebar-fg transition-colors duration-200 hover:bg-sidebar-fg/10 ${narrow ? 'py-2' : 'px-3 py-2'}`}
+            onClick={() => void logout()}
+          >
+            <Icon name="logout" className="h-4 w-4" />
+            {narrow ? <span className="sr-only">Sign out</span> : 'Sign out'}
+          </button>
+        </div>
       </aside>
-      <div>{children}</div>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-surface px-3 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-white"
+              aria-label={mobileOpen || !narrow ? 'Collapse navigation' : 'Expand navigation'}
+              aria-expanded={mobileOpen || !narrow}
+              onClick={toggleNav}
+            >
+              <MenuGlyph mobileOpen={mobileOpen} collapsed={narrow} />
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-xs uppercase tracking-widest text-accent">{ws.label}</p>
+              <p className="truncate text-sm font-medium">{current?.label ?? ws.label}</p>
+            </div>
+          </div>
+          <ProfileMenu variant="console" currentWorkspace={workspace} />
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="flex min-h-full flex-col">
+            <div className="flex-1 px-4 py-6 md:px-8">{children}</div>
+            <ConsoleFooter />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

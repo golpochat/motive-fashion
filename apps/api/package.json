@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "node scripts/free-port.cjs && tsx watch src/main.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
@@ -15,7 +15,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && node prisma/link-client.cjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -37,6 +37,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "ioredis": "^5.4.2",
+    "pdfkit": "^0.20.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "stripe": "^17.5.0",
@@ -47,6 +48,7 @@
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
+    "@types/pdfkit": "^0.17.6",
     "prisma": "^6.5.0",
     "tsx": "^4.19.2",
     "typescript": "^6.0.3",

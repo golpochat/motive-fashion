@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -214,6 +215,39 @@ model Address {
   orders    Order[]
 }
 
+/** Publishable checkout fulfilment. `code` matches `FulfillmentMethod`. */
+model FulfilmentMethodConfig {
+  id            String  @id @default(uuid())
+  code          String  @unique
+  name          String
+  published     Boolean @default(true)
+  isDefault     Boolean @default(false)
+  sortOrder     Int     @default(0)
+  feeCents      Int     @default(0)
+  freeOverCents Int?
+}
+
+/** ROI county delivery rates. `code` is stored on Address.county and Order.shippingCounty. */
+model DeliveryCounty {
+  id        String  @id @default(uuid())
+  code      String  @unique
+  name      String
+  published Boolean @default(true)
+  rateCents Int
+  sortOrder Int     @default(0)
+}
+
+/** Publishable payment methods. `publicChannel` false = staff / POS only (cash). */
+model PaymentMethodConfig {
+  id            String  @id @default(uuid())
+  code          String  @unique
+  name          String
+  published     Boolean @default(true)
+  isDefault     Boolean @default(false)
+  publicChannel Boolean @default(true)
+  sortOrder     Int     @default(0)
+}
+
 model Category {
   id          String    @id @default(uuid())
   slug        String    @unique
@@ -396,6 +430,9 @@ model Order {
   giftNote        String?
   promoCodeId     String?
   promo           PromoCode?         @relation(fields: [promoCodeId], references: [id])
+  paymentMethod   String             @default("CARD")
+  shippingCounty  String?
+  returnPolicyAck Boolean            @default(false)
   subtotalCents   Int
   discountCents   Int                @default(0)
   shippingCents   Int                @default(0)

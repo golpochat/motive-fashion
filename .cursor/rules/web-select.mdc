@@ -1,0 +1,15 @@
+---
+description: All web dropdowns must use the shared Select listbox, never native HTML select.
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Web dropdowns
+
+Use `Select` from `@/components/select` (re-exported from `@/components/dashboard-ui`). Do not add native `<select>` elements.
+
+- Match field styling with `className={fieldClass}` when the control sits with other form fields.
+- Put the placeholder on the trigger only; do not add a placeholder row in `options`.
+- Use `sortLabels` only when the list should be A–Z (county names). Leave catalog/admin option order as the caller provides.
+- The hidden native `<select>` inside `select.tsx` is the only allowed HTML select (form submit / `required`).
+---

@@ -10,12 +10,12 @@ export function CookieBanner() {
   }, []);
   if (!on) return null;
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-2xl border border-ink/10 bg-cream p-4">
+    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-2xl border border-ink/10 bg-surface p-4">
       <p className="text-sm">We use essential cookies for cart and login. Non-essential cookies are off unless you accept them later.</p>
       <div className="mt-3 flex gap-3 text-sm">
         <button
           type="button"
-          className="rounded-full bg-ink px-4 py-1 text-cream"
+          className="rounded-full bg-primary px-4 py-1 text-cream"
           onClick={() => {
             localStorage.setItem('mf_cookies', 'essential');
             setOn(false);

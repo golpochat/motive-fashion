@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { configuredStripeSecret, mockPaymentsAllowed } from '../../common/security-config';
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -107,6 +108,28 @@ export class PaymentsService {
       data: { stripeSessionId: session.id },
     });
     return { url: session.url, orderId: order.id };
+  }
+
+  /** Stripe success_url often lands before the webhook. Confirm from the Checkout Session. */
+  async syncPaid(orderId: string, proof?: { token?: string; userId?: string }) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException();
+    this.assertPayAccess(order, proof);
+    if (order.status !== OrderStatus.PENDING_PAYMENT) {
+      return this.orders.track(orderId, order.trackingToken);
+    }
+    if (this.stripe && order.stripeSessionId) {
+      try {
+        const session = await this.stripe.checkout.sessions.retrieve(order.stripeSessionId);
+        const paid = session.payment_status === 'paid' || session.status === 'complete';
+        if (paid) {
+          await this.orders.confirmPaid(order.id, session.id, `stripe-sync:${session.id}`);
+        }
+      } catch {
+        /* webhook may still confirm; success page will poll */
+      }
+    }
+    return this.orders.track(orderId, order.trackingToken);
   }
 
   async handleStripeWebhook(rawBody: Buffer, signature: string | undefined) {

@@ -1,5 +1,17 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
+export function apiErrorMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const body = payload as { message?: unknown; issues?: { message?: string }[] };
+  const firstIssue = body.issues?.find((issue) => typeof issue.message === 'string')?.message;
+  if (typeof body.message === 'string' && body.message && body.message !== 'Validation failed') {
+    return body.message;
+  }
+  if (firstIssue) return firstIssue;
+  if (typeof body.message === 'string' && body.message) return body.message;
+  return fallback;
+}
+
 function apiBase() {
   if (typeof window === 'undefined') {
     return `${process.env.API_ORIGIN ?? 'http://localhost:4000'}/api/v1`;

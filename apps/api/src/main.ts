@@ -37,8 +37,26 @@ async function bootstrap() {
     }),
   );
   const port = Number(process.env.API_PORT ?? 4000);
-  await app.listen(port);
+  app.enableShutdownHooks();
+  await listen(app, port);
   console.log(`Motive Fashion API http://localhost:${port}/api/v1`);
+}
+
+async function listen(app: Awaited<ReturnType<typeof NestFactory.create>>, port: number) {
+  const waits = [0, 250, 500, 1000, 1500];
+  let last: unknown;
+  for (const wait of waits) {
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      await app.listen(port);
+      return;
+    } catch (err) {
+      last = err;
+      const code = typeof err === 'object' && err && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+      if (code !== 'EADDRINUSE') throw err;
+    }
+  }
+  throw last;
 }
 
 bootstrap().catch((err) => {

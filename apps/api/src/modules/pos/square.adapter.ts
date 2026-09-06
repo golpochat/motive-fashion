@@ -47,6 +47,7 @@ export class SquarePosAdapter implements PosAdapter {
         email: input.email ?? 'pos@motivefashion.ie',
         name: input.name ?? 'Walk-in',
         phone: input.phone,
+        paymentMethod: 'CASH',
       },
       undefined,
       SalesChannel.POS,

@@ -1,12 +1,28 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
 import { OrdersService } from './orders.service';
-import { checkoutSchema, returnRequestSchema } from '@motive-fashion/validation';
+import { CommerceService } from '../commerce/commerce.service';
+import { checkoutQuoteSchema, checkoutSchema, returnRequestSchema } from '@motive-fashion/validation';
 import { SalesChannel } from '@prisma/client';
 
 @Controller()
 export class OrdersController {
-  constructor(@Inject(OrdersService) private readonly orders: OrdersService) {}
+  constructor(
+    @Inject(OrdersService) private readonly orders: OrdersService,
+    @Inject(CommerceService) private readonly commerce: CommerceService,
+  ) {}
+
+  @Get('checkout/options')
+  options() {
+    return this.commerce.publicOptions();
+  }
+
+  @Post('checkout/quote')
+  @UseGuards(OptionalJwtGuard)
+  quote(@Body() body: unknown, @CurrentUser() user?: { sub: string }) {
+    const dto = checkoutQuoteSchema.parse(body);
+    return this.commerce.quote(dto, user?.sub);
+  }
 
   @Post('checkout/session')
   @UseGuards(OptionalJwtGuard)

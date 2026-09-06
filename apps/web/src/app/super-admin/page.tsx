@@ -1,95 +1,71 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { API } from '@/lib/api';
+import { PageHeader, StatCard, DashCard } from '@/components/page-header';
 
 type RoleRow = {
   id: string;
-  slug: string;
   name: string;
+  slug: string;
   system: boolean;
   _count: { members: number };
-  permissions: { permission: { key: string } }[];
+  permissions: unknown[];
 };
 
-export default function SuperAdminRoles() {
-  const [roles, setRoles] = useState<RoleRow[]>([]);
-  const [error, setError] = useState('');
+type Person = { id: string };
 
-  function reload() {
+type Perm = { id: string; key: string };
+
+export default function SuperAdminHome() {
+  const [roles, setRoles] = useState<RoleRow[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [perms, setPerms] = useState<Perm[]>([]);
+
+  useEffect(() => {
     fetch(`${API}/rbac/roles`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
       .then(setRoles);
-  }
-
-  useEffect(() => {
-    reload();
+    fetch(`${API}/rbac/users`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setPeople);
+    fetch(`${API}/rbac/permissions`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setPerms);
   }, []);
-
-  async function onCreate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError('');
-    const form = new FormData(e.currentTarget);
-    const res = await fetch(`${API}/rbac/roles`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: String(form.get('name')),
-        slug: String(form.get('slug')),
-        description: String(form.get('description') || ''),
-        permissionKeys: [],
-      }),
-    });
-    if (!res.ok) {
-      setError('Could not create role. Slug must be unique and not a system slug.');
-      return;
-    }
-    const created = await res.json();
-    window.location.assign(`/super-admin/roles/${created.id}`);
-  }
-
-  async function onDelete(id: string) {
-    if (!confirm('Delete this role? Members keep other roles, or fall back to customer.')) return;
-    await fetch(`${API}/rbac/roles/${id}`, { method: 'DELETE', credentials: 'include' });
-    reload();
-  }
 
   return (
     <div>
-      <h1 className="font-serif text-3xl">Roles</h1>
-      <p className="mt-2 text-sm text-ink/70">
-        Permissions are a fixed catalog. Roles are yours to create. Tick permissions on a role, then assign the role to
-        users.
-      </p>
-      {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
-      <form onSubmit={onCreate} className="mt-6 max-w-md space-y-3">
-        <input name="name" required placeholder="Role name" className="w-full rounded-xl border px-3 py-2" />
-        <input name="slug" required placeholder="slug-like-this" className="w-full rounded-xl border px-3 py-2" />
-        <input name="description" placeholder="Description" className="w-full rounded-xl border px-3 py-2" />
-        <button className="rounded-full bg-ink px-4 py-2 text-cream" type="submit">
-          Create role
-        </button>
-      </form>
-      <ul className="mt-8 space-y-3 text-sm">
+      <PageHeader
+        title="Access control"
+        description="This is the super-admin workspace. It governs who can open every other console."
+      />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Roles" value={String(roles.length)} hint="System plus custom" />
+        <StatCard label="People" value={String(people.length)} hint="With at least one role" />
+        <StatCard label="Permissions" value={String(perms.length)} hint="Fixed catalog" />
+      </div>
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        <DashCard href="/super-admin/roles" icon="roles" label="Create and edit roles" body="Tick permissions, then assign the role to people." />
+        <DashCard href="/super-admin/users" icon="users" label="Assign access" body="A person can hold several roles. Permissions are the union." />
+        <DashCard href="/super-admin/permissions" icon="permissions" label="Review permissions" body="Keys are fixed. Roles choose which ones they grant." />
+      </div>
+      <h2 className="mt-10 font-serif text-2xl">Roles</h2>
+      <ul className="mt-4 divide-y divide-ink/10 rounded-2xl border border-ink/10 bg-white">
         {roles.map((r) => (
-          <li key={r.id} className="flex items-center justify-between border-b py-2">
+          <li key={r.id} className="flex items-center justify-between px-5 py-3 text-sm">
             <span>
-              <Link href={`/super-admin/roles/${r.id}`} className="font-medium">
-                {r.name}
-              </Link>
+              <Link href={`/super-admin/roles/${r.id}`}>{r.name}</Link>
               <span className="text-ink/50">
                 {' '}
                 · {r.slug}
-                {r.system ? ' · system' : ''} · {r._count.members} people · {r.permissions.length} perms
+                {r.system ? ' · system' : ''}
               </span>
             </span>
-            {r.system ? null : (
-              <button type="button" className="rounded-full border px-3 py-1" onClick={() => onDelete(r.id)}>
-                Delete
-              </button>
-            )}
+            <span className="text-ink/50">
+              {r._count.members} people · {r.permissions.length} perms
+            </span>
           </li>
         ))}
       </ul>

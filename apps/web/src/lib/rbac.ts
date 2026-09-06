@@ -2,9 +2,20 @@ export type Me = {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
   role?: string;
   roles?: { id: string; slug: string; name: string }[];
   permissions?: string[];
+  addresses?: {
+    id: string;
+    label?: string | null;
+    line1: string;
+    line2?: string | null;
+    city: string;
+    county?: string | null;
+    eircode?: string | null;
+    isDefault?: boolean;
+  }[];
 };
 
 export function hasPerm(me: Me | null | undefined, key: string) {
@@ -12,22 +23,53 @@ export function hasPerm(me: Me | null | undefined, key: string) {
   return keys.includes('*') || keys.includes(key);
 }
 
+export function hasAnyPerm(me: Me | null | undefined, keys: string[]) {
+  return keys.some((key) => hasPerm(me, key));
+}
+
+export function roleLabel(me: Me | null | undefined) {
+  if (!me) return 'Guest';
+  if (me.roles?.length) return me.roles.map((r) => r.name).join(', ');
+  if (me.role === 'ADMIN') return 'Admin';
+  if (me.role === 'STAFF') return 'Staff';
+  return 'Customer';
+}
+
+export function initials(me: Me | null | undefined) {
+  const source = me?.name?.trim() || me?.email || '?';
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
 export function homePath(me: Me) {
-  if (hasPerm(me, 'rbac.roles.write') || hasPerm(me, 'dashboard.super')) return '/super-admin';
+  if (hasAnyPerm(me, ['rbac.roles.write', 'dashboard.super'])) return '/super-admin';
   if (hasPerm(me, 'dashboard.admin')) return '/admin';
   if (hasPerm(me, 'dashboard.staff')) return '/staff';
   return '/user';
 }
 
 export function safeNext(next: string | null) {
-  if (!next || next.startsWith('//')) return null;
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
+  const path = next.split('?')[0];
   if (
-    next.startsWith('/super-admin') ||
-    next.startsWith('/admin') ||
-    next.startsWith('/staff') ||
-    next.startsWith('/user')
+    path.startsWith('/super-admin') ||
+    path.startsWith('/admin') ||
+    path.startsWith('/staff') ||
+    path.startsWith('/user') ||
+    path === '/checkout' ||
+    path === '/cart'
   ) {
     return next;
   }
   return null;
+}
+
+export function isWorkspacePath(pathname: string) {
+  return (
+    pathname.startsWith('/super-admin') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/staff') ||
+    pathname.startsWith('/user')
+  );
 }

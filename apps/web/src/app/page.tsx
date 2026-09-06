@@ -20,34 +20,35 @@ export default async function HomePage() {
   const featured = featuredSlugs
     .map((slug) => products.find((p) => p.slug === slug))
     .filter((p): p is ProductCard => Boolean(p));
-  const hero =
-    products.find((p) => p.slug === 'luxury-silk-abaya')?.images[0] ?? products[0]?.images[0];
+
   return (
     <div>
-      <section className="grid gap-10 py-12 md:grid-cols-2 md:items-center">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-clay">Dublin · modest wear</p>
-          <h1 className="mt-3 font-serif text-5xl leading-tight md:text-6xl">Quiet luxury, made to wear.</h1>
-          <p className="mt-4 max-w-md text-ink/80">
-            Motive Fashion is a Dublin house for hijabs, abayas, jilbabs, and prayer sets. Photographed for drape,
-            priced with VAT included.
+      <section className="relative overflow-hidden rounded-3xl">
+        <img
+          src="/brand/hero-home.jpg"
+          alt="Quiet luxury modest wear in a Dublin atelier"
+          className="h-[28rem] w-full object-cover md:h-[34rem]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/25 to-transparent" />
+        <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-12">
+          <p className="text-sm uppercase tracking-[0.2em] text-accent">Dublin · modest wear</p>
+          <h1 className="mt-3 max-w-xl font-serif text-4xl leading-tight text-cream md:text-6xl">
+            Quiet luxury, made to wear.
+          </h1>
+          <p className="mt-4 max-w-md text-cream/85">
+            Hijabs, abayas, jilbabs, and prayer sets. Photographed for drape, priced with VAT included.
           </p>
-          <div className="mt-8 flex gap-3">
-            <Link href="/shop" className="rounded-full bg-ink px-6 py-3 text-cream no-underline">
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/shop" className="rounded-full bg-accent px-6 py-3 text-cream no-underline">
               Shop the edit
             </Link>
-            <Link href="/collections/eid" className="rounded-full border border-ink/20 px-6 py-3 no-underline">
+            <Link href="/collections/eid" className="rounded-full border border-cream/40 px-6 py-3 text-cream no-underline">
               Eid collection
             </Link>
           </div>
         </div>
-        <div className="aspect-[3/4] overflow-hidden rounded-3xl bg-moss/20">
-          {hero ? (
-            <img src={hero.url} alt={hero.alt} className="h-full w-full object-cover" />
-          ) : null}
-        </div>
       </section>
-      <h2 className="font-serif text-3xl">In stock now</h2>
+      <h2 className="mt-12 font-serif text-3xl">In stock now</h2>
       <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {featured.map((p) => (
           <ProductTile key={p.id} product={p} />

@@ -1,13 +1,17 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { gdprUserSelect } from '../../common/user-select';
 import { RbacService } from '../rbac/rbac.service';
+import { CommerceService } from '../commerce/commerce.service';
+import { addressLabelCode, isValidEircode, normalizeEircode } from '@motive-fashion/config';
+import type { AddressCreateInput, AddressPatchInput } from '@motive-fashion/validation';
 
 @Injectable()
 export class CustomersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RbacService) private readonly rbac: RbacService,
+    @Inject(CommerceService) private readonly commerce: CommerceService,
   ) {}
 
   async me(userId: string) {
@@ -47,6 +51,88 @@ export class CustomersService {
       include: { items: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  addresses(userId: string) {
+    return this.prisma.address.findMany({
+      where: { userId },
+      orderBy: [{ isDefault: 'desc' }, { city: 'asc' }],
+    });
+  }
+
+  async addAddress(userId: string, dto: AddressCreateInput) {
+    const county = dto.county.trim().toUpperCase();
+    await this.commerce.publishedCounty(county);
+    const count = await this.prisma.address.count({ where: { userId } });
+    const makeDefault = dto.isDefault === true || count === 0;
+    if (makeDefault) {
+      await this.prisma.address.updateMany({ where: { userId }, data: { isDefault: false } });
+    }
+    return this.prisma.address.create({
+      data: {
+        userId,
+        label: addressLabelCode(dto.label),
+        line1: dto.line1,
+        line2: dto.line2,
+        city: dto.city,
+        county,
+        eircode: normalizeEircode(dto.eircode),
+        country: 'IE',
+        isDefault: makeDefault,
+      },
+    });
+  }
+
+  async patchAddress(userId: string, id: string, dto: AddressPatchInput) {
+    const existing = await this.prisma.address.findFirst({ where: { id, userId } });
+    if (!existing) throw new NotFoundException();
+    const county = dto.county ? dto.county.trim().toUpperCase() : existing.county;
+    if (county) await this.commerce.publishedCounty(county);
+    if (dto.eircode && !isValidEircode(dto.eircode)) {
+      throw new BadRequestException('Enter a valid Eircode, like D02 AF30.');
+    }
+    if (dto.isDefault) {
+      await this.prisma.address.updateMany({ where: { userId }, data: { isDefault: false } });
+    }
+    return this.prisma.address.update({
+      where: { id },
+      data: {
+        label: dto.label ? addressLabelCode(dto.label) : undefined,
+        line1: dto.line1,
+        line2: dto.line2,
+        city: dto.city,
+        county,
+        eircode: dto.eircode ? normalizeEircode(dto.eircode) : undefined,
+        country: 'IE',
+        isDefault: dto.isDefault ?? existing.isDefault,
+      },
+    });
+  }
+
+  async setDefaultAddress(userId: string, id: string) {
+    const existing = await this.prisma.address.findFirst({ where: { id, userId } });
+    if (!existing) throw new NotFoundException();
+    await this.prisma.address.updateMany({ where: { userId }, data: { isDefault: false } });
+    return this.prisma.address.update({ where: { id }, data: { isDefault: true } });
+  }
+
+  async removeAddress(userId: string, id: string) {
+    const existing = await this.prisma.address.findFirst({
+      where: { id, userId },
+      include: { _count: { select: { orders: true } } },
+    });
+    if (!existing) throw new NotFoundException();
+    if (existing._count.orders > 0) {
+      throw new BadRequestException('This address is used on an order and cannot be deleted');
+    }
+    await this.prisma.address.delete({ where: { id } });
+    if (existing.isDefault) {
+      const next = await this.prisma.address.findFirst({ where: { userId }, orderBy: { city: 'asc' } });
+      if (next) {
+        await this.prisma.address.update({ where: { id: next.id }, data: { isDefault: true } });
+      }
+    }
+    return { ok: true };
   }
 
   wishlist(userId: string) {

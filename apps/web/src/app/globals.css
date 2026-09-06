@@ -2,8 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme='storefront'] {
   color-scheme: light;
+  --mf-primary: 28 25 23;
+  --mf-secondary: 176 137 104;
+  --mf-accent: 176 137 104;
+  --mf-surface: 245 240 232;
+  --mf-ink: 28 25 23;
+  --mf-cream: 245 240 232;
+  --mf-sidebar: 28 25 23;
+  --mf-sidebar-fg: 245 240 232;
+}
+
+[data-theme='super-admin'] {
+  --mf-primary: 22 20 18;
+  --mf-secondary: 196 165 116;
+  --mf-accent: 196 165 116;
+  --mf-surface: 247 243 236;
+  --mf-sidebar: 22 20 18;
+  --mf-sidebar-fg: 247 243 236;
+}
+
+[data-theme='admin'] {
+  --mf-primary: 44 36 28;
+  --mf-secondary: 176 137 104;
+  --mf-accent: 176 137 104;
+  --mf-surface: 245 240 232;
+  --mf-sidebar: 44 36 28;
+  --mf-sidebar-fg: 245 240 232;
+}
+
+[data-theme='staff'] {
+  --mf-primary: 47 58 46;
+  --mf-secondary: 140 155 130;
+  --mf-accent: 140 155 130;
+  --mf-surface: 242 244 240;
+  --mf-sidebar: 47 58 46;
+  --mf-sidebar-fg: 242 244 240;
+}
+
+[data-theme='customer'] {
+  --mf-primary: 61 53 48;
+  --mf-secondary: 173 126 110;
+  --mf-accent: 173 126 110;
+  --mf-surface: 248 244 239;
+  --mf-sidebar: 61 53 48;
+  --mf-sidebar-fg: 248 244 239;
 }
 
 html {
@@ -11,9 +56,14 @@ html {
 }
 
 body {
-  @apply bg-cream text-ink antialiased font-sans;
+  @apply bg-surface text-ink antialiased font-sans;
 }
 
 a {
   @apply underline-offset-4;
+}
+
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--mf-accent) / 0.35) transparent;
 }

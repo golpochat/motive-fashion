@@ -2,6 +2,8 @@
 
 import { FormEvent } from 'react';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { Field, Panel, PrimaryButton, fieldClass } from '@/components/dashboard-ui';
 
 export default function AdminWhatsapp() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -23,14 +25,17 @@ export default function AdminWhatsapp() {
   }
   return (
     <div>
-      <h1 className="font-serif text-3xl">WhatsApp</h1>
-      <p className="mt-2 text-sm">Webhook: POST /api/v1/webhooks/whatsapp. Customers text MENU, CAT:hijabs, ADD:slug, CHECKOUT.</p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <textarea name="message" className="w-full rounded-xl border px-3 py-2" placeholder="Broadcast (opt-in only)" />
-        <button className="rounded-full bg-ink px-4 py-2 text-cream" type="submit">
-          Send broadcast
-        </button>
-      </form>
+      <PageHeader title="WhatsApp" description="Broadcasts go only to opted-in numbers. Customers can text MENU, CAT:hijabs, ADD:slug, CHECKOUT." />
+      <div className="max-w-lg">
+        <Panel title="Broadcast">
+          <form onSubmit={onSubmit} className="space-y-3">
+            <Field label="Message">
+              <textarea name="message" className={fieldClass} rows={5} />
+            </Field>
+            <PrimaryButton type="submit">Send broadcast</PrimaryButton>
+          </form>
+        </Panel>
+      </div>
     </div>
   );
 }

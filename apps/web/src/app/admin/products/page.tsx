@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
+import { PageHeader } from '@/components/page-header';
+import { DataTable, Td } from '@/components/dashboard-ui';
 
 export default function AdminProducts() {
   const [rows, setRows] = useState<{ id: string; title: string; slug: string; variants: unknown[] }[]>([]);
@@ -12,25 +14,16 @@ export default function AdminProducts() {
   }, []);
   return (
     <div>
-      <h1 className="font-serif text-3xl">Products</h1>
-      <table className="mt-4 w-full text-left text-sm">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Slug</th>
-            <th>SKUs</th>
+      <PageHeader title="Products" description="Catalog SKUs on the Dublin ledger." />
+      <DataTable headers={['Title', 'Slug', 'SKUs']}>
+        {rows.map((r) => (
+          <tr key={r.id} className="hover:bg-ink/[0.02]">
+            <Td>{r.title}</Td>
+            <Td muted>{r.slug}</Td>
+            <Td>{r.variants.length}</Td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-t">
-              <td className="py-2">{r.title}</td>
-              <td>{r.slug}</td>
-              <td>{r.variants.length}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </DataTable>
     </div>
   );
 }

@@ -36,3 +36,16 @@ export function promoDiscountCents(
   }
   return Math.min(subtotalCents, value);
 }
+
+/** Outbound delivery quote. Collection uses the method fee; free-over applies to delivery only. */
+export function quoteShippingCents(input: {
+  fulfillment: 'DELIVERY' | 'COLLECTION';
+  goodsCents: number;
+  collectionFeeCents: number;
+  countyRateCents: number;
+  freeOverCents: number | null;
+}): number {
+  if (input.fulfillment === 'COLLECTION') return Math.max(0, input.collectionFeeCents);
+  if (input.freeOverCents != null && input.goodsCents >= input.freeOverCents) return 0;
+  return Math.max(0, input.countyRateCents);
+}

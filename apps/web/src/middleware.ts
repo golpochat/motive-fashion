@@ -7,17 +7,25 @@ function has(keys: string[] | undefined, needed: string) {
   return Boolean(keys?.includes('*') || keys?.includes(needed));
 }
 
-function requiredPerm(pathname: string) {
-  if (pathname.startsWith('/super-admin')) return 'rbac.roles.write';
-  if (pathname.startsWith('/admin')) return 'dashboard.admin';
-  if (pathname.startsWith('/staff')) return 'dashboard.staff';
-  if (pathname.startsWith('/user')) return 'authenticated';
-  return null;
+function allowedFor(pathname: string, permissions: string[] | undefined) {
+  if (pathname.startsWith('/super-admin')) {
+    return has(permissions, 'dashboard.super') || has(permissions, 'rbac.roles.write');
+  }
+  if (pathname.startsWith('/admin')) return has(permissions, 'dashboard.admin');
+  if (pathname.startsWith('/staff')) return has(permissions, 'dashboard.staff');
+  if (pathname.startsWith('/user')) return true;
+  return false;
 }
 
 export async function middleware(request: NextRequest) {
-  const needed = requiredPerm(request.nextUrl.pathname);
-  if (!needed) return NextResponse.next();
+  const { pathname } = request.nextUrl;
+  const isProtected =
+    pathname.startsWith('/super-admin') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/staff') ||
+    pathname.startsWith('/user');
+  if (!isProtected) return NextResponse.next();
+
   const apiOrigin = process.env.API_ORIGIN ?? 'http://localhost:4000';
   const cookie = request.headers.get('cookie') ?? '';
   try {
@@ -27,8 +35,7 @@ export async function middleware(request: NextRequest) {
     });
     if (res.ok) {
       const me = (await res.json()) as Me;
-      if (needed === 'authenticated') return NextResponse.next();
-      if (has(me.permissions, needed)) {
+      if (allowedFor(pathname, me.permissions)) {
         return NextResponse.next();
       }
     }
@@ -36,7 +43,7 @@ export async function middleware(request: NextRequest) {
     /* fail closed */
   }
   const login = new URL('/account', request.url);
-  login.searchParams.set('next', request.nextUrl.pathname);
+  login.searchParams.set('next', pathname);
   return NextResponse.redirect(login);
 }
 

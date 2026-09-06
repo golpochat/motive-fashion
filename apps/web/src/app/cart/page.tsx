@@ -1,39 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { API, cartSessionKey } from '@/lib/api';
 import { formatEur } from '@motive-fashion/utils';
-
-type Cart = {
-  id: string;
-  items: { id: string; title: string; size: string; color: string; quantity: number; unitPriceCents: number }[];
-  subtotalCents: number;
-};
+import { BRAND } from '@motive-fashion/config';
+import { CartLineRow } from '@/components/cart-line';
+import { useSession } from '@/components/session-provider';
+import { useCart } from '@/lib/cart-store';
 
 export default function CartPage() {
-  const [cart, setCart] = useState<Cart | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { cart, loading, setQty, removeItem, close } = useCart();
+  const { me } = useSession();
 
   useEffect(() => {
-    const id = localStorage.getItem('mf_cart');
-    const sessionKey = cartSessionKey();
-    const qs = new URLSearchParams({ sessionKey });
-    if (id) qs.set('cartId', id);
-    fetch(`${API}/cart?${qs.toString()}`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((next: Cart | null) => {
-        if (next?.id) localStorage.setItem('mf_cart', next.id);
-        setCart(next);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    close();
+  }, [close]);
 
-  if (loading) {
+  if (loading && !cart) {
     return (
       <div>
         <h1 className="font-serif text-4xl">Cart</h1>
-        <p className="mt-4">Loading…</p>
+        <p className="mt-4 text-ink/70">Loading…</p>
       </div>
     );
   }
@@ -42,8 +29,10 @@ export default function CartPage() {
     return (
       <div>
         <h1 className="font-serif text-4xl">Cart</h1>
-        <p className="mt-4">Your cart is empty.</p>
-        <Link href="/shop">Continue shopping</Link>
+        <p className="mt-4 text-ink/70">Your cart is empty.</p>
+        <Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-6 py-3 text-cream no-underline">
+          Continue shopping
+        </Link>
       </div>
     );
   }
@@ -51,20 +40,41 @@ export default function CartPage() {
   return (
     <div>
       <h1 className="font-serif text-4xl">Cart</h1>
-      <ul className="mt-8 space-y-4">
-        {cart.items.map((item) => (
-          <li key={item.id} className="flex justify-between border-b border-ink/10 py-3">
-            <span>
-              {item.title} · {item.size}/{item.color} × {item.quantity}
-            </span>
-            <span>{formatEur(item.unitPriceCents * item.quantity)}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-6 text-lg">Subtotal {formatEur(cart.subtotalCents)} inc. VAT</p>
-      <Link href="/checkout" className="mt-6 inline-block rounded-full bg-ink px-6 py-3 text-cream no-underline">
-        Checkout
-      </Link>
+      <p className="mt-2 text-sm text-ink/60">Reserved for {BRAND.reservationMinutes} minutes.</p>
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <ul className="divide-y divide-ink/10 border-y border-ink/10">
+          {cart.items.map((item) => (
+            <CartLineRow
+              key={item.id}
+              item={item}
+              onQty={(id, qty) => void setQty(id, qty)}
+              onRemove={(id) => void removeItem(id)}
+            />
+          ))}
+        </ul>
+        <aside className="h-fit space-y-4 rounded-2xl border border-ink/10 bg-white p-5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-ink/60">Subtotal inc. VAT</span>
+            <span className="font-medium tabular-nums">{formatEur(cart.subtotalCents)}</span>
+          </div>
+          <p className="text-xs text-ink/55">Delivery is calculated at checkout.</p>
+          <Link href="/checkout" className="block rounded-full bg-primary px-5 py-3 text-center text-sm text-cream no-underline">
+            Checkout
+          </Link>
+          {!me ? (
+            <p className="text-center text-xs text-ink/55">
+              Pay as a guest, or{' '}
+              <Link href="/account?next=/checkout" className="text-ink/70 hover:text-accent">
+                sign in
+              </Link>
+              .
+            </p>
+          ) : null}
+          <Link href="/shop" className="block py-1 text-center text-sm text-ink/70 no-underline hover:text-accent">
+            Continue shopping
+          </Link>
+        </aside>
+      </div>
     </div>
   );
 }

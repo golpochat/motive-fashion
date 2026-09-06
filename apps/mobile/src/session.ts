@@ -5,22 +5,34 @@ const ACCESS_KEY = 'mf_access';
 const CART_KEY = 'mf_cart';
 const SESSION_KEY = 'mf_session';
 
+type WebStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+
+function webStorage(): WebStorage | undefined {
+  const g = globalThis as typeof globalThis & { localStorage?: WebStorage };
+  return g.localStorage;
+}
+
+function newSessionKey() {
+  const g = globalThis as typeof globalThis & { crypto?: { randomUUID?: () => string } };
+  if (typeof g.crypto?.randomUUID === 'function') {
+    return g.crypto.randomUUID();
+  }
+  return `mf-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 let accessToken: string | undefined;
 let cartId: string | undefined;
 let sessionKey: string | undefined;
 let hydrated = false;
 
-function newSessionKey() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `mf-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
 async function read(key: string) {
   try {
     if (Platform.OS === 'web') {
-      return globalThis.localStorage?.getItem(key) ?? undefined;
+      return webStorage()?.getItem(key) ?? undefined;
     }
     return (await SecureStore.getItemAsync(key)) ?? undefined;
   } catch {
@@ -31,8 +43,9 @@ async function read(key: string) {
 async function write(key: string, value: string | undefined) {
   try {
     if (Platform.OS === 'web') {
-      if (value) globalThis.localStorage?.setItem(key, value);
-      else globalThis.localStorage?.removeItem(key);
+      const storage = webStorage();
+      if (value) storage?.setItem(key, value);
+      else storage?.removeItem(key);
       return;
     }
     if (value) await SecureStore.setItemAsync(key, value);
@@ -68,10 +81,12 @@ export function setCartId(id: string) {
   void write(CART_KEY, id);
 }
 
-export function getSessionKey() {
+export function getSessionKey(): string {
   if (!sessionKey) {
-    sessionKey = newSessionKey();
-    void write(SESSION_KEY, sessionKey);
+    const next = newSessionKey();
+    sessionKey = next;
+    void write(SESSION_KEY, next);
+    return next;
   }
   return sessionKey;
 }

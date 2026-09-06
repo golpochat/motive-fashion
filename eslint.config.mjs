@@ -27,4 +27,18 @@ export default tseslint.config(
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    ignores: ['apps/web/src/components/select.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message:
+            'Use the shared Select from @/components/select (or dashboard-ui) so every dropdown matches.',
+        },
+      ],
+    },
+  },
 );

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import {
   FulfillmentMethod,
   OrderStatus,
@@ -12,20 +12,27 @@ import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
 import { MailService } from '../../common/mail.service';
-import { promoDiscountCents, splitVatInclusive } from '@motive-fashion/utils';
+import { splitVatInclusive } from '@motive-fashion/utils';
 import type { CheckoutInput } from '@motive-fashion/validation';
 import { configuredStripeSecret } from '../../common/security-config';
+import { addressLabelCode, canTransitionOrder, isValidEircode, normalizeEircode } from '@motive-fashion/config';
+import { CommerceService } from '../commerce/commerce.service';
 
-const DUBLIN_COLLECTION = 0;
-const IE_SHIPPING_CENTS = 595;
-const FREE_SHIP_OVER = 12000;
+const receiptInclude = {
+  items: true,
+  address: true,
+  promo: { select: { code: true } },
+} as const;
 
 @Injectable()
 export class OrdersService {
+  private readonly log = new Logger(OrdersService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(StockService) private readonly stock: StockService,
     @Inject(MailService) private readonly mail: MailService,
+    @Inject(CommerceService) private readonly commerce: CommerceService,
   ) {}
 
   async checkout(input: CheckoutInput, userId?: string, channel: SalesChannel = SalesChannel.WEB) {
@@ -39,43 +46,33 @@ export class OrdersService {
       const sessionOk = Boolean(input.sessionKey && cart.sessionKey && input.sessionKey === cart.sessionKey);
       if (!ownerOk && !sessionOk) throw new ForbiddenException('Cart does not belong to this session');
     }
-    if (input.fulfillment === 'DELIVERY' && !input.address) {
-      throw new BadRequestException('Delivery address required');
+    if (channel === SalesChannel.WEB && input.returnPolicyAck !== true) {
+      throw new BadRequestException('Please confirm the returns policy before paying');
     }
 
+    await this.commerce.assertFulfilment(input.fulfillment, channel);
+    const paymentMethod = await this.commerce.assertPublicPayment(input.paymentMethod, channel);
+
     let addressId: string | undefined;
-    if (input.fulfillment === 'DELIVERY' && input.address) {
-      const addr = await this.prisma.address.create({
-        data: { ...input.address, userId, country: input.address.country ?? 'IE' },
-      });
-      addressId = addr.id;
+    let county: string | undefined;
+    if (input.fulfillment === 'DELIVERY') {
+      const resolved = await this.resolveDeliveryAddress(input, userId);
+      addressId = resolved.addressId;
+      county = resolved.county;
     }
 
     const subtotal = cart.items.reduce((s, i) => s + i.variant.priceCents * i.quantity, 0);
-    let discount = 0;
-    let promoId: string | undefined;
-    if (input.promoCode) {
-      const promo = await this.prisma.promoCode.findUnique({ where: { code: input.promoCode.toUpperCase() } });
-      const now = new Date();
-      const valid =
-        promo?.active &&
-        (!promo.startsAt || promo.startsAt <= now) &&
-        (!promo.endsAt || promo.endsAt >= now) &&
-        (promo.maxUses == null || promo.usedCount < promo.maxUses);
-      if (valid && promo) {
-        discount = promoDiscountCents(subtotal, promo.type, promo.value);
-        promoId = promo.id;
-      }
+    const priced = await this.commerce.price(
+      { id: cart.id, subtotalCents: subtotal },
+      input.fulfillment,
+      county,
+      input.promoCode,
+    );
+    if (priced.needsCounty) {
+      throw new BadRequestException('County is required for Ireland delivery');
     }
-    const shipping =
-      input.fulfillment === 'COLLECTION' || subtotal - discount >= FREE_SHIP_OVER
-        ? DUBLIN_COLLECTION
-        : IE_SHIPPING_CENTS;
-    const taxable = Math.max(0, subtotal - discount) + shipping;
-    const { taxCents } = splitVatInclusive(taxable);
-    const total = taxable;
 
-    const order = await this.prisma.order.create({
+    return this.prisma.order.create({
       data: {
         userId,
         cartId: cart.id,
@@ -86,12 +83,15 @@ export class OrdersService {
         fulfillment: input.fulfillment as FulfillmentMethod,
         addressId,
         giftNote: input.giftNote,
-        promoCodeId: promoId,
-        subtotalCents: subtotal,
-        discountCents: discount,
-        shippingCents: shipping,
-        taxCents,
-        totalCents: total,
+        promoCodeId: priced.promoCodeId,
+        paymentMethod,
+        shippingCounty: priced.shippingCounty,
+        returnPolicyAck: input.returnPolicyAck === true,
+        subtotalCents: priced.subtotalCents,
+        discountCents: priced.discountCents,
+        shippingCents: priced.shippingCents,
+        taxCents: priced.taxCents,
+        totalCents: priced.totalCents,
         trackingToken: randomBytes(12).toString('hex'),
         items: {
           create: cart.items.map((i) => {
@@ -111,29 +111,60 @@ export class OrdersService {
       },
       include: { items: true },
     });
-    if (promoId) {
-      await this.prisma.promoCode.update({
-        where: { id: promoId },
-        data: { usedCount: { increment: 1 } },
-      });
-    }
-    return order;
   }
 
+  private async resolveDeliveryAddress(input: CheckoutInput, userId?: string) {
+    if (input.addressId) {
+      if (!userId) throw new BadRequestException('Sign in to use a saved address');
+      const addr = await this.prisma.address.findFirst({ where: { id: input.addressId, userId } });
+      if (!addr) throw new BadRequestException('Saved address not found');
+      if (!isValidEircode(addr.eircode ?? '')) {
+        throw new BadRequestException('This address needs a valid Eircode. Update it under Addresses.');
+      }
+      const county = (addr.county ?? input.county)?.trim().toUpperCase();
+      if (!county) throw new BadRequestException('County is required for Ireland delivery');
+      await this.commerce.publishedCounty(county);
+      return { addressId: addr.id, county };
+    }
+    if (!input.address) {
+      throw new BadRequestException('Delivery address required');
+    }
+    const county = input.address.county.trim().toUpperCase();
+    await this.commerce.publishedCounty(county);
+    const existing = userId ? await this.prisma.address.count({ where: { userId } }) : 0;
+    const addr = await this.prisma.address.create({
+      data: {
+        userId,
+        label: addressLabelCode(input.address.label),
+        line1: input.address.line1,
+        line2: input.address.line2,
+        city: input.address.city,
+        county,
+        eircode: normalizeEircode(input.address.eircode),
+        country: 'IE',
+        isDefault: Boolean(userId) && existing === 0,
+      },
+    });
+    return { addressId: addr.id, county };
+  }
+
+
   async confirmPaid(orderId: string, providerRef: string, idempotencyKey: string) {
-    const already = await this.prisma.payment.findUnique({ where: { idempotencyKey } });
+    let notify = false;
     try {
       const paid = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.payment.findUnique({ where: { idempotencyKey } });
         if (existing) {
-          return tx.order.findUniqueOrThrow({ where: { id: existing.orderId }, include: { items: true } });
+          return tx.order.findUniqueOrThrow({ where: { id: existing.orderId }, include: receiptInclude });
         }
         const order = await tx.order.findUnique({
           where: { id: orderId },
           include: { items: true, cart: { include: { items: true } } },
         });
         if (!order) throw new NotFoundException();
-        if (order.status !== OrderStatus.PENDING_PAYMENT) return order;
+        if (order.status !== OrderStatus.PENDING_PAYMENT) {
+          return tx.order.findUniqueOrThrow({ where: { id: order.id }, include: receiptInclude });
+        }
 
         for (const item of order.items) {
           await this.stock.commit(
@@ -146,11 +177,8 @@ export class OrdersService {
             tx,
           );
         }
-        if (order.cart) {
-          await tx.cartItem.updateMany({
-            where: { cartId: order.cart.id },
-            data: { reserved: false },
-          });
+        if (order.cartId) {
+          await tx.cartItem.deleteMany({ where: { cartId: order.cartId } });
         }
         await tx.payment.create({
           data: {
@@ -162,13 +190,26 @@ export class OrdersService {
             idempotencyKey,
           },
         });
+        if (order.promoCodeId) {
+          await tx.promoCode.update({
+            where: { id: order.promoCodeId },
+            data: { usedCount: { increment: 1 } },
+          });
+        }
+        notify = true;
         return tx.order.update({
           where: { id: order.id },
           data: { status: OrderStatus.CONFIRMED },
-          include: { items: true },
+          include: receiptInclude,
         });
       });
-      if (!already) void this.mail.sendOrderPaid(paid);
+      if (notify) {
+        try {
+          await this.mail.sendOrderPaid(paid);
+        } catch (err) {
+          this.log.error(`Order confirmation email failed for ${paid.id}: ${err instanceof Error ? err.message : err}`);
+        }
+      }
       return paid;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -176,7 +217,7 @@ export class OrdersService {
         if (payment) {
           return this.prisma.order.findUniqueOrThrow({
             where: { id: payment.orderId },
-            include: { items: true },
+            include: receiptInclude,
           });
         }
       }
@@ -188,7 +229,18 @@ export class OrdersService {
     if (!token) throw new UnauthorizedException('Tracking token required');
     const order = await this.prisma.order.findFirst({
       where: { id, trackingToken: token },
-      include: { items: true, shipments: true },
+      include: {
+        items: true,
+        shipments: true,
+        address: true,
+        promo: { select: { code: true } },
+        payments: {
+          where: { status: PaymentStatus.SUCCEEDED },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
     });
     if (!order) throw new NotFoundException();
     const { trackingToken: _, ...safe } = order;
@@ -206,37 +258,51 @@ export class OrdersService {
   async listAdmin(status?: OrderStatus) {
     return this.prisma.order.findMany({
       where: status ? { status } : {},
-      include: { items: true },
+      include: { items: true, shipments: true },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
   }
 
-  async transition(orderId: string, status: OrderStatus, actorId?: string) {
+  async transition(
+    orderId: string,
+    status: OrderStatus,
+    actorId?: string,
+    extras?: { carrier?: string; trackingNo?: string },
+  ) {
+    const current = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!current) throw new NotFoundException();
+    if (!canTransitionOrder(current.fulfillment, current.status, status)) {
+      throw new BadRequestException('That status is not the next step for this order');
+    }
+    if (status === OrderStatus.SHIPPED && !extras?.trackingNo?.trim()) {
+      throw new BadRequestException('Add a tracking number before marking shipped');
+    }
+
+    const now = new Date();
+    const existing = await this.prisma.shipment.findFirst({ where: { orderId } });
+    const shipmentData = {
+      packedAt: status === OrderStatus.PACKING ? now : existing?.packedAt,
+      shippedAt:
+        status === OrderStatus.SHIPPED || status === OrderStatus.READY_FOR_COLLECTION
+          ? now
+          : existing?.shippedAt,
+      deliveredAt:
+        status === OrderStatus.DELIVERED || status === OrderStatus.COLLECTED ? now : existing?.deliveredAt,
+      carrier: extras?.carrier ?? existing?.carrier,
+      trackingNo: extras?.trackingNo?.trim() ?? existing?.trackingNo,
+    };
+    if (existing) {
+      await this.prisma.shipment.update({ where: { id: existing.id }, data: shipmentData });
+    } else {
+      await this.prisma.shipment.create({ data: { orderId, ...shipmentData } });
+    }
+
     const order = await this.prisma.order.update({
       where: { id: orderId },
       data: { status },
+      include: { items: true, address: true, promo: { select: { code: true } }, shipments: true },
     });
-    if (status === OrderStatus.PACKING || status === OrderStatus.SHIPPED) {
-      const existing = await this.prisma.shipment.findFirst({ where: { orderId } });
-      if (existing) {
-        await this.prisma.shipment.update({
-          where: { id: existing.id },
-          data: {
-            packedAt: status === OrderStatus.PACKING ? new Date() : existing.packedAt,
-            shippedAt: status === OrderStatus.SHIPPED ? new Date() : existing.shippedAt,
-          },
-        });
-      } else {
-        await this.prisma.shipment.create({
-          data: {
-            orderId,
-            packedAt: new Date(),
-            shippedAt: status === OrderStatus.SHIPPED ? new Date() : undefined,
-          },
-        });
-      }
-    }
     await this.prisma.auditLog.create({
       data: {
         actorId,
@@ -245,6 +311,13 @@ export class OrdersService {
         entityId: orderId,
       },
     });
+    if (status === OrderStatus.SHIPPED || status === OrderStatus.READY_FOR_COLLECTION) {
+      try {
+        await this.mail.sendOrderStatus(order);
+      } catch (err) {
+        this.log.error(`Status email failed for ${order.id}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
     return order;
   }
 

@@ -18,6 +18,7 @@ export const PERMISSION_CATALOG = [
   { key: 'procurement.write', name: 'Suppliers and purchase orders', group: 'Commerce' },
   { key: 'locations.read', name: 'View locations', group: 'Shop floor' },
   { key: 'pos.sale', name: 'Take POS sales', group: 'Shop floor' },
+  { key: 'commerce.settings', name: 'Edit checkout methods and county rates', group: 'Commerce' },
   { key: 'marketing.write', name: 'Marketing calendar', group: 'Commerce' },
   { key: 'whatsapp.broadcast', name: 'WhatsApp broadcast', group: 'Commerce' },
 ] as const;
@@ -50,6 +51,7 @@ export const ROLE_PERMISSIONS: Record<(typeof SYSTEM_ROLE_SLUGS)[number], Permis
     'procurement.write',
     'locations.read',
     'pos.sale',
+    'commerce.settings',
     'marketing.write',
     'whatsapp.broadcast',
   ],

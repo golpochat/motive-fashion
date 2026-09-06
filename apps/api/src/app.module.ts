@@ -16,6 +16,7 @@ import { MarketingModule } from './modules/marketing/marketing.module';
 import { MailModule } from './common/mail.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RbacModule } from './modules/rbac/rbac.module';
+import { CommerceModule } from './modules/commerce/commerce.module';
 import { HealthController } from './health.controller';
 import { OpenApiController } from './openapi.controller';
 
@@ -28,6 +29,7 @@ import { OpenApiController } from './openapi.controller';
     CatalogModule,
     InventoryModule,
     CartModule,
+    CommerceModule,
     OrdersModule,
     PaymentsModule,
     CustomersModule,
