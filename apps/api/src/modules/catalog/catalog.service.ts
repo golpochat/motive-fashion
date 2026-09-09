@@ -31,6 +31,7 @@ export class CatalogService {
               OR: [
                 { title: { contains: filters.q, mode: 'insensitive' } },
                 { description: { contains: filters.q, mode: 'insensitive' } },
+                { variants: { some: { sku: { contains: filters.q, mode: 'insensitive' } } } },
               ],
             }
           : {}),

@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundEx
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeAudit } from '../../common/audit';
-import { CATALOG_KEYS, hasAll, PERMISSION_CATALOG, ROLE_PERMISSIONS, SYSTEM_ROLE_SLUGS } from './permissions';
+import { CATALOG_KEYS, hasAll, HIDDEN_ROLE_SLUG, isLockedPermission, LOCKED_PERMISSION_KEYS, PERMISSION_CATALOG, ROLE_PERMISSIONS, slugifyRole, SYSTEM_ROLE_SLUGS } from './permissions';
 
 @Injectable()
 export class RbacService {
@@ -28,6 +28,8 @@ export class RbacService {
         create: { slug, name, system: true, description: `System ${name} role` },
         update: { system: true },
       });
+      const grantCount = await this.prisma.rolePermission.count({ where: { roleId: role.id } });
+      if (slug !== HIDDEN_ROLE_SLUG && grantCount > 0) continue;
       const keys = ROLE_PERMISSIONS[slug];
       await this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
       await this.prisma.rolePermission.createMany({
@@ -63,7 +65,7 @@ export class RbacService {
         _count: { select: { members: true } },
       },
     });
-    if (!role) throw new NotFoundException();
+    if (!role || role.slug === HIDDEN_ROLE_SLUG) throw new NotFoundException();
     return role;
   }
 
@@ -95,12 +97,17 @@ export class RbacService {
     });
   }
 
-  listPermissions() {
-    return this.prisma.permission.findMany({ orderBy: [{ group: 'asc' }, { key: 'asc' }] });
+  async listPermissions() {
+    const rows = await this.prisma.permission.findMany({
+      where: { key: { notIn: [...LOCKED_PERMISSION_KEYS] } },
+      orderBy: [{ group: 'asc' }, { key: 'asc' }],
+    });
+    return rows.map((row) => ({ ...row, builtin: CATALOG_KEYS.has(row.key) }));
   }
 
   listRoles() {
     return this.prisma.role.findMany({
+      where: { slug: { not: HIDDEN_ROLE_SLUG } },
       include: {
         permissions: { include: { permission: true } },
         _count: { select: { members: true } },
@@ -109,33 +116,41 @@ export class RbacService {
     });
   }
 
-  async createRole(input: { slug: string; name: string; description?: string; permissionKeys: string[] }, actorId: string) {
-    const slug = input.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    if ((SYSTEM_ROLE_SLUGS as readonly string[]).includes(slug)) {
-      throw new BadRequestException('That slug is reserved for a system role');
+  async createRole(input: { slug?: string; name: string; description?: string; permissionKeys: string[] }, actorId: string) {
+    const slug = slugifyRole(input.slug || input.name);
+    if (!slug) throw new BadRequestException('Enter a role name.');
+    if ((SYSTEM_ROLE_SLUGS as readonly string[]).includes(slug) || slug === HIDDEN_ROLE_SLUG) {
+      throw new BadRequestException('That name is reserved.');
     }
-    const keys = input.permissionKeys.filter((k) => k !== '*' && CATALOG_KEYS.has(k));
-    const role = await this.prisma.role.create({
-      data: { slug, name: input.name, description: input.description ?? '', system: false },
-    });
-    await this.replacePermissions(role.id, keys);
-    await writeAudit(this.prisma, {
-      actorId,
-      action: 'rbac.role.create',
-      entity: 'Role',
-      entityId: role.id,
-      meta: { slug, keys },
-    });
-    return this.prisma.role.findUniqueOrThrow({
-      where: { id: role.id },
-      include: { permissions: { include: { permission: true } } },
-    });
+    const keys = await this.assignableKeys(input.permissionKeys);
+    try {
+      const role = await this.prisma.role.create({
+        data: { slug, name: input.name, description: input.description ?? '', system: false },
+      });
+      await this.replacePermissions(role.id, keys);
+      await writeAudit(this.prisma, {
+        actorId,
+        action: 'rbac.role.create',
+        entity: 'Role',
+        entityId: role.id,
+        meta: { slug, keys },
+      });
+      return this.prisma.role.findUniqueOrThrow({
+        where: { id: role.id },
+        include: { permissions: { include: { permission: true } } },
+      });
+    } catch (err) {
+      if (typeof err === 'object' && err && 'code' in err && (err as { code: string }).code === 'P2002') {
+        throw new BadRequestException('A role with that name already exists.');
+      }
+      throw err;
+    }
   }
 
   async updateRole(id: string, input: { name?: string; description?: string; permissionKeys?: string[] }, actorId: string) {
     const role = await this.prisma.role.findUnique({ where: { id } });
-    if (!role) throw new NotFoundException();
-    if (role.system && input.permissionKeys && role.slug === 'super-admin') {
+    if (!role || role.slug === HIDDEN_ROLE_SLUG) throw new NotFoundException();
+    if (role.system && input.permissionKeys && role.slug === HIDDEN_ROLE_SLUG) {
       throw new ForbiddenException('Cannot change super-admin permissions');
     }
     if (input.name || input.description !== undefined) {
@@ -144,11 +159,8 @@ export class RbacService {
         data: { name: input.name, description: input.description },
       });
     }
-    if (input.permissionKeys && (!role.system || role.slug !== 'super-admin')) {
-      await this.replacePermissions(
-        id,
-        input.permissionKeys.filter((k) => k !== '*' && CATALOG_KEYS.has(k)),
-      );
+    if (input.permissionKeys && role.slug !== HIDDEN_ROLE_SLUG) {
+      await this.replacePermissions(id, await this.assignableKeys(input.permissionKeys));
     }
     await writeAudit(this.prisma, { actorId, action: 'rbac.role.update', entity: 'Role', entityId: id });
     const members = await this.prisma.userMembership.findMany({ where: { roleId: id } });
@@ -161,7 +173,7 @@ export class RbacService {
 
   async deleteRole(id: string, actorId: string) {
     const role = await this.prisma.role.findUnique({ where: { id } });
-    if (!role) throw new NotFoundException();
+    if (!role || role.slug === HIDDEN_ROLE_SLUG) throw new NotFoundException();
     if (role.system) throw new ForbiddenException('System roles cannot be deleted');
     const members = await this.prisma.userMembership.findMany({ where: { roleId: id } });
     await this.prisma.role.delete({ where: { id } });
@@ -172,7 +184,10 @@ export class RbacService {
 
   async listUsers() {
     return this.prisma.user.findMany({
-      where: { deletedAt: null },
+      where: {
+        deletedAt: null,
+        memberships: { none: { role: { slug: HIDDEN_ROLE_SLUG } } },
+      },
       select: {
         id: true,
         email: true,
@@ -188,20 +203,14 @@ export class RbacService {
   async setUserRoles(userId: string, roleIds: string[], actorId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException();
+    const isPlatformAdmin = await this.prisma.userMembership.findFirst({
+      where: { userId, role: { slug: HIDDEN_ROLE_SLUG } },
+    });
+    if (isPlatformAdmin) throw new ForbiddenException('The platform super-admin cannot be changed from here.');
     const roles = await this.prisma.role.findMany({ where: { id: { in: roleIds } } });
     if (roleIds.length && roles.length !== roleIds.length) throw new BadRequestException('Unknown role');
-    const superRole = await this.prisma.role.findUnique({ where: { slug: 'super-admin' } });
-    if (superRole) {
-      const currentlySuper = await this.prisma.userMembership.findUnique({
-        where: { userId_roleId: { userId, roleId: superRole.id } },
-      });
-      const stayingSuper = roleIds.includes(superRole.id);
-      if (currentlySuper && !stayingSuper) {
-        const others = await this.prisma.userMembership.count({
-          where: { roleId: superRole.id, userId: { not: userId } },
-        });
-        if (others < 1) throw new ForbiddenException('Keep at least one super-admin');
-      }
+    if (roles.some((role) => role.slug === HIDDEN_ROLE_SLUG)) {
+      throw new ForbiddenException('The super-admin role cannot be assigned.');
     }
     await this.prisma.userMembership.deleteMany({ where: { userId } });
     const nextIds = roleIds.length ? roleIds : [(await this.prisma.role.findUniqueOrThrow({ where: { slug: 'customer' } })).id];
@@ -224,6 +233,54 @@ export class RbacService {
         memberships: { include: { role: { select: { id: true, slug: true, name: true } } } },
       },
     });
+  }
+
+  async createPermission(input: { key: string; name: string; group: string }, actorId: string) {
+    const key = input.key.trim().toLowerCase();
+    if (isLockedPermission(key) || CATALOG_KEYS.has(key)) {
+      throw new BadRequestException('That permission key is reserved.');
+    }
+    const existing = await this.prisma.permission.findUnique({ where: { key } });
+    if (existing) throw new BadRequestException('That permission key already exists.');
+    const row = await this.prisma.permission.create({
+      data: { key, name: input.name.trim(), group: input.group.trim() },
+    });
+    await writeAudit(this.prisma, {
+      actorId,
+      action: 'rbac.permission.create',
+      entity: 'Permission',
+      entityId: row.id,
+      meta: { key },
+    });
+    return row;
+  }
+
+  async updatePermission(id: string, input: { name?: string; group?: string }, actorId: string) {
+    const row = await this.prisma.permission.findUnique({ where: { id } });
+    if (!row || isLockedPermission(row.key)) throw new NotFoundException();
+    const next = await this.prisma.permission.update({
+      where: { id },
+      data: { name: input.name?.trim(), group: input.group?.trim() },
+    });
+    await writeAudit(this.prisma, { actorId, action: 'rbac.permission.update', entity: 'Permission', entityId: id });
+    return next;
+  }
+
+  async deletePermission(id: string, actorId: string) {
+    const row = await this.prisma.permission.findUnique({ where: { id } });
+    if (!row || isLockedPermission(row.key)) throw new NotFoundException();
+    if (CATALOG_KEYS.has(row.key)) {
+      throw new ForbiddenException('Built-in permissions cannot be deleted.');
+    }
+    await this.prisma.permission.delete({ where: { id } });
+    await writeAudit(this.prisma, { actorId, action: 'rbac.permission.delete', entity: 'Permission', entityId: id });
+    return { ok: true };
+  }
+
+  private async assignableKeys(keys: string[]) {
+    const wanted = [...new Set(keys.filter((key) => !isLockedPermission(key)))];
+    const rows = await this.prisma.permission.findMany({ where: { key: { in: wanted } } });
+    return rows.map((row) => row.key);
   }
 
   private async replacePermissions(roleId: string, keys: string[]) {

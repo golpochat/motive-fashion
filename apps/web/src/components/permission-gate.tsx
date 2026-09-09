@@ -17,7 +17,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !me) {
-      window.location.replace('/account?next=/user');
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.replace(`/account?next=${encodeURIComponent(next)}`);
     }
   }, [loading, me]);
 

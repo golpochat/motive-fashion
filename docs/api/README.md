@@ -16,8 +16,10 @@ Machine-readable spec: `GET /api/v1/openapi.json` (OpenAPI 3.1). Source: `apps/a
 | GET | `/cart` | Query cartId / sessionKey |
 | POST | `/cart` | Create |
 | POST | `/cart/:id/items` | Reserve stock |
-| POST | `/checkout/session` | Create order |
-| POST | `/checkout/:orderId/pay` | Stripe session or mock |
+| GET | `/checkout/options` | Fulfilment, public payments, county rates |
+| POST | `/checkout/quote` | Shipping, promo, totals |
+| POST | `/checkout/session` | Create order (guest allowed) |
+| POST | `/checkout/:orderId/pay` | Stripe session or mock; public web is card-only |
 | GET | `/orders/:id/track` | Tokenised |
 | POST | `/webhooks/stripe` | Raw body |
 | GET/POST | `/webhooks/whatsapp` | Verify + inbound |
@@ -31,21 +33,27 @@ Access JWTs last 15 minutes. Refresh tokens are hashed at rest, rotated on use, 
 
 ## Account (JWT)
 
-`GET /account/me` `/account/orders` `/account/wishlist` `/account/gdpr-export` `POST /account/gdpr-delete`
+`GET /account/me` `/account/orders` `/account/wishlist` `/account/addresses` `/account/gdpr-export` `POST /account/gdpr-delete`
+
+Addresses: `POST /account/addresses` `PATCH /account/addresses/:id` `POST /account/addresses/:id/default` `DELETE /account/addresses/:id`
 
 `GET /account/me` includes `roles[]` and `permissions[]` from memberships (not the JWT).
 
 ## Access (RBAC)
 
-Permission catalog is closed. Roles are customizable. `*` is super-admin only.
+Enforced permission **keys** live in code (`PERMISSION_CATALOG`). Labels, groups, and extra keys can be created and edited. Extra keys do not unlock a route until the product starts checking them.
 
-`GET /rbac/permissions` `GET|POST /rbac/roles` `GET|PATCH|DELETE /rbac/roles/:id` `GET /rbac/users` `PUT /rbac/users/:id/roles`
+The `super-admin` role and its user are omitted from list endpoints. They cannot be created, assigned, or deleted here. Locked keys `*` and `dashboard.super` cannot be granted to other roles. System roles `admin`, `staff`, and `customer` can be edited but not deleted.
 
-Requires `rbac.roles.write` (assigning users also needs `rbac.users.assign`).
+`GET|POST /rbac/permissions` `PATCH|DELETE /rbac/permissions/:id`  
+`GET|POST /rbac/roles` `GET|PATCH|DELETE /rbac/roles/:id`  
+`GET /rbac/users` `PUT /rbac/users/:id/roles`
+
+Requires `rbac.roles.write`. Listing or assigning users also needs `rbac.users.assign`. Super-admin `*` still passes every gate.
 
 ## Admin (permission keys)
 
-Products, inventory, orders, customers, locations, promo codes, analytics, procurement, POS print, WhatsApp broadcast, marketing calendar. Each route uses `RequirePermissions` (for example `analytics.read`, `pos.sale`). Super-admin `*` passes all.
+Products, inventory, orders, customers, locations, promo codes, analytics, procurement, checkout methods / county rates (`commerce.settings`), POS print, WhatsApp broadcast, marketing calendar. Each route uses `RequirePermissions` (for example `analytics.read`, `pos.sale`). Super-admin `*` passes all. `POST /admin/pos/print/:orderId` sends an ESC/POS ticket to `POS_PRINTER_PORT` (USB COM) or `POS_PRINTER_HOST:9100` and still returns `preview`.
 
 ## Stock
 
@@ -57,4 +65,4 @@ Promo `PERCENT` values are **basis points** (1000 = 10% off). `FIXED` values are
 
 ## Channels
 
-`POST /channels/pos/sales`
+`POST /channels/pos/sales` (staff/admin till: one or more SKU lines; prices from catalogue)

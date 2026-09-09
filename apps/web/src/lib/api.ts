@@ -42,6 +42,7 @@ export type ProductCard = {
   title: string;
   description: string;
   categorySlug: string;
+  categoryName?: string;
   images: { url: string; alt: string }[];
   variants: {
     id: string;

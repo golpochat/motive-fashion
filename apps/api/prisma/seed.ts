@@ -538,7 +538,7 @@ async function main() {
   const passwordHash = await bcrypt.hash('MotiveAdmin!2026', 12);
   const adminUser = await prisma.user.create({
     data: {
-      email: 'hello@motivefashion.ie',
+      email: 'superadmin@motivefashion.com',
       name: 'Motive Admin',
       role: 'ADMIN',
       passwordHash,

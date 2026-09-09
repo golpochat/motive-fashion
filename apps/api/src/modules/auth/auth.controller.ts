@@ -1,7 +1,7 @@
 import { Body, Controller, Inject, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { loginSchema, registerSchema } from '@motive-fashion/validation';
+import { loginSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema } from '@motive-fashion/validation';
 
 @Controller('auth')
 export class AuthController {
@@ -39,5 +39,20 @@ export class AuthController {
     await this.auth.logout(this.auth.refreshFromRequest(req));
     this.auth.clearAuthCookies(res);
     return { ok: true };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: unknown) {
+    const dto = forgotPasswordSchema.parse(body);
+    await this.auth.forgotPassword(dto.email, dto.next);
+    return { ok: true };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    const dto = resetPasswordSchema.parse(body);
+    const result = await this.auth.resetPassword(dto.token, dto.password);
+    this.auth.setAuthCookies(res, result.accessToken, result.refreshToken);
+    return result;
   }
 }

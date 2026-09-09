@@ -23,6 +23,16 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+  next: z.string().max(200).optional(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(PASSWORD_MIN_LENGTH),
+});
+
 export const cartAddSchema = z.object({
   variantId: z.string().uuid(),
   quantity: z.number().int().min(1).max(20),
@@ -206,9 +216,24 @@ export const posSaleSchema = z.object({
   externalId: z.string().min(1).max(80),
   deviceId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
-  email: z.string().email().optional(),
+  email: z.union([z.string().email(), z.literal('')]).optional(),
   name: z.string().min(1).max(80).optional(),
   phone: z.string().min(8).optional(),
+  fulfillment: z.enum(['DELIVERY', 'COLLECTION']).default('COLLECTION'),
+  paymentMethod: z.enum(['CARD', 'CASH']).default('CASH'),
+  promoCode: z.string().max(40).optional(),
+  county: z.string().min(2).max(40).optional(),
+  address: z
+    .object({
+      line1: z.string().min(3),
+      line2: z.string().optional(),
+      city: z.string().min(2),
+      county: z.string().min(2).max(40),
+      eircode: ieEircode,
+      country: z.string().default('IE'),
+      label: addressLabel.optional(),
+    })
+    .optional(),
   lines: z
     .array(
       z.object({
@@ -219,6 +244,22 @@ export const posSaleSchema = z.object({
     )
     .min(1),
   totalCents: z.number().int().min(0),
+});
+
+export const posQuoteSchema = z.object({
+  lines: posSaleSchema.shape.lines,
+  fulfillment: z.enum(['DELIVERY', 'COLLECTION']),
+  county: z.string().min(2).max(40).optional(),
+  promoCode: z.string().max(40).optional(),
+});
+
+export const posPrintSchema = z.object({
+  tenderedCents: z.number().int().min(0).optional(),
+  changeCents: z.number().int().min(0).optional(),
+});
+
+export const posEmailSchema = z.object({
+  email: z.string().email().optional(),
 });
 
 export const orderStatusSchema = z.object({
@@ -237,7 +278,7 @@ export const resolveReturnSchema = z.object({
 });
 
 export const roleCreateSchema = z.object({
-  slug: z.string().min(2).max(40),
+  slug: z.string().min(2).max(40).optional(),
   name: z.string().min(2).max(60),
   description: z.string().max(200).optional(),
   permissionKeys: z.array(z.string().min(1)).default([]),
@@ -249,12 +290,39 @@ export const roleUpdateSchema = z.object({
   permissionKeys: z.array(z.string().min(1)).optional(),
 });
 
+export const permissionCreateSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(3)
+    .max(60)
+    .regex(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/, 'Use a key like catalog.write'),
+  name: z.string().trim().min(2).max(80),
+  group: z.string().trim().min(2).max(40),
+});
+
+export const permissionUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(80).optional(),
+  group: z.string().trim().min(2).max(40).optional(),
+});
+
 export const userRolesSchema = z.object({
   roleIds: z.array(z.string().uuid()),
 });
 
+export const contactSchema = z.object({
+  name: z.string().trim().min(2, 'Enter your name.').max(80),
+  email: z.string().email('Enter a valid email.'),
+  phone: z.string().trim().max(40).optional(),
+  message: z.string().trim().min(10, 'Write a little more so we can help.').max(2000),
+  company: z.string().max(120).optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ContactInput = z.infer<typeof contactSchema>;
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 export type CheckoutQuoteInput = z.infer<typeof checkoutQuoteSchema>;
 export type AddressCreateInput = z.infer<typeof addressCreateSchema>;

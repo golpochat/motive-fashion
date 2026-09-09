@@ -1,4 +1,5 @@
-export type SalesChannel = 'web' | 'whatsapp' | 'pos' | 'mobile';
+/** Mirrors Prisma `SalesChannel`. */
+export type SalesChannel = 'WEB' | 'WHATSAPP' | 'POS' | 'MOBILE';
 
 export type OrderStatus =
   | 'PENDING_PAYMENT'

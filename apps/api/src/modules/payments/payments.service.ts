@@ -48,14 +48,19 @@ export class PaymentsService {
   private async startSession(order: {
     id: string;
     email: string;
+    channel?: string;
     trackingToken: string;
     shippingCents: number;
     discountCents: number;
     totalCents: number;
     items: { title: string; size: string; color: string; quantity: number; unitPriceCents: number }[];
   }) {
-    const success = `${process.env.WEB_ORIGIN ?? 'http://localhost:3000'}/order/${order.id}?token=${order.trackingToken}`;
-    const cancel = `${process.env.WEB_ORIGIN ?? 'http://localhost:3000'}/checkout?cancelled=1`;
+    const origin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+    const success =
+      order.channel === 'POS'
+        ? `${origin}/staff/pos?paid=${order.id}`
+        : `${origin}/order/${order.id}?token=${order.trackingToken}`;
+    const cancel = order.channel === 'POS' ? `${origin}/staff/pos` : `${origin}/checkout?cancelled=1`;
 
     if (!this.stripe) {
       if (!mockPaymentsAllowed()) {
@@ -88,7 +93,7 @@ export class PaymentsService {
       mode: 'payment',
       success_url: success,
       cancel_url: cancel,
-      customer_email: order.email,
+      customer_email: order.email && order.email !== 'pos@motivefashion.ie' ? order.email : undefined,
       metadata: { orderId: order.id },
       line_items: lineItems,
     };

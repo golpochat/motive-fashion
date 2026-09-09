@@ -1,10 +1,10 @@
 import { AuthGate } from '@/components/permission-gate';
-import { DashboardShell } from '@/components/dashboard-shell';
+import { AccountShell } from '@/components/account-shell';
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
-      <DashboardShell workspace="customer">{children}</DashboardShell>
+      <AccountShell>{children}</AccountShell>
     </AuthGate>
   );
 }

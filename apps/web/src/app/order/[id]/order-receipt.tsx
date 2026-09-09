@@ -6,11 +6,14 @@ import { formatEur } from '@motive-fashion/utils';
 import { BRAND, countyLabel, ORDER_STATUS_LABEL, RETURN_POSTAGE_NOTICE, formatIrelandAddress, fulfilmentSteps, carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
 import { API } from '@/lib/api';
 import { releasePaidCart } from '@/lib/cart-store';
+import { useSession } from '@/components/session-provider';
+import { hasPerm } from '@/lib/rbac';
 
 export type TrackedOrder = {
   id: string;
   cartId?: string | null;
   status: string;
+  channel?: string;
   email: string;
   name: string;
   giftNote?: string | null;
@@ -72,6 +75,9 @@ export function OrderReceipt({
   const [busy, setBusy] = useState(initial.status === 'PENDING_PAYMENT');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [printNote, setPrintNote] = useState('');
+  const { me } = useSession();
+  const canPrintTill = hasPerm(me, 'pos.sale');
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +147,44 @@ export function OrderReceipt({
       window.removeEventListener('focus', onFocus);
     };
   }, [initial.id, token, order.status]);
+
+  async function printTillTicket() {
+    const res = await fetch(`${API}/admin/pos/print/${order.id}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const printed = (await res.json()) as { printed?: boolean; error?: string; message?: string };
+    if (!res.ok) throw new Error(printed.message ?? printed.error ?? 'Print failed.');
+    setPrintNote(printed.printed ? 'Printed on TM-T20III.' : `Not printed${printed.error ? `: ${printed.error}` : '.'}`);
+  }
+
+  useEffect(() => {
+    if (!canPrintTill || order.channel !== 'POS' || !isPaid(order.status)) return;
+    const key = `mf_pos_autoprint_${order.id}`;
+    if (sessionStorage.getItem(key)) return;
+    let cancelled = false;
+    void fetch(`${API}/admin/pos/print/${order.id}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+      .then(async (res) => {
+        const printed = (await res.json()) as { printed?: boolean; error?: string; message?: string };
+        if (cancelled) return;
+        if (!res.ok) throw new Error(printed.message ?? printed.error ?? 'Print failed.');
+        sessionStorage.setItem(key, '1');
+        setPrintNote(printed.printed ? 'Printed on TM-T20III.' : `Not printed${printed.error ? `: ${printed.error}` : '.'}`);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setPrintNote(err instanceof Error ? err.message : 'Print failed.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canPrintTill, order.channel, order.id, order.status]);
 
   async function resumePay() {
     setError('');
@@ -263,6 +307,8 @@ export function OrderReceipt({
 
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
 
+      {printNote ? <p className="mt-3 text-sm text-ink/70">{printNote}</p> : null}
+
       <div className="mt-6 flex flex-wrap gap-3">
         {order.status === 'PENDING_PAYMENT' && !busy ? (
           <button
@@ -271,6 +317,20 @@ export function OrderReceipt({
             onClick={() => void resumePay()}
           >
             Complete payment
+          </button>
+        ) : null}
+        {paid && canPrintTill ? (
+          <Link href="/staff/pos" className="rounded-full bg-primary px-6 py-3 text-sm text-cream no-underline">
+            Back to till
+          </Link>
+        ) : null}
+        {paid && canPrintTill ? (
+          <button
+            type="button"
+            className="rounded-full border border-ink/15 px-6 py-3 text-sm"
+            onClick={() => void printTillTicket().catch((err: unknown) => setPrintNote(err instanceof Error ? err.message : 'Print failed.'))}
+          >
+            Print ticket
           </button>
         ) : null}
         <Link href="/shop" className="rounded-full border border-ink/15 px-6 py-3 text-sm no-underline">

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { initials, roleLabel } from '@/lib/rbac';
-import { accessibleWorkspaces, type WorkspaceId } from '@/lib/workspaces';
+import { accessibleWorkspaces, workspaceFromPath, type WorkspaceId } from '@/lib/workspaces';
 import { useSession } from '@/components/session-provider';
 
 export function ProfileMenu({
@@ -14,6 +15,7 @@ export function ProfileMenu({
   currentWorkspace?: WorkspaceId;
 }) {
   const { me, loading, logout } = useSession();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -37,14 +39,23 @@ export function ProfileMenu({
   }
 
   if (!me) {
+    if (pathname === '/account') {
+      return (
+        <span className="inline-flex min-h-11 items-center text-sm text-accent" aria-current="page">
+          Sign in
+        </span>
+      );
+    }
     return (
-      <Link href="/account" className="text-sm no-underline transition-colors hover:text-accent">
+      <Link href="/account" className="inline-flex min-h-11 items-center text-sm no-underline transition-colors hover:text-accent">
         Sign in
       </Link>
     );
   }
 
   const workspaces = accessibleWorkspaces(me);
+  const current = currentWorkspace ?? workspaceFromPath(pathname ?? '')?.id;
+  const floor = workspaces.find((w) => w.id === 'staff');
 
   return (
     <div className="relative" ref={root}>
@@ -76,11 +87,11 @@ export function ProfileMenu({
               <p className="mt-1 text-[10px] uppercase tracking-widest text-ink/45">{roleLabel(me)}</p>
             ) : null}
           </div>
-          {workspaces.length ? (
+          {workspaces.length > 1 ? (
             <div className="border-b border-ink/10 py-1">
               <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-widest text-ink/40">Workspaces</p>
               {workspaces.map((w) => {
-                const current = currentWorkspace === w.id;
+                const active = current === w.id;
                 return (
                   <Link
                     key={w.id}
@@ -93,7 +104,7 @@ export function ProfileMenu({
                       <span className="block">{w.label}</span>
                       <span className="block text-xs text-ink/45">{w.eyebrow}</span>
                     </span>
-                    {current ? (
+                    {active ? (
                       <span className="text-[10px] uppercase tracking-wider text-accent">Current</span>
                     ) : null}
                   </Link>
@@ -101,18 +112,22 @@ export function ProfileMenu({
               })}
             </div>
           ) : null}
-          <div className="border-b border-ink/10 py-1">
-            <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-widest text-ink/40">Personal</p>
-            <Link href="/user" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-              Account
-            </Link>
-            <Link href="/user/orders" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-              Orders
-            </Link>
-            <Link href="/" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-              Storefront
-            </Link>
-          </div>
+          {current === 'staff' ? null : (
+            <div className="border-b border-ink/10 py-1">
+              <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-widest text-ink/40">Personal</p>
+              {floor && !(pathname ?? '').startsWith('/staff') ? (
+                <Link href="/staff" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
+                  Shop floor
+                </Link>
+              ) : null}
+              <Link href="/user" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
+                My account
+              </Link>
+              <Link href="/" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
+                Storefront
+              </Link>
+            </div>
+          )}
           <div className="p-2">
             <button
               type="button"

@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Headers, Inject, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { SquarePosAdapter } from './square.adapter';
-import { posSaleSchema } from '@motive-fashion/validation';
+import { posEmailSchema, posPrintSchema, posQuoteSchema, posSaleSchema } from '@motive-fashion/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isProduction } from '../../common/security-config';
 import { requestRawBody, squareSignatureValid } from '../../common/webhook-signature';
@@ -14,11 +14,47 @@ export class PosController {
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
+  @Post('channels/pos/quote')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  quote(@Body() body: unknown) {
+    return this.square.quote(posQuoteSchema.parse(body));
+  }
+
   @Post('channels/pos/sales')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  sale(@Body() body: unknown) {
-    return this.square.onSale(posSaleSchema.parse(body));
+  sale(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    return this.square.onSale(posSaleSchema.parse(body), user.sub);
+  }
+
+  @Get('staff/orders')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  mySales(@CurrentUser() user: { sub: string }) {
+    return this.square.listTillOrders(user.sub);
+  }
+
+  @Get('staff/orders/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  mySale(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.square.getTillOrder(id, user.sub);
+  }
+
+  @Post('staff/orders/:id/print')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  printMine(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.square.printTillOrder(id, user.sub);
+  }
+
+  @Post('staff/orders/:id/email')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  emailMine(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = posEmailSchema.parse(body ?? {});
+    return this.square.emailTillOrder(id, user.sub, dto.email);
   }
 
   @Post('webhooks/square')
@@ -54,8 +90,9 @@ export class PosController {
   @Post('admin/pos/print/:orderId')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  print(@Param('orderId') orderId: string) {
-    return this.square.printReceipt(orderId);
+  print(@Param('orderId') orderId: string, @Body() body: unknown) {
+    const cash = posPrintSchema.parse(body ?? {});
+    return this.square.printReceipt(orderId, cash);
   }
 
   @Get('admin/pos/devices')

@@ -2,15 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { addressLabelName, formatIrelandAddress, isValidEircode, normalizeEircode } from '@motive-fashion/config';
+import { addressLabelName, formatIrelandAddress, isValidEircode, normalizeEircode, BRAND } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
 import { API, apiErrorMessage, cartSessionKey } from '@/lib/api';
 import { useCart } from '@/lib/cart-store';
 import { useSession } from '@/components/session-provider';
-import { Select } from '@/components/select';
+import { Field, fieldClass, Select } from '@/components/dashboard-ui';
 import { IrelandAddressFields, validateIrelandAddress, type AddressFieldErrors } from '@/components/ireland-address-fields';
 
-const fieldClass = 'w-full rounded-xl border border-ink/15 bg-white px-3 py-2 text-sm outline-none focus:border-accent';
 const radioClass = 'h-4 w-4 shrink-0 accent-ink';
 
 type Fulfilment = {
@@ -65,7 +64,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('cancelled')) {
-      setError('Payment was cancelled. Your cart is still reserved for 15 minutes.');
+      setError(`Payment was cancelled. Your cart is still reserved for ${BRAND.reservationMinutes} minutes.`);
     }
   }, []);
 
@@ -225,7 +224,7 @@ export default function CheckoutPage() {
     return (
       <div>
         <h1 className="font-serif text-4xl">Checkout</h1>
-        <p className="mt-4">Loading…</p>
+        <p className="mt-4 text-ink/70">Loading…</p>
       </div>
     );
   }
@@ -243,16 +242,18 @@ export default function CheckoutPage() {
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="space-y-6">
+    <form noValidate onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <div className="lg:col-span-2">
         <h1 className="font-serif text-4xl">Checkout</h1>
-        <p className="text-sm text-ink/70">
-          Prices include VAT (23%). Ireland only. See <Link href="/legal/returns">returns</Link>.
+        <p className="mt-2 text-sm text-ink/70">
+          Prices include VAT ({(BRAND.vatRate * 100).toFixed(0)}%). Ireland only. See <Link href="/legal/returns">returns</Link>.
         </p>
+      </div>
+      <div className="space-y-6 max-lg:order-last lg:col-start-1 lg:row-start-2">
         {!me ? (
           <div className="rounded-2xl border border-ink/10 bg-white p-4 text-sm">
             <p className="font-medium">Pay as a guest</p>
-            <p className="mt-1 text-ink/60">No account needed. Fill in your details below.</p>
+            <p className="mt-1 text-ink/70">No account needed. Fill in your details below.</p>
             <p className="mt-3 text-ink/70">
               Already have an account?{' '}
               <Link href="/account?next=/checkout">Sign in</Link> to use a saved address.
@@ -270,16 +271,23 @@ export default function CheckoutPage() {
                 <span className="text-ink/55"> · {me.email}</span>
               </p>
               <label className="block">
-                <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Phone</span>
+                <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Phone</span>
                 <input name="phone" defaultValue={me.phone ?? ''} autoComplete="tel" className={fieldClass} />
-                <span className="mt-1.5 block text-xs text-ink/50">Optional. Used if we need to reach you about this order.</span>
+                <span className="mt-1.5 block text-xs text-ink/55">Optional. Used if we need to reach you about this order.</span>
               </label>
             </>
           ) : (
             <>
-              <input name="name" required placeholder="Name" autoComplete="name" className={fieldClass} />
-              <input name="email" type="email" required placeholder="Email" autoComplete="email" className={fieldClass} />
-              <input name="phone" placeholder="Phone" autoComplete="tel" className={fieldClass} />
+              <Field label="Name">
+                <input name="name" required autoComplete="name" className={fieldClass} />
+              </Field>
+              <Field label="Email">
+                <input name="email" type="email" required autoComplete="email" className={fieldClass} />
+              </Field>
+              <Field label="Phone">
+                <input name="phone" autoComplete="tel" className={fieldClass} />
+                <span className="mt-1.5 block text-xs text-ink/55">Optional. Used if we need to reach you about this order.</span>
+              </Field>
             </>
           )}
         </section>
@@ -290,7 +298,7 @@ export default function CheckoutPage() {
             {showFulfilmentChoice ? (
               <fieldset className="flex flex-col gap-2">
                 {options.fulfilment.map((method) => (
-                  <label key={method.id} className="flex items-center gap-2 text-sm">
+                  <label key={method.id} className="flex min-h-11 items-center gap-2 text-sm">
                     <input
                       type="radio"
                       className={radioClass}
@@ -327,11 +335,11 @@ export default function CheckoutPage() {
                         {addressLabelName(addr.label) || 'Address'}
                         {addr.isDefault ? <span className="text-ink/45"> · Default</span> : null}
                       </span>
-                      <span className="mt-1 block text-ink/80">{formatIrelandAddress(addr)}</span>
+                      <span className="mt-1 block text-ink/70">{formatIrelandAddress(addr)}</span>
                     </span>
                   </label>
                 ))}
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
                   <input type="radio" className={radioClass} checked={addressId === 'new'} onChange={() => setAddressId('new')} />
                   Use a different address
                 </label>
@@ -362,27 +370,31 @@ export default function CheckoutPage() {
 
         <section className="space-y-3">
           <h2 className="font-serif text-2xl">Promo</h2>
-          <div className="flex gap-2">
-            <input
-              value={promoInput}
-              onChange={(e) => setPromoInput(e.target.value)}
-              placeholder="Code"
-              className={fieldClass}
-            />
-            <button
-              type="button"
-              className="shrink-0 rounded-xl border border-ink/15 px-4 py-2 text-sm"
-              onClick={() => setPromo(promoInput.trim().toUpperCase())}
-            >
-              Apply
-            </button>
+          <div>
+            <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Promo code</span>
+            <div className="flex gap-2">
+              <input
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value)}
+                autoComplete="off"
+                className={fieldClass}
+              />
+              <button
+                type="button"
+                className="min-h-11 shrink-0 rounded-xl border border-ink/15 px-4 py-2 text-sm"
+                onClick={() => setPromo(promoInput.trim().toUpperCase())}
+              >
+                Apply
+              </button>
+            </div>
           </div>
-          {promo && !quoteError ? <p className="text-sm text-ink/60">Applied {promo}</p> : null}
+          {promo && !quoteError ? <p className="text-sm text-ink/70">Applied {promo}</p> : null}
         </section>
 
         <section className="space-y-3">
           <h2 className="font-serif text-2xl">Gift note</h2>
-          <textarea name="giftNote" placeholder="Optional message with the order" className={fieldClass} />
+          <textarea name="giftNote" rows={3} aria-label="Gift note" className={fieldClass} />
+          <p className="text-xs text-ink/55">Optional. Printed with the order.</p>
         </section>
 
         {options?.returnNotice ? (
@@ -398,25 +410,36 @@ export default function CheckoutPage() {
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         {quoteError ? <p className="text-sm text-red-700">{quoteError}</p> : null}
 
-        <button
-          className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50"
-          type="submit"
-          disabled={Boolean(options?.blocked) || !cardOk || !ack || paying}
-        >
-          {paying ? 'Starting payment…' : 'Pay with card'}
-        </button>
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-ink/70">
+              Total inc. VAT {quote ? formatEur(quote.totalCents) : formatEur(cart.subtotalCents)}
+            </p>
+            <button
+              className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50"
+              type="submit"
+              disabled={Boolean(options?.blocked) || !cardOk || !ack || paying}
+            >
+              {paying ? 'Starting payment…' : 'Pay with card'}
+            </button>
+          </div>
+          <p className="text-xs text-ink/55">
+            Card payment is processed by Stripe. We never store full card numbers. Your cart is reserved for{' '}
+            {BRAND.reservationMinutes} minutes.
+          </p>
+        </div>
       </div>
 
-      <aside className="h-fit space-y-4 rounded-2xl border border-ink/10 bg-white p-5">
+      <aside className="h-fit space-y-4 rounded-2xl border border-ink/10 bg-white p-5 lg:col-start-2 lg:row-start-2 lg:sticky lg:top-24">
         <h2 className="font-serif text-2xl">Order</h2>
         <ul className="divide-y divide-ink/10 text-sm">
           {cart.items.map((item) => (
             <li key={item.id} className="flex justify-between gap-3 py-2">
               <span>
                 {item.title} × {item.quantity}
-                <span className="block text-ink/50">
+                <span className="block text-ink/55">
                   {item.size} / {item.color}
-                  <span className="text-ink/40"> · {formatEur(item.unitPriceCents)} each</span>
+                  <span className="text-ink/55"> · {formatEur(item.unitPriceCents)} each</span>
                 </span>
               </span>
               <span className="shrink-0 tabular-nums">{formatEur(item.unitPriceCents * item.quantity)}</span>
@@ -453,7 +476,7 @@ export default function CheckoutPage() {
             </div>
           </dl>
         ) : (
-          <p className="text-sm text-ink/60">Subtotal {formatEur(cart.subtotalCents)}</p>
+          <p className="text-sm text-ink/70">Subtotal {formatEur(cart.subtotalCents)}</p>
         )}
         {fulfillment === 'DELIVERY' && deliveryMethod?.freeOverCents && quote?.countyRateCents != null ? (
           <p className="text-xs text-ink/55">

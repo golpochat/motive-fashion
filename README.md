@@ -43,7 +43,7 @@ Readiness (Postgres + Redis): `GET http://localhost:4000/api/v1/health/ready`
 
 Demo logins after seed:
 
-- Super-admin `hello@motivefashion.ie` / `MotiveAdmin!2026` → `/super-admin`
+- Super-admin `superadmin@motivefashion.com` / `MotiveAdmin!2026` → `/super-admin`
 - Staff `floor@motivefashion.ie` / `MotiveStaff!2026` → `/staff`
 - Customer `guest@motivefashion.ie` / `MotiveUser!2026` → `/user`
 

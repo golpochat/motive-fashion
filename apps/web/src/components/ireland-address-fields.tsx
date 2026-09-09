@@ -64,7 +64,7 @@ export function IrelandAddressFields({
     <div className="space-y-3">
       {showLabel ? (
         <label className="block">
-          <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Label</span>
+          <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Label</span>
           <Select
             name="label"
             defaultValue={addressLabelCode(defaults?.label)}
@@ -77,7 +77,7 @@ export function IrelandAddressFields({
         <input type="hidden" name="label" value="HOME" />
       )}
       <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Address line 1</span>
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Address line 1</span>
         <input
           name="line1"
           required
@@ -93,12 +93,12 @@ export function IrelandAddressFields({
         ) : null}
       </label>
       <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Address line 2</span>
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Address line 2</span>
         <input name="line2" defaultValue={defaults?.line2 ?? ''} autoComplete="address-line2" className={fieldClass} />
-        <span className="mt-1.5 block text-xs text-ink/50">Optional. Apartment, building, or estate name.</span>
+        <span className="mt-1.5 block text-xs text-ink/55">Optional. Apartment, building, or estate name.</span>
       </label>
       <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Town / city</span>
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Town / city</span>
         <input
           name="city"
           required
@@ -114,7 +114,7 @@ export function IrelandAddressFields({
         ) : null}
       </label>
       <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">County</span>
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">County</span>
         {onCountyChange ? (
           <Select
             name="county"
@@ -144,7 +144,7 @@ export function IrelandAddressFields({
         ) : null}
       </label>
       <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">Eircode</span>
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Eircode</span>
         <input
           name="eircode"
           required
@@ -159,7 +159,7 @@ export function IrelandAddressFields({
             {errors.eircode}
           </p>
         ) : (
-          <span className="mt-1.5 block text-xs text-ink/50">Required for Ireland. Example: D02 AF30.</span>
+          <span className="mt-1.5 block text-xs text-ink/55">Required for Ireland. Example: D02 AF30.</span>
         )}
       </label>
     </div>

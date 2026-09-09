@@ -26,7 +26,8 @@ export const PALETTE = {
   rose: '#ad7e6e',
 } as const;
 
-export const CHANNELS = ['web', 'whatsapp', 'pos', 'mobile'] as const;
+/** Mirrors Prisma `SalesChannel`. */
+export const CHANNELS = ['WEB', 'WHATSAPP', 'POS', 'MOBILE'] as const;
 export type SalesChannel = (typeof CHANNELS)[number];
 
 /** Default Ireland delivery rate (VAT-inc cents). Admin can override per county. */

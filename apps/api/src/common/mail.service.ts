@@ -14,9 +14,13 @@ export class MailService {
     order: ReceiptOrder & {
       channel: SalesChannel;
     },
+    options?: { to?: string },
   ) {
-    if (order.channel === SalesChannel.POS) return { skipped: true };
-    const receipt = toReceiptOrder(order);
+    const to = options?.to?.trim() || order.email;
+    if (!options?.to && order.channel === SalesChannel.POS && (!to || to === 'pos@motivefashion.ie')) {
+      return { skipped: true };
+    }
+    const receipt = toReceiptOrder({ ...order, email: to });
     const mark = brandMarkPng();
     const html = orderPaidHtml(receipt, { inlineLogo: Boolean(mark) });
     const text = orderPaidText(receipt);
@@ -51,7 +55,7 @@ export class MailService {
       });
     }
 
-    return this.send(receipt.email, 'Order confirmed · Motive Fashion', html, { text, attachments });
+    return this.send(to, 'Order confirmed · Motive Fashion', html, { text, attachments });
   }
 
   async sendOrderStatus(
@@ -60,7 +64,9 @@ export class MailService {
       shipments?: { carrier?: string | null; trackingNo?: string | null }[];
     },
   ) {
-    if (order.channel === SalesChannel.POS) return { skipped: true };
+    if (order.channel === SalesChannel.POS && (!order.email || order.email === 'pos@motivefashion.ie')) {
+      return { skipped: true };
+    }
     const receipt = toReceiptOrder(order);
     const ready = receipt.status === 'READY_FOR_COLLECTION';
     const courier = carrierTrackUrl(receipt.carrier, receipt.trackingNo);
@@ -87,12 +93,38 @@ export class MailService {
     return this.send(receipt.email, subject, html, { text });
   }
 
+  async sendPasswordReset(to: string, url: string) {
+    const html = `<p>Assalamu alaikum.</p><p>Use this link to choose a new Motive Fashion password. It expires in one hour.</p><p><a href="${url.replace(/&/g, '&amp;')}">Choose a new password</a></p><p>If you did not ask for this, you can ignore the email.</p>`;
+    const text = `Assalamu alaikum.\n\nChoose a new Motive Fashion password (expires in one hour):\n${url}\n\nIf you did not ask for this, ignore this email.`;
+    const result = await this.send(to, 'Reset your password · Motive Fashion', html, { text });
+    if (result && 'skipped' in result && result.skipped) {
+      this.log.log(`Password reset link (email skipped): ${url}`);
+    }
+    return result;
+  }
+
+  async sendContactEnquiry(input: { name: string; email: string; phone?: string; message: string }) {
+    const to = process.env.CONTACT_TO ?? process.env.EMAIL_REPLY_TO ?? 'hello@motivefashion.ie';
+    const phone = input.phone ? `<p>Phone: ${escapeHtml(input.phone)}</p>` : '';
+    const html = `<p>Storefront message from ${escapeHtml(input.name)}.</p><p>Email: ${escapeHtml(input.email)}</p>${phone}<p>${escapeHtml(input.message).replace(/\n/g, '<br/>')}</p>`;
+    const text = `Storefront message from ${input.name}.\nEmail: ${input.email}\n${input.phone ? `Phone: ${input.phone}\n` : ''}\n${input.message}`;
+    const result = await this.send(to, `Contact · ${input.name} · Motive Fashion`, html, {
+      text,
+      replyTo: input.email,
+    });
+    if (result && 'skipped' in result && result.skipped) {
+      this.log.log(`Contact enquiry (email skipped) from ${input.email}: ${input.message.slice(0, 200)}`);
+    }
+    return result;
+  }
+
   async send(
     to: string,
     subject: string,
     html: string,
     extras?: {
       text?: string;
+      replyTo?: string;
       attachments?: Array<{
         filename: string;
         content: string;
@@ -116,7 +148,7 @@ export class MailService {
       body: JSON.stringify({
         from: process.env.EMAIL_FROM ?? 'Motive Fashion <info@motivefashion.com>',
         to: [to],
-        reply_to: process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com',
+        reply_to: extras?.replyTo ?? process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com',
         subject,
         html,
         text: extras?.text,
@@ -129,4 +161,12 @@ export class MailService {
     }
     return { ok: true };
   }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

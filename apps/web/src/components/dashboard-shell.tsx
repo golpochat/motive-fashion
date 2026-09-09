@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { hasPerm } from '@/lib/rbac';
-import { navActive, workspaceById, type WorkspaceId } from '@/lib/workspaces';
+import { accessibleWorkspaces, navActive, workspaceById, type WorkspaceId } from '@/lib/workspaces';
 import { ProfileMenu } from '@/components/profile-menu';
 import { useSession } from '@/components/session-provider';
 import { ConsoleFooter } from '@/components/dashboard-ui';
@@ -14,21 +14,12 @@ import { BRAND } from '@motive-fashion/config';
 
 const COLLAPSE_KEY = 'mf_sidebar_collapsed';
 
-function MenuGlyph({ mobileOpen, collapsed }: { mobileOpen: boolean; collapsed: boolean }) {
-  const desktopOpen = !collapsed;
-  return (
-    <span className="relative block h-3.5 w-4" aria-hidden>
-      <span
-        className={`absolute left-0 top-0 h-0.5 w-4 bg-primary transition-transform duration-300 ${mobileOpen ? 'translate-y-[6px] rotate-45' : ''} ${desktopOpen ? 'md:translate-y-[6px] md:rotate-45' : 'md:translate-y-0 md:rotate-0'}`}
-      />
-      <span
-        className={`absolute left-0 top-[6px] h-0.5 w-4 bg-primary transition-opacity duration-200 ${mobileOpen ? 'opacity-0' : 'opacity-100'} ${desktopOpen ? 'md:opacity-0' : 'md:opacity-100'}`}
-      />
-      <span
-        className={`absolute left-0 top-[12px] h-0.5 w-4 bg-primary transition-transform duration-300 ${mobileOpen ? '-translate-y-[6px] -rotate-45' : ''} ${desktopOpen ? 'md:-translate-y-[6px] md:-rotate-45' : 'md:translate-y-0 md:rotate-0'}`}
-      />
-    </span>
-  );
+function isTillPath(pathname: string) {
+  return pathname === '/staff/pos' || pathname === '/admin/pos';
+}
+
+function MenuGlyph({ mobileOpen }: { mobileOpen: boolean }) {
+  return <Icon name={mobileOpen ? 'close' : 'menu'} className="h-4 w-4" />;
 }
 
 export function DashboardShell({
@@ -43,6 +34,7 @@ export function DashboardShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const ws = workspaceById(workspace);
+  const workspaces = useMemo(() => accessibleWorkspaces(me), [me]);
 
   const visibleLinks = useMemo(
     () => ws.nav.filter((item) => !item.perm || hasPerm(me, item.perm)),
@@ -85,6 +77,7 @@ export function DashboardShell({
 
   const current = visibleLinks.find((item) => navActive(pathname, item));
   const narrow = collapsed;
+  const till = isTillPath(pathname);
 
   return (
     <div data-theme={workspace} className="flex h-dvh overflow-hidden bg-surface">
@@ -115,6 +108,30 @@ export function DashboardShell({
         </div>
 
         <nav className="sidebar-nav min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2">
+          {workspaces.length > 1 ? (
+            <div className="mb-2">
+              {narrow ? null : (
+                <p className="px-2 pb-1 text-[10px] uppercase tracking-widest text-sidebar-fg/40">Workspaces</p>
+              )}
+              <ul className="space-y-0.5">
+                {workspaces.map((item) => {
+                  const active = item.id === workspace;
+                  return (
+                    <li key={item.id}>
+                      <Link
+                        href={item.href}
+                        title={item.label}
+                        className={`flex items-center gap-3 rounded-lg text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2'} ${active ? 'bg-accent/25 text-sidebar-fg' : 'text-sidebar-fg/70 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
+                      >
+                        <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
+                        {narrow ? <span className="sr-only">{item.label}</span> : item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
           {sections.map((section) => (
             <div key={section.name} className="mb-2 last:mb-0">
               {narrow ? null : (
@@ -160,11 +177,11 @@ export function DashboardShell({
             <button
               type="button"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-white"
-              aria-label={mobileOpen || !narrow ? 'Collapse navigation' : 'Expand navigation'}
+              aria-label={mobileOpen || !narrow ? 'Hide navigation' : 'Show navigation'}
               aria-expanded={mobileOpen || !narrow}
               onClick={toggleNav}
             >
-              <MenuGlyph mobileOpen={mobileOpen} collapsed={narrow} />
+              <MenuGlyph mobileOpen={mobileOpen} />
             </button>
             <div className="min-w-0">
               <p className="truncate text-xs uppercase tracking-widest text-accent">{ws.label}</p>
@@ -173,11 +190,25 @@ export function DashboardShell({
           </div>
           <ProfileMenu variant="console" currentWorkspace={workspace} />
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="flex min-h-full flex-col">
-            <div className="flex-1 px-4 py-6 md:px-8">{children}</div>
-            <ConsoleFooter />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            className={
+              till
+                ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-3 md:p-4'
+                : 'flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 md:px-8'
+            }
+          >
+            {workspace === 'customer' && workspaces.some((item) => item.id === 'staff') ? (
+              <p className="mb-4 shrink-0 rounded-xl border border-accent/25 bg-accent/10 px-4 py-3 text-sm">
+                This is your personal customer account. Staff tools are on the shop floor.{' '}
+                <Link href="/staff" className="font-medium text-ink">
+                  Open shop floor
+                </Link>
+              </p>
+            ) : null}
+            {children}
           </div>
+          {till ? null : <ConsoleFooter />}
         </div>
       </div>
     </div>

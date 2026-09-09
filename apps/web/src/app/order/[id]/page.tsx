@@ -1,5 +1,8 @@
 import { api } from '@/lib/api';
+import { pageMeta } from '@/lib/page-meta';
 import { OrderReceipt, type TrackedOrder } from './order-receipt';
+
+export const metadata = pageMeta('Order', 'Track a Motive Fashion order with the link from your confirmation email.');
 
 export default async function OrderPage({
   params,

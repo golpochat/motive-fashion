@@ -34,6 +34,23 @@ export function hasAll(keys: string[], needed: string[]) {
 
 export const SYSTEM_ROLE_SLUGS = ['super-admin', 'admin', 'staff', 'customer'] as const;
 
+export const LOCKED_PERMISSION_KEYS = ['*', 'dashboard.super'] as const;
+
+export const HIDDEN_ROLE_SLUG = 'super-admin';
+
+export function isLockedPermission(key: string) {
+  return (LOCKED_PERMISSION_KEYS as readonly string[]).includes(key);
+}
+
+export function slugifyRole(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
 export const ROLE_PERMISSIONS: Record<(typeof SYSTEM_ROLE_SLUGS)[number], PermissionKey[]> = {
   'super-admin': ['*'],
   admin: [

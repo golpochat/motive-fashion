@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { API } from '@/lib/api';
 import { PageHeader, StatCard, DashCard } from '@/components/page-header';
 import { useSession } from '@/components/session-provider';
+import { hasPerm } from '@/lib/rbac';
 
 type OrderRow = { id: string; status: string; trackingToken?: string; totalCents?: number };
 
@@ -24,7 +25,11 @@ export default function UserHome() {
     <div>
       <PageHeader
         title={`Hello, ${me.name}`}
-        description="Your customer account. Orders, wishlist, profile, and addresses live here — staff tools are in their own workspaces."
+        description={
+          hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale')
+            ? 'Personal orders, wishlist, and addresses. Shop-floor tools stay in the sidebar — POS, inventory, packing.'
+            : 'Your customer account. Orders, wishlist, profile, and addresses live here.'
+        }
       />
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Signed in as" value={me.name} />
@@ -32,6 +37,9 @@ export default function UserHome() {
         <StatCard label="Workspace" value="Account" hint={me.email} />
       </div>
       <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale') ? (
+          <DashCard href="/staff/pos" icon="pos" label="POS" body="Open the till — cash or card." />
+        ) : null}
         <DashCard href="/user/orders" icon="orders" label="Orders" body="Track purchases and returns." />
         <DashCard href="/user/wishlist" icon="wishlist" label="Wishlist" body="Pieces you saved." />
         <DashCard href="/user/profile" icon="profile" label="Profile" body="Name, email, and phone." />

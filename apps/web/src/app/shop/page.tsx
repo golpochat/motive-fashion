@@ -1,6 +1,10 @@
-import Link from 'next/link';
-import { api, type ProductCard } from '@/lib/api';
-import { ProductTile } from '@/components/product-tile';
+import { pageMeta } from '@/lib/page-meta';
+import { ShopView } from './shop-view';
+
+export const metadata = pageMeta(
+  'Shop',
+  'Shop hijabs, abayas, jilbabs, and prayer sets from Motive Fashion, Dublin. VAT included.',
+);
 
 export default async function ShopPage({
   searchParams,
@@ -8,44 +12,5 @@ export default async function ShopPage({
   searchParams: Promise<{ category?: string; q?: string }>;
 }) {
   const q = await searchParams;
-  const qs = new URLSearchParams();
-  if (q.category) qs.set('category', q.category);
-  if (q.q) qs.set('q', q.q);
-  let products: ProductCard[] = [];
-  let categories: { slug: string; name: string }[] = [];
-  try {
-    [products, categories] = await Promise.all([
-      api<ProductCard[]>(`/catalog/products?${qs.toString()}`),
-      api<{ slug: string; name: string }[]>('/catalog/categories'),
-    ]);
-  } catch {
-    /* api offline */
-  }
-  return (
-    <div>
-      <h1 className="font-serif text-4xl">Shop</h1>
-      <div className="mt-6 flex flex-wrap gap-2">
-        <Link
-          href="/shop"
-          className={`rounded-full border px-3 py-1 text-sm no-underline ${q.category ? 'border-ink/15 hover:border-accent' : 'border-accent bg-accent/15'}`}
-        >
-          All
-        </Link>
-        {categories.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/shop/${c.slug}`}
-            className={`rounded-full border px-3 py-1 text-sm no-underline ${q.category === c.slug ? 'border-accent bg-accent/15' : 'border-ink/15 hover:border-accent'}`}
-          >
-            {c.name}
-          </Link>
-        ))}
-      </div>
-      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((p) => (
-          <ProductTile key={p.id} product={p} />
-        ))}
-      </div>
-    </div>
-  );
+  return <ShopView category={q.category} q={q.q} />;
 }

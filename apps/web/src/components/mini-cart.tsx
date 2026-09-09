@@ -38,7 +38,7 @@ export function MiniCart() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40">
+    <div className="fixed inset-0 z-[60]">
       <button type="button" className="absolute inset-0 bg-primary/40" aria-label="Close cart" onClick={close} />
       <aside className="absolute inset-y-0 right-0 flex h-dvh w-full max-w-md flex-col bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4">
@@ -57,15 +57,15 @@ export function MiniCart() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {loading && !cart ? <p className="text-sm text-ink/60">Loading…</p> : null}
+          {loading && !cart ? <p className="text-sm text-ink/70">Loading…</p> : null}
           {!loading && items.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <Icon name="cart" className="h-10 w-10 text-ink/25" />
               <p className="mt-4 font-serif text-xl">Your cart is empty</p>
-              <p className="mt-2 text-sm text-ink/60">Start with the shop edit.</p>
+              <p className="mt-2 text-sm text-ink/70">Start with the shop edit.</p>
               <Link
                 href="/shop"
-                className="mt-6 rounded-full bg-primary px-5 py-2 text-sm text-cream no-underline"
+                className="mt-6 inline-flex min-h-11 items-center rounded-full bg-primary px-5 py-2.5 text-sm text-cream no-underline"
                 onClick={close}
               >
                 Shop modest wear
@@ -90,7 +90,7 @@ export function MiniCart() {
         {items.length ? (
           <div className="border-t border-ink/10 px-5 py-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-ink/60">Subtotal inc. VAT</span>
+              <span className="text-ink/70">Subtotal inc. VAT</span>
               <span className="font-medium">{formatEur(cart?.subtotalCents ?? 0)}</span>
             </div>
             <Link
@@ -102,7 +102,7 @@ export function MiniCart() {
             </Link>
             <Link
               href="/cart"
-              className="mt-2 block py-2 text-center text-sm text-ink/70 no-underline hover:text-accent"
+              className="mt-2 block min-h-11 py-2.5 text-center text-sm text-ink/70 no-underline hover:text-accent"
               onClick={close}
             >
               View cart

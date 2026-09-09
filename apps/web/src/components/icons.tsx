@@ -18,6 +18,7 @@ export type IconName =
   | 'privacy'
   | 'logout'
   | 'menu'
+  | 'search'
   | 'cart'
   | 'close'
   | 'eye'
@@ -157,6 +158,12 @@ const paths = {
   menu: (
     <>
       <path d="M4 7h16M4 12h16M4 17h16" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16.5 20.5 21" />
     </>
   ),
   cart: (

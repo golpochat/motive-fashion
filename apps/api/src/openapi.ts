@@ -17,6 +17,7 @@ export const openapiSpec = {
     { name: 'Admin' },
     { name: 'POS' },
     { name: 'Access' },
+    { name: 'Contact' },
     { name: 'Webhooks' },
   ],
   components: {
@@ -70,7 +71,32 @@ export const openapiSpec = {
       },
     },
     '/openapi.json': {
-      get: { tags: ['Health'], summary: 'OpenAPI document', responses: { '200': { description: 'OpenAPI 3.1' } } },
+      get: { tags: ['Health'], summary: 'OpenAPI document', responses: { '200': { description: 'OK' } } },
+    },
+    '/contact': {
+      post: {
+        tags: ['Contact'],
+        summary: 'Storefront contact form',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'email', 'message'],
+                properties: {
+                  name: { type: 'string' },
+                  email: { type: 'string', format: 'email' },
+                  phone: { type: 'string' },
+                  message: { type: 'string' },
+                  company: { type: 'string', description: 'Honeypot' },
+                },
+              },
+            },
+          },
+        },
+        responses: { '200': { description: 'OK' }, '400': { description: 'Validation failed' } },
+      },
     },
     '/catalog/categories': {
       get: { tags: ['Catalog'], summary: 'List categories', responses: { '200': { description: 'OK' } } },
@@ -200,6 +226,20 @@ export const openapiSpec = {
     '/auth/login': { post: { tags: ['Auth'], summary: 'Login', responses: { '200': { description: 'Sets cookies' } } } },
     '/auth/refresh': { post: { tags: ['Auth'], summary: 'Rotate refresh token', responses: { '200': { description: 'OK' } } } },
     '/auth/logout': { post: { tags: ['Auth'], summary: 'Revoke refresh + clear cookies', responses: { '200': { description: 'OK' } } } },
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Request a password reset email',
+        responses: { '200': { description: 'Always OK (does not reveal whether the email exists)' } },
+      },
+    },
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Set a new password from a reset token',
+        responses: { '200': { description: 'Sets cookies' }, '400': { description: 'Invalid or expired token' } },
+      },
+    },
     '/account/me': {
       get: {
         tags: ['Account'],
@@ -236,7 +276,42 @@ export const openapiSpec = {
         tags: ['POS'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
         parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string' } }],
-        summary: 'Receipt preview',
+        summary: 'Print ESC/POS till ticket (Epson USB COM or TCP 9100)',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/staff/orders': {
+      get: {
+        tags: ['POS'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Till sales placed by the signed-in staff member',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/staff/orders/{id}': {
+      get: {
+        tags: ['POS'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'One till sale placed by the signed-in staff member',
+        responses: { '200': { description: 'OK' }, '403': { description: 'Not this cashier' } },
+      },
+    },
+    '/staff/orders/{id}/print': {
+      post: {
+        tags: ['POS'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Reprint this cashier’s till ticket',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/staff/orders/{id}/email': {
+      post: {
+        tags: ['POS'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Email the PDF receipt for this cashier’s till sale',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -267,15 +342,37 @@ export const openapiSpec = {
       get: {
         tags: ['Access'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
-        summary: 'Permission catalog',
+        summary: 'List permissions (locked keys omitted)',
         responses: { '200': { description: 'OK' }, '403': { description: 'Forbidden' } },
+      },
+      post: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Create a custom permission key (labels extra keys; does not unlock routes until code checks them)',
+        responses: { '200': { description: 'Created' }, '400': { description: 'Duplicate or locked key' } },
+      },
+    },
+    '/rbac/permissions/{id}': {
+      patch: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Rename or regroup a permission (built-in keys stay undeletable)',
+        responses: { '200': { description: 'OK' } },
+      },
+      delete: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Delete a custom permission (built-in catalog keys refused)',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Built-in or in use' } },
       },
     },
     '/rbac/roles': {
       get: {
         tags: ['Access'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
-        summary: 'List roles',
+        summary: 'List roles (super-admin omitted)',
         responses: { '200': { description: 'OK' } },
       },
       post: {
@@ -312,7 +409,7 @@ export const openapiSpec = {
       get: {
         tags: ['Access'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
-        summary: 'List users and role memberships',
+        summary: 'List users and role memberships (platform super-admin omitted)',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -321,7 +418,7 @@ export const openapiSpec = {
         tags: ['Access'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        summary: 'Replace a user’s roles',
+        summary: 'Replace a user’s roles (cannot assign or edit super-admin)',
         responses: { '200': { description: 'OK' } },
       },
     },

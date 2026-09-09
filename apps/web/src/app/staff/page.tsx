@@ -3,42 +3,39 @@
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { PageHeader, StatCard, DashCard } from '@/components/page-header';
+import { formatEur } from '@motive-fashion/utils';
 
-type OrderRow = { id: string; status: string };
+type SaleRow = { id: string; totalCents: number };
 type Level = { id: string; onHand: number; reserved: number };
 
 export default function StaffHome() {
-  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [sales, setSales] = useState<SaleRow[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
 
   useEffect(() => {
-    fetch(`${API}/admin/orders`, { credentials: 'include' })
+    fetch(`${API}/staff/orders`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
-      .then(setOrders);
+      .then(setSales);
     fetch(`${API}/admin/inventory`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
       .then(setLevels);
   }, []);
 
-  const packing = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'PACKING').length;
+  const take = sales.reduce((sum, row) => sum + row.totalCents, 0);
   const low = levels.filter((l) => l.onHand - l.reserved <= 5).length;
 
   return (
     <div>
-      <PageHeader
-        title="Shop floor"
-        description="Staff workspace for the Dublin till, stock moves, packing, and locations. Same inventory ledger as the website."
-      />
+      <PageHeader title="Shop floor" description="Till, your sales, and stock. Packing of web orders lives in Admin." />
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Open orders" value={String(orders.length)} />
-        <StatCard label="Need packing" value={String(packing)} hint="Paid or packing" />
+        <StatCard label="My till sales" value={String(sales.length)} />
+        <StatCard label="My take" value={formatEur(take)} hint="This register" />
         <StatCard label="Low stock rows" value={String(low)} hint="Free ≤ 5" />
       </div>
-      <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <DashCard href="/staff/pos" icon="pos" label="POS" body="Take a walk-in sale." />
+      <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <DashCard href="/staff/pos" icon="pos" label="POS" body="Take cash or card and print the ticket." />
+        <DashCard href="/staff/orders" icon="orders" label="Orders" body="Your sales: details, reprint, email receipt." />
         <DashCard href="/staff/inventory" icon="inventory" label="Inventory" body="Adjust and transfer stock." />
-        <DashCard href="/staff/orders" icon="orders" label="Orders" body="Pack paid web orders." />
-        <DashCard href="/staff/locations" icon="locations" label="Locations" body="Warehouse, shop, pop-up." />
       </div>
     </div>
   );

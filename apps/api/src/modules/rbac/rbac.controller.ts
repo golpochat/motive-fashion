@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { RbacService } from './rbac.service';
-import { roleCreateSchema, roleUpdateSchema, userRolesSchema } from '@motive-fashion/validation';
+import { permissionCreateSchema, permissionUpdateSchema, roleCreateSchema, roleUpdateSchema, userRolesSchema } from '@motive-fashion/validation';
 
 @Controller('rbac')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -12,6 +12,21 @@ export class RbacController {
   @Get('permissions')
   permissions() {
     return this.rbac.listPermissions();
+  }
+
+  @Post('permissions')
+  createPermission(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    return this.rbac.createPermission(permissionCreateSchema.parse(body), user.sub);
+  }
+
+  @Patch('permissions/:id')
+  updatePermission(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    return this.rbac.updatePermission(id, permissionUpdateSchema.parse(body), user.sub);
+  }
+
+  @Delete('permissions/:id')
+  removePermission(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.rbac.deletePermission(id, user.sub);
   }
 
   @Get('roles')

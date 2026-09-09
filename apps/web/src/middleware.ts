@@ -12,7 +12,9 @@ function allowedFor(pathname: string, permissions: string[] | undefined) {
     return has(permissions, 'dashboard.super') || has(permissions, 'rbac.roles.write');
   }
   if (pathname.startsWith('/admin')) return has(permissions, 'dashboard.admin');
-  if (pathname.startsWith('/staff')) return has(permissions, 'dashboard.staff');
+  if (pathname.startsWith('/staff')) {
+    return has(permissions, 'dashboard.staff') || has(permissions, 'pos.sale');
+  }
   if (pathname.startsWith('/user')) return true;
   return false;
 }

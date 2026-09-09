@@ -45,7 +45,7 @@ export function initials(me: Me | null | undefined) {
 export function homePath(me: Me) {
   if (hasAnyPerm(me, ['rbac.roles.write', 'dashboard.super'])) return '/super-admin';
   if (hasPerm(me, 'dashboard.admin')) return '/admin';
-  if (hasPerm(me, 'dashboard.staff')) return '/staff';
+  if (hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale')) return '/staff';
   return '/user';
 }
 
@@ -63,6 +63,43 @@ export function safeNext(next: string | null) {
     return next;
   }
   return null;
+}
+
+export function loginContext(next: string | null) {
+  const path = safeNext(next)?.split('?')[0] ?? '';
+  if (path.startsWith('/super-admin')) {
+    return {
+      title: 'Sign in to Super admin',
+      copy: 'Use your Motive Fashion work email and password.',
+      allowRegister: false,
+    };
+  }
+  if (path.startsWith('/admin')) {
+    return {
+      title: 'Sign in to Admin',
+      copy: 'Use your Motive Fashion work email and password.',
+      allowRegister: false,
+    };
+  }
+  if (path.startsWith('/staff')) {
+    return {
+      title: 'Sign in to Staff',
+      copy: 'Use your shop-floor email and password to open the till, orders, and inventory.',
+      allowRegister: false,
+    };
+  }
+  if (path === '/checkout' || path === '/cart') {
+    return {
+      title: 'Sign in',
+      copy: 'Sign in to use a saved address at checkout. You can still pay as a guest from the cart.',
+      allowRegister: true,
+    };
+  }
+  return {
+    title: 'Sign in',
+    copy: 'Use the email and password for this Motive Fashion account.',
+    allowRegister: true,
+  };
 }
 
 export function isWorkspacePath(pathname: string) {

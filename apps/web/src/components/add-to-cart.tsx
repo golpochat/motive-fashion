@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { addCartItem } from '@/lib/cart-store';
 import { Select } from '@/components/select';
+import { BRAND } from '@motive-fashion/config';
 
 type Variant = { id: string; size: string; color: string; available: number };
 
@@ -16,7 +17,7 @@ export function AddToCart({ variants }: { variants: Variant[] }) {
     setMsg('');
     try {
       await addCartItem(variantId, 1);
-      setMsg('Reserved in your cart for 15 minutes.');
+      setMsg(`Reserved in your cart for ${BRAND.reservationMinutes} minutes.`);
     } catch {
       setMsg('Could not add that piece. Try another size.');
     } finally {
@@ -29,7 +30,7 @@ export function AddToCart({ variants }: { variants: Variant[] }) {
       <label className="block text-sm">
         Size / colour
         <Select
-          className="mt-1 w-full rounded-xl border border-ink/15 bg-white px-3 py-2"
+          className="mt-1 w-full min-h-11 rounded-xl border border-ink/15 bg-white px-3 py-2"
           value={variantId}
           onChange={setVariantId}
           options={variants.map((v) => ({

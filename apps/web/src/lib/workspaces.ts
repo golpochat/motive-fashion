@@ -19,6 +19,7 @@ export type Workspace = {
   eyebrow: string;
   description: string;
   match: string[];
+  icon: IconName;
   nav: NavItem[];
 };
 
@@ -30,11 +31,14 @@ export const WORKSPACES: Workspace[] = [
     eyebrow: 'Access control',
     description: 'Roles, people, and the permission catalog.',
     match: ['/super-admin'],
+    icon: 'permissions',
     nav: [
       { href: '/super-admin', label: 'Overview', icon: 'overview', exact: true, section: 'Access' },
       { href: '/super-admin/roles', label: 'Roles', icon: 'roles', perm: 'rbac.roles.write', section: 'Access' },
       { href: '/super-admin/users', label: 'Users', icon: 'users', perm: 'rbac.users.assign', section: 'Access' },
       { href: '/super-admin/permissions', label: 'Permissions', icon: 'permissions', perm: 'rbac.roles.write', section: 'Access' },
+      { href: '/user', label: 'My account', icon: 'profile', exact: true, section: 'Personal' },
+      { href: '/user/addresses', label: 'Addresses', icon: 'locations', section: 'Personal' },
     ],
   },
   {
@@ -44,6 +48,7 @@ export const WORKSPACES: Workspace[] = [
     eyebrow: 'Commerce',
     description: 'Merchandising, customers, supply, and marketing.',
     match: ['/admin'],
+    icon: 'products',
     nav: [
       { href: '/admin', label: 'Overview', icon: 'overview', exact: true, perm: 'analytics.read', section: 'Commerce' },
       { href: '/admin/products', label: 'Products', icon: 'products', perm: 'catalog.read', section: 'Commerce' },
@@ -57,6 +62,8 @@ export const WORKSPACES: Workspace[] = [
       { href: '/admin/procurement', label: 'Procurement', icon: 'procurement', perm: 'procurement.write', section: 'Supply' },
       { href: '/admin/marketing', label: 'Marketing', icon: 'marketing', perm: 'marketing.write', section: 'Growth' },
       { href: '/admin/whatsapp', label: 'WhatsApp', icon: 'whatsapp', perm: 'whatsapp.broadcast', section: 'Growth' },
+      { href: '/user', label: 'My account', icon: 'profile', exact: true, section: 'Personal' },
+      { href: '/user/addresses', label: 'Addresses', icon: 'locations', section: 'Personal' },
     ],
   },
   {
@@ -66,12 +73,12 @@ export const WORKSPACES: Workspace[] = [
     eyebrow: 'Shop floor',
     description: 'Till, stock, packing, and locations.',
     match: ['/staff'],
+    icon: 'pos',
     nav: [
       { href: '/staff', label: 'Overview', icon: 'overview', exact: true, section: 'Floor' },
       { href: '/staff/pos', label: 'POS', icon: 'pos', perm: 'pos.sale', section: 'Floor' },
+      { href: '/staff/orders', label: 'Orders', icon: 'orders', perm: 'pos.sale', section: 'Floor' },
       { href: '/staff/inventory', label: 'Inventory', icon: 'inventory', perm: 'inventory.read', section: 'Floor' },
-      { href: '/staff/orders', label: 'Orders', icon: 'orders', perm: 'orders.read', section: 'Floor' },
-      { href: '/staff/locations', label: 'Locations', icon: 'locations', perm: 'locations.read', section: 'Floor' },
     ],
   },
   {
@@ -81,6 +88,7 @@ export const WORKSPACES: Workspace[] = [
     eyebrow: 'Customer',
     description: 'Orders, wishlist, profile, addresses, and privacy.',
     match: ['/user'],
+    icon: 'profile',
     nav: [
       { href: '/user', label: 'Overview', icon: 'overview', exact: true, section: 'Account' },
       { href: '/user/orders', label: 'Orders', icon: 'orders', section: 'Account' },
@@ -104,12 +112,24 @@ export function canAccessWorkspace(me: Me | null | undefined, id: WorkspaceId) {
   if (!me) return false;
   if (id === 'super-admin') return hasAnyPerm(me, ['dashboard.super', 'rbac.roles.write']);
   if (id === 'admin') return hasPerm(me, 'dashboard.admin');
-  if (id === 'staff') return hasPerm(me, 'dashboard.staff');
+  if (id === 'staff') return hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale');
   return true;
 }
 
+export function homeWorkspace(me: Me | null | undefined): WorkspaceId {
+  if (canAccessWorkspace(me, 'super-admin')) return 'super-admin';
+  if (canAccessWorkspace(me, 'admin')) return 'admin';
+  if (canAccessWorkspace(me, 'staff')) return 'staff';
+  return 'customer';
+}
+
 export function accessibleWorkspaces(me: Me | null | undefined) {
-  return WORKSPACES.filter((w) => canAccessWorkspace(me, w.id));
+  const operational = homeWorkspace(me) !== 'customer';
+  return WORKSPACES.filter((w) => {
+    if (!canAccessWorkspace(me, w.id)) return false;
+    if (w.id === 'customer' && operational) return false;
+    return true;
+  });
 }
 
 export function navActive(pathname: string, item: NavItem) {

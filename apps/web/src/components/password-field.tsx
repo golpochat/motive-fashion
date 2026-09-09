@@ -43,7 +43,7 @@ export function PasswordField({
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-xs uppercase tracking-wider text-ink/50">
+      <label htmlFor={id} className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">
         {label}
       </label>
       <div className="relative">

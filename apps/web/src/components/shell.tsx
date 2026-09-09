@@ -1,12 +1,15 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BrandLockup } from '@/components/brand-logo';
 import { ProfileMenu } from '@/components/profile-menu';
+import { workspaceFromPath } from '@/lib/workspaces';
 import { Icon } from '@/components/icons';
 import { useCart } from '@/lib/cart-store';
 import { BRAND } from '@motive-fashion/config';
+import { ShopSearch } from '@/components/shop-search';
 
 const nav = [
   { href: '/shop', label: 'Shop' },
@@ -25,7 +28,7 @@ const help = [
 ];
 
 function chromeLink(active: boolean) {
-  return `text-sm no-underline transition-colors hover:text-accent ${active ? 'text-accent' : 'text-ink'}`;
+  return `inline-flex min-h-11 items-center text-sm no-underline transition-colors hover:text-accent ${active ? 'text-accent' : 'text-ink'}`;
 }
 
 function pathActive(pathname: string, href: string) {
@@ -38,10 +41,28 @@ export function Header() {
   const { count, isOpen, open, close } = useCart();
   const onCartPage = pathname === '/cart';
   const cartActive = onCartPage || pathname.startsWith('/checkout') || isOpen;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    document.body.classList.add('overflow-hidden');
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-ink/10 bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2">
         <Link href="/" className="shrink-0 no-underline">
           <BrandLockup />
         </Link>
@@ -57,11 +78,14 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-          <ProfileMenu variant="storefront" />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="hidden xl:block">
+            <ShopSearch compact id="header-q" />
+          </div>
+          <ProfileMenu variant="storefront" currentWorkspace={workspaceFromPath(pathname)?.id} />
           <button
             type="button"
-            className={`relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-accent ${cartActive ? 'text-accent' : 'text-ink'}`}
+            className={`relative flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:text-accent ${cartActive ? 'text-accent' : 'text-ink'}`}
             aria-label={count ? `Cart, ${count} ${count === 1 ? 'item' : 'items'}` : 'Cart'}
             aria-expanded={onCartPage ? undefined : isOpen}
             aria-current={onCartPage ? 'page' : undefined}
@@ -76,25 +100,42 @@ export function Header() {
           >
             <Icon name="cart" className="h-5 w-5" />
             {count > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-cream">
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-cream">
                 {count > 99 ? '99+' : count}
               </span>
             ) : null}
           </button>
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-lg lg:hidden"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((openMenu) => !openMenu)}
+          >
+            <Icon name={menuOpen ? 'close' : 'menu'} className="h-5 w-5" />
+          </button>
         </div>
       </div>
-      <nav className="mx-auto flex max-w-6xl gap-4 overflow-x-auto px-4 pb-3 lg:hidden">
-        {nav.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={pathActive(pathname, item.href) ? 'page' : undefined}
-            className={`shrink-0 ${chromeLink(pathActive(pathname, item.href))}`}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      {menuOpen ? (
+        <div className="border-t border-ink/10 bg-surface px-4 py-4 lg:hidden">
+          <ShopSearch compact id="menu-q" />
+          <nav className="mt-3 flex flex-col">
+            {nav.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={pathActive(pathname, item.href) ? 'page' : undefined}
+                className={chromeLink(pathActive(pathname, item.href))}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <Link href="/contact" className={chromeLink(pathActive(pathname, '/contact'))}>
+              Contact
+            </Link>
+          </nav>
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -111,7 +152,7 @@ export function Footer() {
         </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-ink/45">Shop</p>
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-1">
             {nav.map((item) => (
               <Link key={item.href} href={item.href} className={chromeLink(false)}>
                 {item.label}
@@ -121,7 +162,7 @@ export function Footer() {
         </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-ink/45">Help</p>
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-1">
             {help.map((item) => (
               <Link key={item.href} href={item.href} className={chromeLink(false)}>
                 {item.label}

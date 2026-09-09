@@ -19,6 +19,7 @@ import { RbacModule } from './modules/rbac/rbac.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { HealthController } from './health.controller';
 import { OpenApiController } from './openapi.controller';
+import { ContactController } from './contact.controller';
 
 @Module({
   imports: [
@@ -41,6 +42,6 @@ import { OpenApiController } from './openapi.controller';
     JobsModule,
     MailModule,
   ],
-  controllers: [HealthController, OpenApiController],
+  controllers: [HealthController, OpenApiController, ContactController],
 })
 export class AppModule {}

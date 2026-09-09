@@ -14,7 +14,7 @@ async function bootstrap() {
   app.use(requestIdMiddleware);
   app.use(securityHeaders);
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/api/v1/auth') || /\/checkout\/[^/]+\/pay$/.test(req.path)) {
+    if (req.path.startsWith('/api/v1/auth') || req.path === '/api/v1/contact' || /\/checkout\/[^/]+\/pay$/.test(req.path)) {
       rateLimit(30, 60_000)(req, res, next);
       return;
     }
