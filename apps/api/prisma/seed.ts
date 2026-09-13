@@ -535,13 +535,19 @@ async function main() {
   await prisma.permission.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash('MotiveAdmin!2026', 12);
-  const adminUser = await prisma.user.create({
+  const [superHash, adminHash, staffHash, guestHash] = await Promise.all([
+    bcrypt.hash('MotiveSuper!2026', 12),
+    bcrypt.hash('MotiveAdmin!2026', 12),
+    bcrypt.hash('MotiveStaff!2026', 12),
+    bcrypt.hash('MotiveUser!2026', 12),
+  ]);
+  const superAdminUser = await prisma.user.create({
     data: {
       email: 'superadmin@motivefashion.com',
-      name: 'Motive Admin',
+      name: 'Motive Super Admin',
       role: 'ADMIN',
-      passwordHash,
+      passwordHash: superHash,
+      emailVerified: true,
       gdprConsentAt: new Date(),
     },
   });
@@ -628,28 +634,40 @@ async function main() {
     });
   }
   await prisma.userMembership.create({
-    data: { userId: adminUser.id, roleId: roleIds['super-admin']! },
+    data: { userId: superAdminUser.id, roleId: roleIds['super-admin']! },
   });
 
-  const staffHash = await bcrypt.hash('MotiveStaff!2026', 12);
+  const adminUser = await prisma.user.create({
+    data: {
+      email: 'admin@motivefashion.com',
+      name: 'Motive Admin',
+      role: 'ADMIN',
+      passwordHash: adminHash,
+      emailVerified: true,
+      gdprConsentAt: new Date(),
+    },
+  });
+  await prisma.userMembership.create({ data: { userId: adminUser.id, roleId: roleIds.admin! } });
+
   const staffUser = await prisma.user.create({
     data: {
-      email: 'floor@motivefashion.ie',
+      email: 'staff@motivefashion.com',
       name: 'Shop Floor',
       role: 'STAFF',
       passwordHash: staffHash,
+      emailVerified: true,
       gdprConsentAt: new Date(),
     },
   });
   await prisma.userMembership.create({ data: { userId: staffUser.id, roleId: roleIds.staff! } });
 
-  const customerHash = await bcrypt.hash('MotiveUser!2026', 12);
   const customerUser = await prisma.user.create({
     data: {
-      email: 'guest@motivefashion.ie',
+      email: 'guest@motivefashion.com',
       name: 'Guest Customer',
       role: 'CUSTOMER',
-      passwordHash: customerHash,
+      passwordHash: guestHash,
+      emailVerified: true,
       gdprConsentAt: new Date(),
     },
   });

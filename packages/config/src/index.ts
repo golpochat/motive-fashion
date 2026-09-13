@@ -7,11 +7,65 @@ export const BRAND = {
   currencySymbol: '€',
   vatRateBps: 2300,
   vatRate: 0.23,
-  supportEmail: 'hello@motivefashion.ie',
+  supportEmail: 'hello@motivefashion.com',
   whatsappDisplay: '+353',
   reservationMinutes: 15,
   returnDays: 14,
 } as const;
+
+/**
+ * Ramadan and Eid sit in chrome only during merchandising windows (Europe/Dublin).
+ * Collection URLs stay live year-round for campaigns and search.
+ */
+export const SEASONAL_NAV = [
+  {
+    href: '/collections/ramadan',
+    label: 'Ramadan',
+    cta: 'Ramadan collection',
+    windows: [
+      ['2026-01-07', '2026-03-20'],
+      ['2026-12-28', '2027-03-10'],
+      ['2027-12-17', '2028-02-27'],
+    ],
+  },
+  {
+    href: '/collections/eid',
+    label: 'Eid',
+    cta: 'Eid collection',
+    windows: [
+      ['2026-03-01', '2026-04-03'],
+      ['2026-05-10', '2026-06-10'],
+      ['2027-02-20', '2027-03-24'],
+      ['2027-04-30', '2027-05-30'],
+      ['2028-02-10', '2028-03-12'],
+      ['2028-04-20', '2028-05-19'],
+    ],
+  },
+] as const;
+
+export function dublinDay(at = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Dublin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+}
+
+export function isDateInWindows(windows: readonly (readonly [string, string])[], at = new Date()) {
+  const day = dublinDay(at);
+  return windows.some(([from, to]) => day >= from && day <= to);
+}
+
+export function liveSeasonalNav(at = new Date()) {
+  return SEASONAL_NAV.filter((item) => isDateInWindows(item.windows, at));
+}
+
+/** Homepage secondary CTA. Eid wins when both windows overlap. */
+export function liveSeasonalCta(at = new Date()) {
+  const live = liveSeasonalNav(at);
+  return live.find((item) => item.label === 'Eid') ?? live[0] ?? null;
+}
 
 /** NIST-aligned minimum for new accounts. */
 export const PASSWORD_MIN_LENGTH = 8;
@@ -29,6 +83,13 @@ export const PALETTE = {
 /** Mirrors Prisma `SalesChannel`. */
 export const CHANNELS = ['WEB', 'WHATSAPP', 'POS', 'MOBILE'] as const;
 export type SalesChannel = (typeof CHANNELS)[number];
+
+export const CHANNEL_LABEL: Record<SalesChannel, string> = {
+  WEB: 'Web',
+  WHATSAPP: 'WhatsApp',
+  POS: 'Till',
+  MOBILE: 'App',
+};
 
 /** Default Ireland delivery rate (VAT-inc cents). Admin can override per county. */
 export const DEFAULT_COUNTY_RATE_CENTS = 595;
@@ -154,6 +215,46 @@ export function countyLabel(code?: string | null) {
   if (!code) return '';
   const hit = IE_COUNTIES.find((row) => row.code === code.toUpperCase());
   return hit?.name ?? code;
+}
+
+/** Mills we buy from. `code` is ISO 3166-1 alpha-2, stored on Supplier.country. */
+export const SUPPLIER_COUNTRIES = [
+  { code: 'BD', name: 'Bangladesh' },
+  { code: 'CN', name: 'China' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'IN', name: 'India' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'JO', name: 'Jordan' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'MA', name: 'Morocco' },
+  { code: 'PK', name: 'Pakistan' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'TN', name: 'Tunisia' },
+  { code: 'TR', name: 'Turkey' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'GB', name: 'United Kingdom' },
+] as const;
+
+export type SupplierCountryCode = (typeof SUPPLIER_COUNTRIES)[number]['code'];
+
+export const DEFAULT_SUPPLIER_COUNTRY: SupplierCountryCode = 'TR';
+
+export function supplierCountryLabel(code?: string | null) {
+  if (!code) return '';
+  const hit = SUPPLIER_COUNTRIES.find(
+    (row) => row.code === code.trim().toUpperCase() || row.name.toLowerCase() === code.trim().toLowerCase(),
+  );
+  return hit?.name ?? code;
+}
+
+export function supplierCountryCode(value?: string | null): SupplierCountryCode | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const byCode = SUPPLIER_COUNTRIES.find((row) => row.code === trimmed.toUpperCase());
+  if (byCode) return byCode.code;
+  const byName = SUPPLIER_COUNTRIES.find((row) => row.name.toLowerCase() === trimmed.toLowerCase());
+  return byName?.code ?? null;
 }
 
 export function formatIrelandAddress(address: {

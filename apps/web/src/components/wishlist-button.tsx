@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { API } from '@/lib/api';
+import { authHref } from '@/lib/rbac';
 import { Icon } from '@/components/icons';
 import { useSession } from '@/components/session-provider';
 
@@ -89,8 +90,7 @@ export function WishlistButton({
   const toggle = useCallback(async () => {
     if (!me) {
       sessionStorage.setItem(PENDING_KEY, productId);
-      const next = encodeURIComponent(pathname || '/shop');
-      router.push(`/account?next=${next}`);
+      router.push(authHref('/auth/login', pathname || '/shop'));
       return;
     }
     const next = new Set(state.ids);

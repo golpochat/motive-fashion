@@ -66,4 +66,4 @@ Admin products/orders pages are still thin (inventory now has adjust/transfer). 
 3. Hosted Postgres + Redis + API + worker; backups.
 4. S3/R2 only if you stop shipping photos from `apps/web/public`.
 5. WhatsApp Cloud credentials only if that channel is on. Skip Square unless you buy terminals.
-6. Demo / ops login is `superadmin@motivefashion.com` (seed). Public support stays `hello@motivefashion.ie`. Existing databases still need a one-row email update or a re-seed; do not wipe production users to pick up the address.
+6. Demo / ops login is `superadmin@motivefashion.com` (seed). Public support is `hello@motivefashion.com`. Existing databases still need a one-row email update or a re-seed; do not wipe production users to pick up the address.

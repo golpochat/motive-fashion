@@ -7,7 +7,7 @@ import {
   SalesChannel,
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../../generated/prisma';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
@@ -23,6 +23,12 @@ const receiptInclude = {
   address: true,
   promo: { select: { code: true } },
 } as const;
+
+function cashierIdFromRaw(raw: unknown) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const id = (raw as { cashierId?: unknown }).cashierId;
+  return typeof id === 'string' && id ? id : undefined;
+}
 
 @Injectable()
 export class OrdersService {
@@ -256,11 +262,33 @@ export class OrdersService {
   }
 
   async listAdmin(status?: OrderStatus) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: status ? { status } : {},
-      include: { items: true, shipments: true },
+      include: { items: true, shipments: true, posSale: true, refunds: true },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
+    });
+    const cashierIds = [
+      ...new Set(orders.map((order) => cashierIdFromRaw(order.posSale?.raw)).filter((id): id is string => Boolean(id))),
+    ];
+    const cashiers = cashierIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: cashierIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const byId = Object.fromEntries(cashiers.map((row) => [row.id, row]));
+    return orders.map((order) => {
+      const cashierId = cashierIdFromRaw(order.posSale?.raw);
+      const cashier = cashierId ? byId[cashierId] : undefined;
+      return {
+        ...order,
+        ticket: order.channel === SalesChannel.POS ? order.id.replace(/-/g, '').slice(0, 8).toUpperCase() : null,
+        cashierId: cashierId ?? null,
+        cashierName: cashier?.name ?? null,
+        cashierEmail: cashier?.email ?? null,
+        refundedCents: order.refunds.reduce((sum, row) => sum + row.amountCents, 0),
+      };
     });
   }
 

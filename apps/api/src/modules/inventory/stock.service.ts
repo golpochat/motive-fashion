@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { Prisma, SalesChannel, StockMovementType } from '@prisma/client';
+import { Prisma, SalesChannel, StockMovementType } from '../../../generated/prisma';
 import { PrismaService } from '../../prisma/prisma.service';
 import { availableStock } from '@motive-fashion/utils';
 import { writeAudit } from '../../common/audit';

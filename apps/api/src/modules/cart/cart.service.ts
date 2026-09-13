@@ -6,6 +6,18 @@ import { BRAND } from '@motive-fashion/config';
 
 type CartAccess = { userId?: string; sessionKey?: string; internal?: boolean; channel?: SalesChannel };
 
+const CART_INCLUDE = {
+  items: {
+    include: {
+      variant: {
+        include: {
+          product: { include: { images: { orderBy: { sortOrder: 'asc' as const }, take: 1 } } },
+        },
+      },
+    },
+  },
+};
+
 @Injectable()
 export class CartService {
   constructor(
@@ -23,7 +35,7 @@ export class CartService {
     if (opts.cartId) {
       const existing = await this.prisma.cart.findUnique({
         where: { id: opts.cartId },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        include: CART_INCLUDE,
       });
       if (existing) {
         await this.assertAccess(existing, { ...opts, internal: opts.internal || opts.channel === SalesChannel.WHATSAPP });
@@ -33,7 +45,7 @@ export class CartService {
     if (opts.sessionKey) {
       const bySession = await this.prisma.cart.findFirst({
         where: { sessionKey: opts.sessionKey },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        include: CART_INCLUDE,
         orderBy: { updatedAt: 'desc' },
       });
       if (bySession) return this.toDto(bySession);
@@ -45,7 +57,7 @@ export class CartService {
         sessionKey: opts.sessionKey,
         expiresAt: new Date(Date.now() + BRAND.reservationMinutes * 60 * 1000),
       },
-      include: { items: { include: { variant: { include: { product: true } } } } },
+      include: CART_INCLUDE,
     });
     return this.toDto(cart);
   }
@@ -176,20 +188,25 @@ export class CartService {
         size: string;
         color: string;
         priceCents: number;
-        product: { title: string };
+        product: { title: string; images: { url: string; alt: string }[] };
       };
     }[];
   }) {
-    const items = cart.items.map((i) => ({
-      id: i.id,
-      variantId: i.variantId,
-      sku: i.variant.sku,
-      title: i.variant.product.title,
-      size: i.variant.size,
-      color: i.variant.color,
-      quantity: i.quantity,
-      unitPriceCents: i.variant.priceCents,
-    }));
+    const items = cart.items.map((i) => {
+      const image = i.variant.product.images[0];
+      return {
+        id: i.id,
+        variantId: i.variantId,
+        sku: i.variant.sku,
+        title: i.variant.product.title,
+        size: i.variant.size,
+        color: i.variant.color,
+        quantity: i.quantity,
+        unitPriceCents: i.variant.priceCents,
+        imageUrl: image?.url ?? null,
+        imageAlt: image?.alt ?? i.variant.product.title,
+      };
+    });
     return {
       id: cart.id,
       channel: cart.channel.toLowerCase(),

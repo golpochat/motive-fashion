@@ -20,7 +20,7 @@ function esc(value: string) {
 
 export function orderPaidText(order: ReceiptOrder) {
   const address = addressLine(order);
-  const support = process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com';
+  const support = BRAND.supportEmail;
   const items = order.items
     .map(
       (item) =>
@@ -60,7 +60,7 @@ export function orderPaidText(order: ReceiptOrder) {
 export function orderPaidHtml(order: ReceiptOrder, options?: { inlineLogo?: boolean }) {
   const track = trackUrl(order);
   const address = addressLine(order);
-  const support = process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com';
+  const support = BRAND.supportEmail;
   const itemRows = order.items
     .map(
       (item) => `
@@ -181,7 +181,7 @@ export function orderStatusUpdateHtml(
   copy: { kicker: string; heading: string; body: string; extra?: string },
 ) {
   const track = trackUrl(order);
-  const support = process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com';
+  const support = BRAND.supportEmail;
   return `<!DOCTYPE html>
 <html lang="en-IE">
 <head>

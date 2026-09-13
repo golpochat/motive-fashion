@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { CatalogEmpty, CatalogError, ProductGrid } from '@/components/catalog-state';
 import { HERO_IMAGE_SIZES, StorefrontImage } from '@/components/storefront-image';
 import { featuredProducts, loadCatalog } from '@/lib/catalog';
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, liveSeasonalCta } from '@motive-fashion/config';
 import type { ProductCard } from '@/lib/api';
 
 export const metadata = {
@@ -23,6 +23,7 @@ const FEATURED_SLUGS = [
 export default async function HomePage() {
   const result = await loadCatalog<ProductCard[]>('/catalog/products');
   const featured = result.ok ? featuredProducts(result.data, FEATURED_SLUGS) : [];
+  const seasonal = liveSeasonalCta();
 
   return (
     <div>
@@ -48,9 +49,14 @@ export default async function HomePage() {
             <Link href="/shop" className="rounded-full bg-primary px-6 py-3 text-cream no-underline">
               Shop the edit
             </Link>
-            <Link href="/collections/eid" className="rounded-full border border-cream/40 px-6 py-3 text-cream no-underline">
-              Eid collection
-            </Link>
+            {seasonal ? (
+              <Link
+                href={seasonal.href}
+                className="rounded-full border border-cream/40 px-6 py-3 text-cream no-underline"
+              >
+                {seasonal.cta}
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>

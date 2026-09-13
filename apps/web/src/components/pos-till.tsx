@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { formatEur } from '@motive-fashion/utils';
 import { isValidEircode, normalizeEircode } from '@motive-fashion/config';
 import { API, apiErrorMessage, type ProductCard } from '@/lib/api';
+import { catalogPriceLabel, groupVariantsBySize, variantPriceRange } from '@/lib/catalog';
 import { Field, FilterTabs, Modal, PrimaryButton, QtyStepper, SecondaryButton, Select, fieldClass } from '@/components/dashboard-ui';
 
 const LAST_ORDER_KEY = 'mf_pos_last_order';
@@ -30,6 +31,55 @@ function eurosToCents(value: string) {
   const n = Number(value.replace(',', '.').trim());
   if (!Number.isFinite(n) || n < 0) return null;
   return Math.round(n * 100);
+}
+
+function PosVariantPicker({
+  product,
+  onPick,
+}: {
+  product: ProductCard;
+  onPick: (sku: string) => void;
+}) {
+  const groups = groupVariantsBySize(product.variants);
+  const showGroups = groups.length > 1;
+
+  return (
+    <div className={showGroups ? 'space-y-4' : 'grid grid-cols-2 gap-2'}>
+      {groups.map(([size, variants]) => {
+        const range = variantPriceRange(variants);
+        return (
+          <div key={size} className={showGroups ? 'space-y-2' : 'contents'}>
+            {showGroups ? (
+              <p className="text-xs uppercase tracking-wider text-ink/55">
+                {size}
+                <span className="ml-2 font-sans normal-case tracking-normal text-ink/70">
+                  {range.mixed ? `from ${formatEur(range.min)}` : formatEur(range.min)}
+                </span>
+              </p>
+            ) : null}
+            <div className={showGroups ? 'grid grid-cols-2 gap-2' : 'contents'}>
+              {variants.map((variant) => (
+                <button
+                  key={variant.sku}
+                  type="button"
+                  disabled={variant.available < 1}
+                  onClick={() => onPick(variant.sku)}
+                  className="rounded-xl border border-ink/15 px-3 py-2 text-left text-sm disabled:opacity-40"
+                >
+                  <span className="block font-medium">
+                    {showGroups ? variant.color : `${variant.size} / ${variant.color}`}
+                  </span>
+                  <span className="text-ink/55">
+                    {formatEur(variant.priceCents)} · {variant.available} left
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function PosTill() {
@@ -359,7 +409,7 @@ export function PosTill() {
                       ) : null}
                     </div>
                     <p className="mt-2 truncate text-sm font-medium">{product.title}</p>
-                    <p className="text-xs text-ink/55">from {formatEur(product.variants[0]?.priceCents ?? 0)}</p>
+                    <p className="text-xs text-ink/55">{catalogPriceLabel(product.variants)}</p>
                   </button>
                 ))}
               </div>
@@ -394,7 +444,7 @@ export function PosTill() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{line.productTitle}</p>
                         <p className="text-xs text-ink/55">
-                          {line.size} / {line.color}
+                          {line.size} / {line.color} · {formatEur(line.priceCents)}
                         </p>
                         <p className="text-sm">{formatEur(line.priceCents * line.quantity)}</p>
                       </div>
@@ -531,24 +581,7 @@ export function PosTill() {
       </div>
       {picking ? (
         <Modal title={picking.title} onClose={() => setPicking(null)}>
-          <div className="grid grid-cols-2 gap-2">
-            {picking.variants.map((variant) => (
-              <button
-                key={variant.sku}
-                type="button"
-                disabled={variant.available < 1}
-                onClick={() => addVariant(picking, variant.sku)}
-                className="rounded-xl border border-ink/15 px-3 py-2 text-left text-sm disabled:opacity-40"
-              >
-                <span className="block font-medium">
-                  {variant.size} / {variant.color}
-                </span>
-                <span className="text-ink/55">
-                  {formatEur(variant.priceCents)} · {variant.available} left
-                </span>
-              </button>
-            ))}
-          </div>
+          <PosVariantPicker product={picking} onPick={(sku) => addVariant(picking, sku)} />
         </Modal>
       ) : null}
     </div>

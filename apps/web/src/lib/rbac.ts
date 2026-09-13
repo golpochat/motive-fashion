@@ -4,6 +4,8 @@ export type Me = {
   email: string;
   phone?: string | null;
   role?: string;
+  emailVerified?: boolean;
+  mfaEnabled?: boolean;
   roles?: { id: string; slug: string; name: string }[];
   permissions?: string[];
   addresses?: {
@@ -25,6 +27,10 @@ export function hasPerm(me: Me | null | undefined, key: string) {
 
 export function hasAnyPerm(me: Me | null | undefined, keys: string[]) {
   return keys.some((key) => hasPerm(me, key));
+}
+
+export function seesAllStaffSales(me: Me | null | undefined) {
+  return hasPerm(me, 'dashboard.admin') || me?.role === 'ADMIN';
 }
 
 export function roleLabel(me: Me | null | undefined) {
@@ -109,4 +115,23 @@ export function isWorkspacePath(pathname: string) {
     pathname.startsWith('/staff') ||
     pathname.startsWith('/user')
   );
+}
+
+export function isAuthPath(pathname: string) {
+  return pathname === '/account' || pathname === '/auth' || pathname.startsWith('/auth/');
+}
+
+export type AuthRoute = '/auth/login' | '/auth/register' | '/auth/forgot' | '/auth/reset' | '/auth/verify';
+
+export function authHref(path: AuthRoute, next?: string | null, extra?: Record<string, string | undefined>) {
+  const params = new URLSearchParams();
+  const safe = safeNext(next ?? null);
+  if (safe) params.set('next', safe);
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (value) params.set(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }

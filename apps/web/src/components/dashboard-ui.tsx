@@ -49,7 +49,7 @@ export function PrimaryButton({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-primary px-4 py-2 text-sm text-cream hover:bg-primary/90 disabled:opacity-50 ${className}`}
+      className={`min-h-11 rounded-lg bg-primary px-4 py-2.5 text-sm text-cream hover:bg-primary/90 disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -64,7 +64,7 @@ export function SecondaryButton({
   return (
     <button
       {...props}
-      className={`rounded-lg border border-ink/15 px-3 py-1.5 text-sm hover:border-ink/40 disabled:opacity-50 ${className}`}
+      className={`min-h-11 rounded-lg border border-ink/15 px-3 py-2.5 text-sm hover:border-ink/40 disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -88,7 +88,7 @@ export function QtyStepper({
     <div className="inline-flex items-center rounded-lg border border-ink/15">
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center text-sm hover:bg-ink/5"
+        className="flex h-11 w-11 items-center justify-center text-sm hover:bg-ink/5"
         aria-label={decreaseLabel}
         onClick={onDecrease}
       >
@@ -97,7 +97,7 @@ export function QtyStepper({
       <span className="w-7 text-center text-sm tabular-nums">{value}</span>
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center text-sm hover:bg-ink/5"
+        className="flex h-11 w-11 items-center justify-center text-sm hover:bg-ink/5"
         aria-label={increaseLabel}
         onClick={onIncrease}
       >
@@ -157,7 +157,7 @@ export function Tabs({
           <Link
             key={item.href}
             href={item.href}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm no-underline ${active ? 'border-accent text-ink' : 'border-transparent text-ink/55 hover:text-ink'}`}
+            className={`-mb-px min-h-11 border-b-2 px-4 py-2.5 text-sm no-underline ${active ? 'border-accent text-ink' : 'border-transparent text-ink/55 hover:text-ink'}`}
           >
             {item.label}
           </Link>
@@ -188,7 +188,7 @@ export function FilterTabs({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(item.id)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${active ? 'border-accent text-ink' : 'border-transparent text-ink/55 hover:text-ink'}`}
+            className={`-mb-px min-h-11 border-b-2 px-3 py-2.5 text-sm ${active ? 'border-accent text-ink' : 'border-transparent text-ink/55 hover:text-ink'}`}
           >
             {item.label}
           </button>
@@ -233,7 +233,7 @@ export function Modal({
           <h2 id="modal-title" className="font-serif text-xl">
             {title}
           </h2>
-          <button type="button" className="text-sm text-ink/55 hover:text-ink" onClick={onClose}>
+          <button type="button" className="min-h-11 px-3 text-sm text-ink/55 hover:text-ink" onClick={onClose}>
             Close
           </button>
         </div>

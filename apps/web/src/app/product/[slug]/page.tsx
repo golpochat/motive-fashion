@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { api, type ProductCard } from '@/lib/api';
-import { formatEur } from '@motive-fashion/utils';
 import { BRAND } from '@motive-fashion/config';
+import { variantPriceRange } from '@/lib/catalog';
 import { AddToCart } from '@/components/add-to-cart';
 import { ProductGallery } from '@/components/product-gallery';
 import { WishlistButton } from '@/components/wishlist-button';
@@ -35,6 +35,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     notFound();
   }
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const range = variantPriceRange(product.variants);
+  const availability = product.variants.some((v) => v.available > 0)
+    ? 'https://schema.org/InStock'
+    : 'https://schema.org/OutOfStock';
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -42,14 +46,20 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     description: product.description,
     image: product.images.map((image) => (image.url.startsWith('http') ? image.url : `${site}${image.url}`)),
     brand: { '@type': 'Brand', name: BRAND.name },
-    offers: {
-      '@type': 'Offer',
-      priceCurrency: 'EUR',
-      price: ((product.variants[0]?.priceCents ?? 0) / 100).toFixed(2),
-      availability: product.variants.some((v) => v.available > 0)
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock',
-    },
+    offers: range.mixed
+      ? {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'EUR',
+          lowPrice: (range.min / 100).toFixed(2),
+          highPrice: (range.max / 100).toFixed(2),
+          availability,
+        }
+      : {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: (range.min / 100).toFixed(2),
+          availability,
+        },
   };
   const categoryLabel = product.categoryName ?? product.categorySlug.replace(/-/g, ' ');
   return (
@@ -68,9 +78,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
           <WishlistButton productId={product.id} />
         </div>
-        <p className="mt-4 text-xl">{formatEur(product.variants[0]?.priceCents ?? 0)} inc. VAT</p>
-        <p className="mt-4 text-ink/70">{product.description}</p>
-        <AddToCart variants={product.variants} />
+        <AddToCart variants={product.variants}>
+          <p className="mt-4 text-ink/70">{product.description}</p>
+        </AddToCart>
         <p className="mt-3 text-sm">
           <Link href="/size-guide">Size guide</Link>
         </p>
@@ -86,10 +96,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <div>
             <dt className="text-xs uppercase tracking-wider text-ink/55">Fabric</dt>
             <dd className="mt-1">{product.variants[0]?.fabric ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wider text-ink/55">SKU</dt>
-            <dd className="mt-1">{product.variants[0]?.sku ?? '—'}</dd>
           </div>
           <div className="sm:col-span-2">
             <dt className="text-xs uppercase tracking-wider text-ink/55">Care</dt>

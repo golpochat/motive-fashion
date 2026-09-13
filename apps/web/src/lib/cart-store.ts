@@ -10,6 +10,8 @@ export type CartLine = {
   color: string;
   quantity: number;
   unitPriceCents: number;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
 };
 
 export type Cart = {

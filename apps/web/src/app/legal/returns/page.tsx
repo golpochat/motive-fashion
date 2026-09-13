@@ -32,7 +32,7 @@ export default function ReturnsPage() {
         where they are faulty.
       </p>
       <p className="text-ink/70">
-        Start a return from your order email, from <a href="/account">Account</a> if you are signed in, or write to{' '}
+        Start a return from your order email, from <a href="/user/orders">Account</a> if you are signed in, or write to{' '}
         <a href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a> with your order reference.
       </p>
       <p className="text-ink/70">Refunds go back to the original payment method after we receive and inspect the return.</p>

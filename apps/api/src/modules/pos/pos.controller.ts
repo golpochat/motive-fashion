@@ -7,6 +7,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isProduction } from '../../common/security-config';
 import { requestRawBody, squareSignatureValid } from '../../common/webhook-signature';
 
+function canSeeAllTills(user: { permissions?: string[]; role?: string }) {
+  const keys = user.permissions ?? [];
+  return keys.includes('*') || keys.includes('dashboard.admin') || user.role === 'ADMIN';
+}
+
 @Controller()
 export class PosController {
   constructor(
@@ -31,30 +36,34 @@ export class PosController {
   @Get('staff/orders')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  mySales(@CurrentUser() user: { sub: string }) {
-    return this.square.listTillOrders(user.sub);
+  mySales(@CurrentUser() user: { sub: string; permissions?: string[]; role?: string }) {
+    return this.square.listTillOrders(user.sub, canSeeAllTills(user));
   }
 
   @Get('staff/orders/:id')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  mySale(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
-    return this.square.getTillOrder(id, user.sub);
+  mySale(@Param('id') id: string, @CurrentUser() user: { sub: string; permissions?: string[]; role?: string }) {
+    return this.square.getTillOrder(id, user.sub, canSeeAllTills(user));
   }
 
   @Post('staff/orders/:id/print')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  printMine(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
-    return this.square.printTillOrder(id, user.sub);
+  printMine(@Param('id') id: string, @CurrentUser() user: { sub: string; permissions?: string[]; role?: string }) {
+    return this.square.printTillOrder(id, user.sub, canSeeAllTills(user));
   }
 
   @Post('staff/orders/:id/email')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('pos.sale')
-  emailMine(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+  emailMine(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: { sub: string; permissions?: string[]; role?: string },
+  ) {
     const dto = posEmailSchema.parse(body ?? {});
-    return this.square.emailTillOrder(id, user.sub, dto.email);
+    return this.square.emailTillOrder(id, user.sub, dto.email, canSeeAllTills(user));
   }
 
   @Post('webhooks/square')

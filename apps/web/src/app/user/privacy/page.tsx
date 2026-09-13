@@ -1,13 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { API } from '@/lib/api';
+import { API, apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
+import { SecondaryButton } from '@/components/dashboard-ui';
 import { useSession } from '@/components/session-provider';
 
 export default function UserPrivacy() {
   const { logout } = useSession();
   const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
 
   return (
     <div>
@@ -15,13 +18,31 @@ export default function UserPrivacy() {
         title="Privacy"
         description="Export a copy of your data, or delete the account. Order records are kept where Irish law requires."
       />
-      {notice ? <p className="mb-4 text-sm">{notice}</p> : null}
+      {error ? (
+        <p className="mb-4 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="mb-4 text-sm text-ink/80" role="status">
+          {notice}
+        </p>
+      ) : null}
       <div className="flex max-w-lg flex-col gap-3">
-        <button
+        <SecondaryButton
           type="button"
-          className="rounded-full border border-ink/15 px-4 py-2 text-left text-sm hover:border-ink/40"
+          disabled={busy === 'export'}
           onClick={async () => {
-            const data = await fetch(`${API}/account/gdpr-export`, { credentials: 'include' }).then((r) => r.json());
+            setError('');
+            setNotice('');
+            setBusy('export');
+            const res = await fetch(`${API}/account/gdpr-export`, { credentials: 'include' });
+            const data = await res.json().catch(() => null);
+            setBusy('');
+            if (!res.ok) {
+              setError(apiErrorMessage(data, 'Could not export your data.'));
+              return;
+            }
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -32,20 +53,29 @@ export default function UserPrivacy() {
             setNotice('Export downloaded.');
           }}
         >
-          Export my data
-        </button>
-        <button
+          {busy === 'export' ? 'Exporting…' : 'Export my data'}
+        </SecondaryButton>
+        <SecondaryButton
           type="button"
-          className="rounded-full border border-red-200 px-4 py-2 text-left text-sm text-red-800 hover:bg-red-50"
+          disabled={busy === 'delete'}
           onClick={async () => {
             if (!confirm('Delete your account? Orders are retained for legal records.')) return;
-            await fetch(`${API}/account/gdpr-delete`, { method: 'POST', credentials: 'include' });
+            setError('');
+            setNotice('');
+            setBusy('delete');
+            const res = await fetch(`${API}/account/gdpr-delete`, { method: 'POST', credentials: 'include' });
+            const payload = await res.json().catch(() => null);
+            setBusy('');
+            if (!res.ok) {
+              setError(apiErrorMessage(payload, 'Could not delete this account.'));
+              return;
+            }
             setNotice('Account deleted.');
             await logout();
           }}
         >
-          Delete account
-        </button>
+          {busy === 'delete' ? 'Deleting…' : 'Delete account'}
+        </SecondaryButton>
       </div>
     </div>
   );

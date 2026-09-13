@@ -41,7 +41,7 @@ export async function logoutSession() {
     /* still leave */
   }
   setSnapshot({ me: null, loading: false });
-  window.location.replace('/account');
+  window.location.replace('/auth/login');
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {

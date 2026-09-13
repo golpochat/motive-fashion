@@ -35,7 +35,7 @@ export default function ContactPage() {
           </div>
         </dl>
         <p className="text-sm text-ink/70">
-          Data requests: export or delete from <a href="/account">Account</a>, or email the address above. We do not send
+          Data requests: export or delete from <a href="/user/privacy">Account</a>, or email the address above. We do not send
           marketing WhatsApp unless you opt in.
         </p>
       </div>

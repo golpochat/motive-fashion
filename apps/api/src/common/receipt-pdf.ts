@@ -92,7 +92,7 @@ export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
     y += doc.heightOfString(RETURN_POSTAGE_NOTICE, { width: 480 }) + 16;
     doc.fontSize(10).fillColor(PALETTE.clay).text('Track your order', 56, y, { link: trackUrl(order), underline: true });
 
-    const support = process.env.EMAIL_REPLY_TO ?? 'info@motivefashion.com';
+    const support = BRAND.supportEmail;
     const footer = `${BRAND.legalName}  ·  ${BRAND.city}, ${BRAND.country}  ·  ${support}`;
     const footerY = doc.page.height - doc.page.margins.bottom - 10;
     doc.fontSize(8).fillColor('#8a8178').text(footer, 56, footerY, {

@@ -7,6 +7,7 @@ import { formatEur } from '@motive-fashion/utils';
 import { API, apiErrorMessage, cartSessionKey } from '@/lib/api';
 import { useCart } from '@/lib/cart-store';
 import { useSession } from '@/components/session-provider';
+import { authHref } from '@/lib/rbac';
 import { Field, fieldClass, Select } from '@/components/dashboard-ui';
 import { IrelandAddressFields, validateIrelandAddress, type AddressFieldErrors } from '@/components/ireland-address-fields';
 
@@ -256,7 +257,7 @@ export default function CheckoutPage() {
             <p className="mt-1 text-ink/70">No account needed. Fill in your details below.</p>
             <p className="mt-3 text-ink/70">
               Already have an account?{' '}
-              <Link href="/account?next=/checkout">Sign in</Link> to use a saved address.
+              <Link href={authHref('/auth/login', '/checkout')}>Sign in</Link> to use a saved address.
             </p>
           </div>
         ) : null}

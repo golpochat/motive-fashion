@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { addressLabelName, formatIrelandAddress, normalizeEircode } from '@motive-fashion/config';
 import { API, apiErrorMessage } from '@/lib/api';
 import { EmptyState, PageHeader } from '@/components/page-header';
+import { PrimaryButton, SecondaryButton } from '@/components/dashboard-ui';
 import { useSession, refreshSession } from '@/components/session-provider';
 import {
   IrelandAddressFields,
@@ -76,7 +77,13 @@ export default function UserAddresses() {
   }
 
   async function makeDefault(id: string) {
-    await fetch(`${API}/account/addresses/${id}/default`, { method: 'POST', credentials: 'include' });
+    setError('');
+    const res = await fetch(`${API}/account/addresses/${id}/default`, { method: 'POST', credentials: 'include' });
+    const payload = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) {
+      setError(apiErrorMessage(payload, 'Could not set this as the default address'));
+      return;
+    }
     await refreshSession();
   }
 
@@ -97,9 +104,8 @@ export default function UserAddresses() {
         title="Addresses"
         description="Ireland delivery addresses on this account. Eircode is required so parcels can be routed."
         actions={
-          <button
+          <SecondaryButton
             type="button"
-            className="text-sm underline"
             onClick={() => {
               setError('');
               setFieldErrors({});
@@ -107,7 +113,7 @@ export default function UserAddresses() {
             }}
           >
             Add address
-          </button>
+          </SecondaryButton>
         }
       />
       {error ? (
@@ -144,10 +150,9 @@ export default function UserAddresses() {
                     {address.isDefault ? <span className="text-ink/45"> · Default</span> : null}
                   </p>
                   <p className="mt-2 text-ink/80">{formatIrelandAddress(address)}</p>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    <button
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <SecondaryButton
                       type="button"
-                      className="text-xs underline"
                       onClick={() => {
                         setError('');
                         setFieldErrors({});
@@ -155,15 +160,15 @@ export default function UserAddresses() {
                       }}
                     >
                       Edit
-                    </button>
+                    </SecondaryButton>
                     {!address.isDefault ? (
-                      <button type="button" className="text-xs underline" onClick={() => void makeDefault(address.id)}>
+                      <SecondaryButton type="button" onClick={() => void makeDefault(address.id)}>
                         Set as default
-                      </button>
+                      </SecondaryButton>
                     ) : null}
-                    <button type="button" className="text-xs underline" onClick={() => void remove(address.id)}>
+                    <SecondaryButton type="button" onClick={() => void remove(address.id)}>
                       Remove
-                    </button>
+                    </SecondaryButton>
                   </div>
                 </>
               )}
@@ -198,12 +203,10 @@ function AddressEditor({
         Default address
       </label>
       <div className="flex gap-3">
-        <button type="submit" className="rounded-full bg-primary px-4 py-2 text-sm text-cream">
-          Save
-        </button>
-        <button type="button" className="text-sm underline" onClick={onCancel}>
+        <PrimaryButton type="submit">Save</PrimaryButton>
+        <SecondaryButton type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </SecondaryButton>
       </div>
     </form>
   );

@@ -32,7 +32,7 @@ describe('ESC/POS till ticket', () => {
     expect(preview).toContain('MOTIVE FASHION');
     expect(preview).toContain('Motive Fashion Limited');
     expect(preview).toContain('Dublin, Ireland');
-    expect(preview).toContain('hello@motivefashion.ie');
+    expect(preview).toContain('hello@motivefashion.com');
     expect(preview).toContain('Ticket');
     expect(preview).toContain(tillTicketNo(base.id));
     expect(preview).toContain('Collect in Dublin');
@@ -54,6 +54,8 @@ describe('ESC/POS till ticket', () => {
     expect(payload.includes(Buffer.from([0x1d, 0x76, 0x30]))).toBe(true);
     expect(payload.includes(Buffer.from([0x1d, 0x56, 0x41, 0x18]))).toBe(true);
     expect(payload.includes(Buffer.from([0x1d, 0x6b, 73]))).toBe(true);
+    expect(payload.includes(Buffer.from([0x1d, 0x68, 120]))).toBe(true);
+    expect(payload.includes(Buffer.from([0x1d, 0x77, 3]))).toBe(true);
     let rasters = 0;
     for (let i = 0; i < payload.length - 2; i++) {
       if (payload[i] === 0x1d && payload[i + 1] === 0x76 && payload[i + 2] === 0x30) rasters += 1;
@@ -80,7 +82,7 @@ describe('ESC/POS till ticket', () => {
   });
 
   it('prints delivery, VAT number, and card when those are set', () => {
-    const { preview } = buildEscPosReceipt({
+    const { preview, payload } = buildEscPosReceipt({
       ...base,
       fulfillment: 'DELIVERY',
       shippingCounty: 'DUBLIN',
@@ -95,5 +97,7 @@ describe('ESC/POS till ticket', () => {
     expect(preview).toContain('Card');
     expect(preview).toContain('Scan to view this order');
     expect(preview).not.toContain('Cash tendered');
+    expect(payload.includes(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 49, 67, 7]))).toBe(true);
+    expect(payload.includes(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 49, 69, 49]))).toBe(true);
   });
 });

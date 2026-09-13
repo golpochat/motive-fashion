@@ -171,27 +171,51 @@ export class SquarePosAdapter implements PosAdapter {
     return { printed: sent.printed, preview: ticket.preview, error: sent.error };
   }
 
-  async listTillOrders(cashierId: string) {
+  async listTillOrders(cashierId: string, allCashiers = false) {
     const sales = await this.prisma.posSale.findMany({
       include: { order: { include: { items: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    return sales.filter((sale) => this.cashierOwns(sale.raw, cashierId)).map((sale) => this.serializeTillOrder(sale.order));
+    const scoped = allCashiers ? sales : sales.filter((sale) => this.cashierOwns(sale.raw, cashierId));
+    const ids = [
+      ...new Set(scoped.map((sale) => this.cashierId(sale.raw)).filter((id): id is string => Boolean(id))),
+    ];
+    const people = ids.length
+      ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+      : [];
+    const names = Object.fromEntries(people.map((row) => [row.id, row.name]));
+    return scoped.map((sale) => {
+      const id = this.cashierId(sale.raw);
+      return {
+        ...this.serializeTillOrder(sale.order),
+        cashierId: id ?? null,
+        cashierName: id ? names[id] ?? null : null,
+        storeWide: allCashiers,
+      };
+    });
   }
 
-  async getTillOrder(orderId: string, cashierId: string) {
-    const sale = await this.ownedSale(orderId, cashierId);
-    return this.serializeTillOrder(sale.order);
+  async getTillOrder(orderId: string, cashierId: string, allCashiers = false) {
+    const sale = await this.ownedSale(orderId, cashierId, allCashiers);
+    const id = this.cashierId(sale.raw);
+    const cashier = id
+      ? await this.prisma.user.findUnique({ where: { id }, select: { name: true } })
+      : null;
+    return {
+      ...this.serializeTillOrder(sale.order),
+      cashierId: id ?? null,
+      cashierName: cashier?.name ?? null,
+    };
   }
 
-  async printTillOrder(orderId: string, cashierId: string) {
-    await this.ownedSale(orderId, cashierId);
+  async printTillOrder(orderId: string, cashierId: string, allCashiers = false) {
+    await this.ownedSale(orderId, cashierId, allCashiers);
     return this.printReceipt(orderId);
   }
 
-  async emailTillOrder(orderId: string, cashierId: string, email?: string) {
-    const sale = await this.ownedSale(orderId, cashierId);
+  async emailTillOrder(orderId: string, cashierId: string, email?: string, allCashiers = false) {
+    const sale = await this.ownedSale(orderId, cashierId, allCashiers);
     const to = email?.trim() || (this.realEmail(sale.order.email) ? sale.order.email : '');
     if (!to) throw new BadRequestException('Add a customer email to send this receipt');
     const result = await this.mail.sendOrderPaid(
@@ -214,7 +238,7 @@ export class SquarePosAdapter implements PosAdapter {
     return Boolean(email) && email !== TILL_EMAIL && !email.toLowerCase().includes('@pos.motivefashion.ie');
   }
 
-  private async ownedSale(orderId: string, cashierId: string) {
+  private async ownedSale(orderId: string, cashierId: string, allCashiers = false) {
     const sale = await this.prisma.posSale.findUnique({
       where: { orderId },
       include: {
@@ -222,12 +246,18 @@ export class SquarePosAdapter implements PosAdapter {
       },
     });
     if (!sale) throw new NotFoundException('Sale not found');
-    if (!this.cashierOwns(sale.raw, cashierId)) throw new ForbiddenException();
+    if (!allCashiers && !this.cashierOwns(sale.raw, cashierId)) throw new ForbiddenException();
     return sale;
   }
 
+  private cashierId(raw: unknown) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const id = (raw as { cashierId?: unknown }).cashierId;
+    return typeof id === 'string' && id ? id : undefined;
+  }
+
   private cashierOwns(raw: unknown, cashierId: string) {
-    const tagged = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { cashierId?: string }).cashierId : undefined;
+    const tagged = this.cashierId(raw);
     return !tagged || tagged === cashierId;
   }
 

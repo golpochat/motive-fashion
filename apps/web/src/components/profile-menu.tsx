@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { initials, roleLabel } from '@/lib/rbac';
+import { homePath, initials, roleLabel } from '@/lib/rbac';
 import { accessibleWorkspaces, workspaceFromPath, type WorkspaceId } from '@/lib/workspaces';
 import { useSession } from '@/components/session-provider';
 
@@ -34,12 +34,13 @@ export function ProfileMenu({
     };
   }, []);
 
-  if (loading) {
-    return <span className="h-9 w-9 rounded-full bg-ink/10" aria-hidden />;
-  }
-
+  // Guests have no session cookie to hint at login, so `loading` is always true
+  // on refresh. An avatar skeleton looks signed-in; keep Sign in until `me` arrives.
   if (!me) {
-    if (pathname === '/account') {
+    if (loading && variant === 'console') {
+      return <span className="h-9 w-9 rounded-full bg-ink/10" aria-hidden />;
+    }
+    if (pathname.startsWith('/auth')) {
       return (
         <span className="inline-flex min-h-11 items-center text-sm text-accent" aria-current="page">
           Sign in
@@ -47,7 +48,7 @@ export function ProfileMenu({
       );
     }
     return (
-      <Link href="/account" className="inline-flex min-h-11 items-center text-sm no-underline transition-colors hover:text-accent">
+      <Link href="/auth/login" className="inline-flex min-h-11 items-center text-sm no-underline transition-colors hover:text-accent">
         Sign in
       </Link>
     );
@@ -55,7 +56,7 @@ export function ProfileMenu({
 
   const workspaces = accessibleWorkspaces(me);
   const current = currentWorkspace ?? workspaceFromPath(pathname ?? '')?.id;
-  const floor = workspaces.find((w) => w.id === 'staff');
+  const shopper = homePath(me) === '/user';
 
   return (
     <div className="relative" ref={root}>
@@ -83,13 +84,11 @@ export function ProfileMenu({
           <div className="border-b border-ink/10 px-3 py-3">
             <p className="truncate text-sm font-medium">{me.name}</p>
             <p className="truncate text-xs text-ink/55">{me.email}</p>
-            {workspaces.some((w) => w.id !== 'customer') ? (
-              <p className="mt-1 text-[10px] uppercase tracking-widest text-ink/45">{roleLabel(me)}</p>
-            ) : null}
+            <p className="mt-1 text-xs text-ink/45">{roleLabel(me)}</p>
           </div>
           {workspaces.length > 1 ? (
             <div className="border-b border-ink/10 py-1">
-              <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-widest text-ink/40">Workspaces</p>
+              <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-ink/40">Workspaces</p>
               {workspaces.map((w) => {
                 const active = current === w.id;
                 return (
@@ -105,29 +104,24 @@ export function ProfileMenu({
                       <span className="block text-xs text-ink/45">{w.eyebrow}</span>
                     </span>
                     {active ? (
-                      <span className="text-[10px] uppercase tracking-wider text-accent">Current</span>
+                      <span className="text-[11px] font-medium text-accent">Current</span>
                     ) : null}
                   </Link>
                 );
               })}
             </div>
           ) : null}
-          {current === 'staff' ? null : (
-            <div className="border-b border-ink/10 py-1">
-              <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-widest text-ink/40">Personal</p>
-              {floor && !(pathname ?? '').startsWith('/staff') ? (
-                <Link href="/staff" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-                  Shop floor
-                </Link>
-              ) : null}
+          <div className="border-b border-ink/10 py-1">
+            <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-ink/40">Links</p>
+            {shopper ? (
               <Link href="/user" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
                 My account
               </Link>
-              <Link href="/" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-                Storefront
-              </Link>
-            </div>
-          )}
+            ) : null}
+            <Link href="/" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
+              Storefront
+            </Link>
+          </div>
           <div className="p-2">
             <button
               type="button"

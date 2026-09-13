@@ -1,10 +1,25 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { OrderStatus, UserRole } from '@prisma/client';
+import { Prisma } from '../../../generated/prisma';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { CommerceService } from '../commerce/commerce.service';
-import { productCreateSchema, productPatchSchema, variantCreateSchema, promoCreateSchema, orderStatusSchema, refundSchema, resolveReturnSchema, fulfilmentPatchSchema, countyPatchSchema, paymentPatchSchema } from '@motive-fashion/validation';
+import {
+  productCreateSchema,
+  productPatchSchema,
+  variantCreateSchema,
+  promoCreateSchema,
+  promoPatchSchema,
+  orderStatusSchema,
+  refundSchema,
+  resolveReturnSchema,
+  fulfilmentPatchSchema,
+  countyPatchSchema,
+  paymentPatchSchema,
+  locationCreateSchema,
+  locationPatchSchema,
+} from '@motive-fashion/validation';
 import { slugify } from '@motive-fashion/utils';
 import { customerPublicSelect } from '../../common/user-select';
 import { writeAudit } from '../../common/audit';
@@ -65,7 +80,7 @@ export class AdminController {
   createProduct(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = productCreateSchema.parse(body);
     return this.prisma.product.create({
-      data: { ...dto, slug: dto.slug || slugify(dto.title) },
+      data: { ...dto, slug: dto.slug?.trim() || slugify(dto.title) },
     }).then(async (product) => {
       await writeAudit(this.prisma, {
         actorId: user.sub,
@@ -143,7 +158,7 @@ export class AdminController {
   customers() {
     return this.prisma.user.findMany({
       where: { role: UserRole.CUSTOMER, deletedAt: null },
-      select: customerPublicSelect,
+      select: { ...customerPublicSelect, _count: { select: { orders: true } } },
       take: 200,
       orderBy: { createdAt: 'desc' },
     });
@@ -152,7 +167,45 @@ export class AdminController {
   @Get('locations')
   @RequirePermissions('locations.read')
   locations() {
-    return this.prisma.location.findMany();
+    return this.prisma.location.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  @Post('locations')
+  @RequirePermissions('dashboard.admin')
+  async createLocation(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = locationCreateSchema.parse(body);
+    try {
+      const location = await this.prisma.location.create({
+        data: { ...dto, code: dto.code.toUpperCase() },
+      });
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'location.create',
+        entity: 'Location',
+        entityId: location.id,
+      });
+      return location;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That location code is already in use');
+      }
+      throw err;
+    }
+  }
+
+  @Patch('locations/:id')
+  @RequirePermissions('dashboard.admin')
+  async updateLocation(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = locationPatchSchema.parse(body);
+    const location = await this.prisma.location.update({ where: { id }, data: dto });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'location.update',
+      entity: 'Location',
+      entityId: id,
+      meta: dto,
+    });
+    return location;
   }
 
   @Get('returns')
@@ -187,6 +240,21 @@ export class AdminController {
       entity: 'PromoCode',
       entityId: promo.id,
       meta: { type: dto.type, value: dto.value },
+    });
+    return promo;
+  }
+
+  @Patch('promo-codes/:id')
+  @RequirePermissions('marketing.write')
+  async patchPromo(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = promoPatchSchema.parse(body);
+    const promo = await this.prisma.promoCode.update({ where: { id }, data: dto });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'promo.update',
+      entity: 'PromoCode',
+      entityId: id,
+      meta: dto,
     });
     return promo;
   }

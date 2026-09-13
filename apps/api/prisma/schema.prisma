@@ -124,6 +124,9 @@ model User {
   name            String
   role            UserRole  @default(CUSTOMER)
   emailVerified   Boolean   @default(false)
+  mfaEnabled      Boolean   @default(false)
+  mfaSecret       String?
+  mfaBackupHashes String[]  @default([])
   gdprConsentAt   DateTime?
   marketingOptIn  Boolean   @default(false)
   whatsappOptIn   Boolean   @default(false)

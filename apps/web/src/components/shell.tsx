@@ -7,23 +7,34 @@ import { BrandLockup } from '@/components/brand-logo';
 import { ProfileMenu } from '@/components/profile-menu';
 import { workspaceFromPath } from '@/lib/workspaces';
 import { Icon } from '@/components/icons';
-import { useCart } from '@/lib/cart-store';
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, liveSeasonalNav } from '@motive-fashion/config';
 import { ShopSearch } from '@/components/shop-search';
 
-const nav = [
+const coreNav = [
   { href: '/shop', label: 'Shop' },
-  { href: '/collections/ramadan', label: 'Ramadan' },
-  { href: '/collections/eid', label: 'Eid' },
   { href: '/size-guide', label: 'Size guide' },
   { href: '/about', label: 'About' },
 ];
 
-const help = [
+const footerShopCore = [
+  { href: '/shop', label: 'Shop' },
+  { href: '/size-guide', label: 'Size guide' },
+];
+
+function withSeasonalNav<T extends { href: string; label: string }>(items: T[]) {
+  const seasonal = liveSeasonalNav().map(({ href, label }) => ({ href, label }));
+  return [items[0], ...seasonal, ...items.slice(1)];
+}
+
+const footerCompany = [
+  { href: '/about', label: 'About' },
   { href: '/contact', label: 'Contact' },
   { href: '/legal/returns', label: '14-day returns' },
-  { href: '/legal/privacy', label: 'Privacy' },
+];
+
+const footerLegal = [
   { href: '/legal/terms', label: 'Terms' },
+  { href: '/legal/privacy', label: 'Privacy' },
   { href: '/legal/cookies', label: 'Cookies' },
 ];
 
@@ -38,10 +49,8 @@ function pathActive(pathname: string, href: string) {
 
 export function Header() {
   const pathname = usePathname();
-  const { count, isOpen, open, close } = useCart();
-  const onCartPage = pathname === '/cart';
-  const cartActive = onCartPage || pathname.startsWith('/checkout') || isOpen;
   const [menuOpen, setMenuOpen] = useState(false);
+  const nav = withSeasonalNav(coreNav);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -79,32 +88,10 @@ export function Header() {
           ))}
         </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <div className="hidden xl:block">
+          <div className="hidden lg:block">
             <ShopSearch compact id="header-q" />
           </div>
           <ProfileMenu variant="storefront" currentWorkspace={workspaceFromPath(pathname)?.id} />
-          <button
-            type="button"
-            className={`relative flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:text-accent ${cartActive ? 'text-accent' : 'text-ink'}`}
-            aria-label={count ? `Cart, ${count} ${count === 1 ? 'item' : 'items'}` : 'Cart'}
-            aria-expanded={onCartPage ? undefined : isOpen}
-            aria-current={onCartPage ? 'page' : undefined}
-            onClick={() => {
-              if (onCartPage) {
-                close();
-                return;
-              }
-              if (isOpen) close();
-              else open();
-            }}
-          >
-            <Icon name="cart" className="h-5 w-5" />
-            {count > 0 ? (
-              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-cream">
-                {count > 99 ? '99+' : count}
-              </span>
-            ) : null}
-          </button>
           <button
             type="button"
             className="flex h-11 w-11 items-center justify-center rounded-lg lg:hidden"
@@ -140,39 +127,63 @@ export function Header() {
   );
 }
 
+function footerLinkClass() {
+  return 'block min-h-9 py-1.5 text-sm text-cream/70 no-underline transition-colors hover:text-cream';
+}
+
 export function Footer() {
+  const footerShop = withSeasonalNav(footerShopCore);
   return (
-    <footer className="mt-auto border-t border-ink/10">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:grid-cols-2 lg:grid-cols-3">
+    <footer className="mt-auto bg-primary text-cream">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <BrandLockup />
-          <p className="mt-3 text-sm text-ink/70">
-            {BRAND.city}, {BRAND.country}
+          <Link href="/" className="inline-flex text-accent no-underline">
+            <BrandLockup />
+          </Link>
+          <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/70">
+            Premium modest wear from {BRAND.city}. Hijabs, abayas, jilbabs, and prayer sets — collection and Ireland
+            delivery.
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-widest text-ink/45">Shop</p>
-          <div className="mt-3 flex flex-col gap-1">
-            {nav.map((item) => (
-              <Link key={item.href} href={item.href} className={chromeLink(false)}>
-                {item.label}
-              </Link>
+          <p className="text-sm font-semibold">Shop</p>
+          <ul className="mt-3 list-none space-y-0.5 p-0">
+            {footerShop.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={footerLinkClass()}>
+                  {item.label}
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-widest text-ink/45">Help</p>
-          <div className="mt-3 flex flex-col gap-1">
-            {help.map((item) => (
-              <Link key={item.href} href={item.href} className={chromeLink(false)}>
-                {item.label}
-              </Link>
+          <p className="text-sm font-semibold">Company</p>
+          <ul className="mt-3 list-none space-y-0.5 p-0">
+            {footerCompany.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={footerLinkClass()}>
+                  {item.label}
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">Legal</p>
+          <ul className="mt-3 list-none space-y-0.5 p-0">
+            {footerLegal.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={footerLinkClass()}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-      <p className="border-t border-ink/10 px-4 py-4 text-center text-xs text-ink/45">
-        © {new Date().getFullYear()} {BRAND.legalName}
+      <p className="border-t border-cream/15 px-4 py-4 text-center text-xs text-cream/55">
+        © {new Date().getFullYear()} {BRAND.legalName} · {BRAND.country}. All rights reserved.
       </p>
     </footer>
   );

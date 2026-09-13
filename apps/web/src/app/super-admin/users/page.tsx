@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PermissionGate } from '@/components/permission-gate';
-import { PageHeader } from '@/components/page-header';
+import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
 import { DataTable, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
 import { API, apiErrorMessage } from '@/lib/api';
@@ -22,16 +22,29 @@ export default function SuperAdminUsers() {
   const [editing, setEditing] = useState<Person | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   function reload() {
+    setLoading(true);
     Promise.all([
-      fetch(`${API}/rbac/users`, { credentials: 'include' }).then((r) => r.json()) as Promise<Person[]>,
-      fetch(`${API}/rbac/roles`, { credentials: 'include' }).then((r) => r.json()) as Promise<Role[]>,
-    ]).then(([u, r]) => {
-      setPeople(Array.isArray(u) ? u : []);
-      setRoles(Array.isArray(r) ? r : []);
-    });
+      fetch(`${API}/rbac/users`, { credentials: 'include' }),
+      fetch(`${API}/rbac/roles`, { credentials: 'include' }),
+    ])
+      .then(async ([usersRes, rolesRes]) => {
+        if (!usersRes.ok || !rolesRes.ok) {
+          setLoadError('Could not load people');
+          return;
+        }
+        const u = (await usersRes.json()) as Person[];
+        const r = (await rolesRes.json()) as Role[];
+        setPeople(Array.isArray(u) ? u : []);
+        setRoles(Array.isArray(r) ? r : []);
+        setLoadError('');
+      })
+      .catch(() => setLoadError('Could not load people'))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -87,6 +100,14 @@ export default function SuperAdminUsers() {
             className={fieldClass}
           />
         </div>
+        <ConsoleSection
+          loading={loading}
+          error={loadError}
+          onRetry={reload}
+          empty={visible.length === 0}
+          emptyTitle="No people"
+          emptyBody="Accounts you can assign roles to will appear here."
+        >
         <DataTable headers={['Person', 'Roles', 'Action']}>
           {visible.map((p) => (
             <tr key={p.id} className="hover:bg-ink/[0.02]">
@@ -103,6 +124,7 @@ export default function SuperAdminUsers() {
             </tr>
           ))}
         </DataTable>
+        </ConsoleSection>
         {editing ? (
           <Modal title={`Roles for ${editing.name}`} onClose={() => setEditing(null)}>
             <form onSubmit={(e) => void save(e)} className="space-y-4">

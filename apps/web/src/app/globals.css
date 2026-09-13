@@ -16,30 +16,39 @@
 }
 
 [data-theme='super-admin'] {
-  --mf-primary: 22 20 18;
-  --mf-secondary: 196 165 116;
-  --mf-accent: 196 165 116;
-  --mf-surface: 247 243 236;
-  --mf-sidebar: 22 20 18;
-  --mf-sidebar-fg: 247 243 236;
+  color-scheme: light;
+  --mf-primary: 30 27 75;
+  --mf-secondary: 79 70 229;
+  --mf-accent: 99 102 241;
+  --mf-surface: 238 242 255;
+  --mf-ink: 30 27 75;
+  --mf-cream: 238 242 255;
+  --mf-sidebar: 15 23 42;
+  --mf-sidebar-fg: 226 232 240;
 }
 
 [data-theme='admin'] {
-  --mf-primary: 44 36 28;
-  --mf-secondary: 176 137 104;
-  --mf-accent: 176 137 104;
-  --mf-surface: 245 240 232;
-  --mf-sidebar: 44 36 28;
-  --mf-sidebar-fg: 245 240 232;
+  color-scheme: light;
+  --mf-primary: 15 23 42;
+  --mf-secondary: 14 116 144;
+  --mf-accent: 8 145 178;
+  --mf-surface: 241 245 249;
+  --mf-ink: 15 23 42;
+  --mf-cream: 248 250 252;
+  --mf-sidebar: 15 23 42;
+  --mf-sidebar-fg: 241 245 249;
 }
 
 [data-theme='staff'] {
-  --mf-primary: 47 58 46;
-  --mf-secondary: 140 155 130;
-  --mf-accent: 140 155 130;
-  --mf-surface: 242 244 240;
-  --mf-sidebar: 47 58 46;
-  --mf-sidebar-fg: 242 244 240;
+  color-scheme: light;
+  --mf-primary: 20 83 45;
+  --mf-secondary: 22 101 52;
+  --mf-accent: 34 120 58;
+  --mf-surface: 240 253 244;
+  --mf-ink: 20 46 30;
+  --mf-cream: 240 253 244;
+  --mf-sidebar: 20 46 30;
+  --mf-sidebar-fg: 236 253 243;
 }
 
 [data-theme='customer'] {

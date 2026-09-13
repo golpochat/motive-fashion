@@ -35,7 +35,9 @@ export class JwtAuthGuard implements CanActivate {
     const token = bearer ?? cookie;
     if (!token) throw new UnauthorizedException();
     try {
-      req.user = this.jwt.verify(token);
+      const payload = this.jwt.verify(token) as { typ?: string };
+      if (payload.typ) throw new UnauthorizedException();
+      req.user = payload;
       return true;
     } catch {
       throw new UnauthorizedException();
@@ -93,7 +95,8 @@ export class OptionalJwtGuard implements CanActivate {
     const token = bearer ?? cookie;
     if (!token) return true;
     try {
-      req.user = this.jwt.verify(token);
+      const payload = this.jwt.verify(token) as { typ?: string };
+      if (!payload.typ) req.user = payload;
     } catch {
       /* guest */
     }

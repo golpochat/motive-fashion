@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isValidEircode, normalizeEircode, PASSWORD_MIN_LENGTH } from '@motive-fashion/config';
+import { isValidEircode, normalizeEircode, PASSWORD_MIN_LENGTH, supplierCountryCode } from '@motive-fashion/config';
 
 const ieEircode = z
   .string({ required_error: 'Enter an Eircode.' })
@@ -10,13 +10,19 @@ const ieEircode = z
 
 const addressLabel = z.enum(['HOME', 'WORK', 'FAMILY', 'OTHER']);
 
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(PASSWORD_MIN_LENGTH),
-  name: z.string().min(2).max(80),
-  phone: z.string().min(8).optional(),
-  gdprConsent: z.literal(true),
-});
+export const registerSchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(PASSWORD_MIN_LENGTH),
+    confirmPassword: z.string().min(PASSWORD_MIN_LENGTH),
+    name: z.string().min(2).max(80),
+    phone: z.string().min(8).optional(),
+    gdprConsent: z.literal(true),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -31,6 +37,28 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z.object({
   token: z.string().min(20),
   password: z.string().min(PASSWORD_MIN_LENGTH),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
+});
+
+export const mfaCodeSchema = z.object({
+  code: z.string().trim().min(6).max(16),
+});
+
+export const mfaVerifySchema = z.object({
+  mfaToken: z.string().min(20),
+  code: z.string().trim().min(6).max(16),
+});
+
+export const mfaDisableSchema = z.object({
+  password: z.string().min(1),
+  code: z.string().trim().min(6).max(16),
 });
 
 export const cartAddSchema = z.object({
@@ -134,7 +162,7 @@ export const stockTransferSchema = z.object({
 
 export const productCreateSchema = z.object({
   title: z.string().min(2),
-  slug: z.string().min(2),
+  slug: z.string().min(2).optional(),
   description: z.string().min(10),
   categoryId: z.string().uuid(),
   occasion: z.string().optional(),
@@ -191,6 +219,95 @@ export const promoCreateSchema = z.object({
   active: z.boolean().optional(),
   maxUses: z.number().int().min(1).optional(),
 });
+
+export const promoPatchSchema = z
+  .object({
+    active: z.boolean().optional(),
+    maxUses: z.number().int().min(1).nullable().optional(),
+  })
+  .strict();
+
+export const locationCreateSchema = z.object({
+  code: z
+    .string()
+    .min(2)
+    .max(20)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Use letters, numbers, hyphen, or underscore'),
+  name: z.string().min(2).max(80),
+  type: z.enum(['WAREHOUSE', 'SHOP', 'POPUP']),
+  address: z.string().max(200).optional(),
+});
+
+export const locationPatchSchema = z
+  .object({
+    name: z.string().min(2).max(80).optional(),
+    type: z.enum(['WAREHOUSE', 'SHOP', 'POPUP']).optional(),
+    address: z.string().max(200).nullable().optional(),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
+const supplierCountry = z
+  .string()
+  .min(2)
+  .max(80)
+  .transform((raw) => supplierCountryCode(raw) ?? raw.trim().toUpperCase())
+  .refine((code) => Boolean(supplierCountryCode(code)), 'Pick a country from the list.');
+
+export const supplierCreateSchema = z.object({
+  name: z.string().min(2).max(80),
+  country: supplierCountry,
+  email: z.string().max(120).optional(),
+  phone: z.string().max(40).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const supplierPatchSchema = z
+  .object({
+    name: z.string().min(2).max(80).optional(),
+    country: supplierCountry.optional(),
+    email: z.string().max(120).nullable().optional(),
+    phone: z.string().max(40).nullable().optional(),
+    notes: z.string().max(500).nullable().optional(),
+    example: z.boolean().optional(),
+  })
+  .strict();
+
+export const supplierProductLinkSchema = z.object({
+  productId: z.string().uuid(),
+  moq: z.number().int().min(1).max(100_000).optional(),
+  unitCostCents: z.number().int().min(0).max(10_000_000),
+  leadDays: z.number().int().min(1).max(365).optional(),
+});
+
+export const supplierProductPatchSchema = z
+  .object({
+    moq: z.number().int().min(1).max(100_000).optional(),
+    unitCostCents: z.number().int().min(0).max(10_000_000).optional(),
+    leadDays: z.number().int().min(1).max(365).optional(),
+  })
+  .strict();
+
+export const purchaseOrderCreateSchema = z.object({
+  supplierId: z.string().uuid(),
+  notes: z.string().max(500).optional(),
+  monthBucket: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM')
+    .optional(),
+  lines: z
+    .array(
+      z.object({
+        variantId: z.string().uuid(),
+        quantity: z.number().int().min(1).max(100_000),
+        unitCostCents: z.number().int().min(0).max(10_000_000).optional(),
+      }),
+    )
+    .min(1, 'Add at least one SKU')
+    .max(200),
+});
+
+export const purchaseOrderPatchSchema = purchaseOrderCreateSchema.omit({ supplierId: true, monthBucket: true });
 
 export const campaignCreateSchema = z.object({
   name: z.string().min(2).max(80),
@@ -322,6 +439,11 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
+export type MfaVerifyInput = z.infer<typeof mfaVerifySchema>;
+export type MfaDisableInput = z.infer<typeof mfaDisableSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 export type CheckoutQuoteInput = z.infer<typeof checkoutQuoteSchema>;

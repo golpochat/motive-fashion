@@ -1,4 +1,13 @@
-import { Injectable, UnauthorizedException, ConflictException, Inject, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  Inject,
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
@@ -7,9 +16,19 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { LoginInput, RegisterInput } from '@motive-fashion/validation';
 import { authCookieOptions } from '../../common/http';
 import { MailService } from '../../common/mail.service';
+import { clearFailedLogins, isLoginLocked, recordFailedLogin } from './login-lockout';
+import {
+  consumeBackupCode,
+  generateBackupCodes,
+  hashBackupCode,
+  otpauthUri,
+  randomTotpSecret,
+  verifyTotp,
+} from './totp';
 
 const ACCESS_MS = 15 * 60 * 1000;
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+const LOCKED_MESSAGE = 'Too many sign-in attempts. Try again later.';
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
@@ -47,20 +66,40 @@ export class AuthService {
         phone: dto.phone,
         passwordHash: await bcrypt.hash(dto.password, 12),
         gdprConsentAt: new Date(),
+        emailVerified: false,
       },
     });
     const customerRole = await this.prisma.role.findUnique({ where: { slug: 'customer' } });
     if (customerRole) {
       await this.prisma.userMembership.create({ data: { userId: user.id, roleId: customerRole.id } });
     }
-    return this.issue(user.id, user.email, user.role, user.name);
+    await this.sendVerification(user.id, user.email);
+    return { needsVerification: true as const, email: user.email };
   }
 
   async login(dto: LoginInput) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (!user?.passwordHash) throw new UnauthorizedException('Invalid credentials');
+    const email = dto.email.toLowerCase();
+    if (await isLoginLocked(email)) {
+      throw new HttpException({ message: LOCKED_MESSAGE }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user?.passwordHash || user.deletedAt) {
+      await this.failLogin(email);
+      throw new UnauthorizedException('Invalid credentials');
+    }
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) {
+      await this.failLogin(email);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    if (!user.emailVerified) {
+      throw new ForbiddenException('Verify your email before signing in.');
+    }
+    if (user.mfaEnabled) {
+      const mfaToken = this.jwt.sign({ sub: user.id, typ: 'mfa_pending' }, { expiresIn: '5m' });
+      return { mfaRequired: true as const, mfaToken };
+    }
+    await clearFailedLogins(email);
     return this.issue(user.id, user.email, user.role, user.name);
   }
 
@@ -84,7 +123,7 @@ export class AuthService {
       where: { tokenHash, expiresAt: { gt: new Date() } },
       include: { user: true },
     });
-    if (!stored || stored.user.deletedAt) throw new UnauthorizedException();
+    if (!stored || stored.user.deletedAt || !stored.user.emailVerified) throw new UnauthorizedException();
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
     return this.issue(stored.user.id, stored.user.email, stored.user.role, stored.user.name);
   }
@@ -104,7 +143,7 @@ export class AuthService {
       const origin = (process.env.WEB_ORIGIN ?? 'http://localhost:3000').replace(/\/$/, '');
       const params = new URLSearchParams({ reset: token });
       if (safeResetNext(next)) params.set('next', next!);
-      const url = `${origin}/account?${params.toString()}`;
+      const url = `${origin}/auth/reset?${params.toString()}`;
       await this.mail.sendPasswordReset(user.email, url);
     }
   }
@@ -128,6 +167,106 @@ export class AuthService {
       this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
       this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     ]);
+    if (!user.emailVerified) {
+      await this.sendVerification(user.id, user.email);
+      return { needsVerification: true as const, email: user.email };
+    }
+    if (user.mfaEnabled) {
+      const mfaToken = this.jwt.sign({ sub: user.id, typ: 'mfa_pending' }, { expiresIn: '5m' });
+      return { mfaRequired: true as const, mfaToken };
+    }
+    return this.issue(user.id, user.email, user.role, user.name);
+  }
+
+  async verifyEmail(token: string) {
+    let payload: { sub?: string; typ?: string };
+    try {
+      payload = this.jwt.verify(token) as { sub?: string; typ?: string };
+    } catch {
+      throw new BadRequestException('This verification link is invalid or has expired.');
+    }
+    if (payload.typ !== 'emailverify' || !payload.sub) {
+      throw new BadRequestException('This verification link is invalid or has expired.');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || user.deletedAt) {
+      throw new BadRequestException('This verification link is invalid or has expired.');
+    }
+    if (!user.emailVerified) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+    }
+    await clearFailedLogins(user.email);
+    return this.issue(user.id, user.email, user.role, user.name);
+  }
+
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (user?.passwordHash && !user.deletedAt && !user.emailVerified) {
+      await this.sendVerification(user.id, user.email);
+    }
+  }
+
+  async setupMfa(userId: string) {
+    const user = await this.requireUser(userId);
+    if (user.mfaEnabled) throw new BadRequestException('Authenticator is already on.');
+    const secret = randomTotpSecret();
+    const backupCodes = generateBackupCodes();
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { mfaSecret: secret, mfaBackupHashes: backupCodes.map(hashBackupCode), mfaEnabled: false },
+    });
+    return { secret, otpauth: otpauthUri(user.email, secret), backupCodes };
+  }
+
+  async enableMfa(userId: string, code: string) {
+    const user = await this.requireUser(userId);
+    if (user.mfaEnabled) throw new BadRequestException('Authenticator is already on.');
+    if (!user.mfaSecret || !verifyTotp(user.mfaSecret, code)) {
+      throw new BadRequestException('That code is not valid. Try the current code from your authenticator.');
+    }
+    await this.prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true } });
+    return { ok: true as const };
+  }
+
+  async disableMfa(userId: string, password: string, code: string) {
+    const user = await this.requireUser(userId);
+    if (!user.mfaEnabled || !user.passwordHash) throw new BadRequestException('Authenticator is not on.');
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    const totpOk = user.mfaSecret ? verifyTotp(user.mfaSecret, code) : false;
+    const remaining = totpOk ? user.mfaBackupHashes : consumeBackupCode(user.mfaBackupHashes, code);
+    if (!totpOk && !remaining) throw new BadRequestException('That code is not valid.');
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { mfaEnabled: false, mfaSecret: null, mfaBackupHashes: [] },
+    });
+    return { ok: true as const };
+  }
+
+  async verifyMfa(mfaToken: string, code: string) {
+    let payload: { sub?: string; typ?: string };
+    try {
+      payload = this.jwt.verify(mfaToken) as { sub?: string; typ?: string };
+    } catch {
+      throw new UnauthorizedException('This sign-in step expired. Sign in again.');
+    }
+    if (payload.typ !== 'mfa_pending' || !payload.sub) {
+      throw new UnauthorizedException('This sign-in step expired. Sign in again.');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user?.mfaEnabled || user.deletedAt || !user.emailVerified) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const totpOk = user.mfaSecret ? verifyTotp(user.mfaSecret, code) : false;
+    const remaining = totpOk ? null : consumeBackupCode(user.mfaBackupHashes, code);
+    if (!totpOk && !remaining) {
+      await this.failLogin(user.email);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    if (remaining) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { mfaBackupHashes: remaining } });
+    }
+    await clearFailedLogins(user.email);
     return this.issue(user.id, user.email, user.role, user.name);
   }
 
@@ -143,5 +282,24 @@ export class AuthService {
 
   refreshFromRequest(req: Request, body?: { refreshToken?: string }) {
     return (req.cookies?.mf_refresh as string | undefined) ?? body?.refreshToken;
+  }
+
+  private async sendVerification(userId: string, email: string) {
+    const token = this.jwt.sign({ sub: userId, typ: 'emailverify' }, { expiresIn: '24h' });
+    const origin = (process.env.WEB_ORIGIN ?? 'http://localhost:3000').replace(/\/$/, '');
+    const url = `${origin}/auth/verify?token=${encodeURIComponent(token)}`;
+    await this.mail.sendEmailVerification(email, url);
+  }
+
+  private async failLogin(email: string) {
+    const locked = await recordFailedLogin(email);
+    if (locked) throw new HttpException({ message: LOCKED_MESSAGE }, HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  private async requireUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) throw new UnauthorizedException();
+    if (!user.emailVerified) throw new ForbiddenException('Verify your email before signing in.');
+    return user;
   }
 }

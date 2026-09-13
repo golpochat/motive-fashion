@@ -115,15 +115,23 @@ function padCenter(text: string, width = COLS) {
   });
 }
 
+/** Height in dots (~15 mm on TM-T20III). Module width 2–6; 3 fills an 8-char ticket on 80 mm. */
+const BARCODE_HEIGHT = 120;
+const BARCODE_MODULE = 3;
+/** QR module size 1–16. 7 is ~40 mm for a typical order URL — phone-scannable, still inside 80 mm. */
+const QR_MODULE = 7;
+const QR_EC_M = 49;
+
 function code128(data: string) {
   const body = `{B${ascii(data)}`;
   return Buffer.concat([
+    Buffer.from('\n', 'ascii'),
     Buffer.from([GS, 0x48, 2]),
-    Buffer.from([GS, 0x68, 60]),
-    Buffer.from([GS, 0x77, 2]),
+    Buffer.from([GS, 0x68, BARCODE_HEIGHT]),
+    Buffer.from([GS, 0x77, BARCODE_MODULE]),
     Buffer.from([GS, 0x6b, 73, body.length]),
     Buffer.from(body, 'ascii'),
-    Buffer.from('\n', 'ascii'),
+    Buffer.from('\n\n', 'ascii'),
   ]);
 }
 
@@ -132,12 +140,12 @@ function qr(data: string) {
   const p = bytes.length + 3;
   return Buffer.concat([
     Buffer.from([GS, 0x28, 0x6b, 0x04, 0x00, 49, 65, 50, 0]),
-    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 49, 67, 3]),
-    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 49, 69, 48]),
+    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 49, 67, QR_MODULE]),
+    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 49, 69, QR_EC_M]),
     Buffer.from([GS, 0x28, 0x6b, p % 256, Math.floor(p / 256), 49, 80, 48]),
     bytes,
     Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 49, 81, 48]),
-    Buffer.from('\n', 'ascii'),
+    Buffer.from('\n\n', 'ascii'),
   ]);
 }
 

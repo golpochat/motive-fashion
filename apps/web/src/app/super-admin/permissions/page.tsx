@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
-import { PageHeader } from '@/components/page-header';
+import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, FilterTabs, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
 
 type Perm = { id: string; key: string; name: string; group: string; builtin?: boolean };
 
@@ -12,15 +12,27 @@ export default function SuperAdminPermissions() {
   const [perms, setPerms] = useState<Perm[]>([]);
   const [group, setGroup] = useState('All');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Perm | 'new' | null>(null);
   const [form, setForm] = useState({ key: '', name: '', group: '' });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Perm | null>(null);
 
   function reload() {
+    setLoading(true);
     fetch(`${API}/rbac/permissions`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: Perm[]) => setPerms(Array.isArray(rows) ? rows : []));
+      .then(async (r) => {
+        if (!r.ok) {
+          setLoadError('Could not load permissions');
+          return;
+        }
+        const rows = (await r.json()) as Perm[];
+        setPerms(Array.isArray(rows) ? rows : []);
+        setLoadError('');
+      })
+      .catch(() => setLoadError('Could not load permissions'))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -99,18 +111,22 @@ export default function SuperAdminPermissions() {
       />
       <AccessTabs current="/super-admin/permissions" />
       {error && !editing ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {groups.map((name) => (
-          <button
-            key={name}
-            type="button"
-            className={`rounded-full px-3 py-1 text-sm ${group === name ? 'bg-primary text-cream' : 'border border-ink/15'}`}
-            onClick={() => setGroup(name)}
-          >
-            {name}
-          </button>
-        ))}
+      <div className="mb-4">
+        <FilterTabs
+          ariaLabel="Permission groups"
+          items={groups.map((name) => ({ id: name, label: name }))}
+          current={group}
+          onChange={setGroup}
+        />
       </div>
+      <ConsoleSection
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        empty={rows.length === 0}
+        emptyTitle="No permissions"
+        emptyBody="Keys in this group will appear here."
+      >
       <DataTable headers={['Permission', 'Key', 'Group', 'Action']}>
         {rows.map((p) => (
           <tr key={p.id} className="hover:bg-ink/[0.02]">
@@ -134,6 +150,7 @@ export default function SuperAdminPermissions() {
           </tr>
         ))}
       </DataTable>
+      </ConsoleSection>
 
       {editing ? (
         <Modal title={editing === 'new' ? 'New permission' : 'Edit permission'} onClose={() => setEditing(null)}>

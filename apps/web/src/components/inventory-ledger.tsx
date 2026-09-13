@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
-import { EmptyState, PageHeader } from '@/components/page-header';
+import { ConsoleSection, EmptyState, PageHeader } from '@/components/page-header';
 import { DataTable, Field, FilterTabs, PrimaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
 import { useSession } from '@/components/session-provider';
 import { hasPerm } from '@/lib/rbac';
@@ -34,6 +34,8 @@ export function InventoryLedger({
   const scanRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<Level[]>([]);
   const [locations, setLocations] = useState<LocationRow[]>([]);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [tab, setTab] = useState<TabId>('stock');
@@ -49,12 +51,22 @@ export function InventoryLedger({
   const [quantity, setQuantity] = useState('1');
 
   const reload = useCallback(() => {
-    fetch(`${API}/admin/inventory`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setRows);
-    fetch(`${API}/admin/locations`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setLocations);
+    setLoading(true);
+    Promise.all([
+      fetch(`${API}/admin/inventory`, { credentials: 'include' }),
+      fetch(`${API}/admin/locations`, { credentials: 'include' }),
+    ])
+      .then(async ([inv, loc]) => {
+        if (!inv.ok || !loc.ok) {
+          setLoadError('Could not load inventory');
+          return;
+        }
+        setLoadError('');
+        setRows((await inv.json()) as Level[]);
+        setLocations((await loc.json()) as LocationRow[]);
+      })
+      .catch(() => setLoadError('Could not load inventory'))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -172,6 +184,7 @@ export function InventoryLedger({
       {error ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
       {notice ? <p className="mb-4 text-sm text-moss">{notice}</p> : null}
 
+      <ConsoleSection loading={loading} error={loadError} onRetry={reload}>
       <form onSubmit={onScan} className="mb-4">
         <input
           ref={scanRef}
@@ -341,6 +354,7 @@ export function InventoryLedger({
           <PrimaryButton type="submit">Move stock</PrimaryButton>
         </form>
       ) : null}
+      </ConsoleSection>
     </div>
   );
 }

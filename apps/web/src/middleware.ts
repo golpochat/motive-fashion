@@ -19,8 +19,36 @@ function allowedFor(pathname: string, permissions: string[] | undefined) {
   return false;
 }
 
+function redirectLegacyAccount(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  const mode = url.searchParams.get('mode');
+  const reset = url.searchParams.get('reset');
+  const verify = url.searchParams.get('verify');
+  if (verify) {
+    url.pathname = '/auth/verify';
+    url.searchParams.delete('verify');
+    url.searchParams.set('token', verify);
+  } else if (reset) {
+    url.pathname = '/auth/reset';
+  } else if (mode === 'register') {
+    url.pathname = '/auth/register';
+    url.searchParams.delete('mode');
+  } else if (mode === 'forgot') {
+    url.pathname = '/auth/forgot';
+    url.searchParams.delete('mode');
+  } else {
+    url.pathname = '/auth/login';
+    url.searchParams.delete('mode');
+  }
+  return NextResponse.redirect(url);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname === '/account') {
+    return redirectLegacyAccount(request);
+  }
+
   const isProtected =
     pathname.startsWith('/super-admin') ||
     pathname.startsWith('/admin') ||
@@ -44,13 +72,14 @@ export async function middleware(request: NextRequest) {
   } catch {
     /* fail closed */
   }
-  const login = new URL('/account', request.url);
+  const login = new URL('/auth/login', request.url);
   login.searchParams.set('next', pathname);
   return NextResponse.redirect(login);
 }
 
 export const config = {
   matcher: [
+    '/account',
     '/super-admin',
     '/super-admin/:path*',
     '/admin',

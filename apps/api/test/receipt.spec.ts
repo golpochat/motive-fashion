@@ -6,7 +6,7 @@ import type { ReceiptOrder } from '../src/common/receipt';
 const sample: ReceiptOrder = {
   id: 'ef6ee9d6-1111-2222-3333-444444444444',
   name: 'Sujan Hossain',
-  email: 'guest@motivefashion.ie',
+  email: 'guest@motivefashion.com',
   trackingToken: 'track-token',
   fulfillment: 'DELIVERY',
   shippingCounty: 'DUBLIN',

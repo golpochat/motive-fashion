@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
-import { carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
+import { BRAND, carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
 import { brandMarkPng } from './brand-assets';
 import { orderPaidHtml, orderPaidText, orderStatusUpdateHtml, orderStatusUpdateText } from './receipt-html';
 import { buildReceiptPdf } from './receipt-pdf';
@@ -103,8 +103,18 @@ export class MailService {
     return result;
   }
 
+  async sendEmailVerification(to: string, url: string) {
+    const html = `<p>Assalamu alaikum.</p><p>Confirm this email for your Motive Fashion account. The link expires in 24 hours.</p><p><a href="${url.replace(/&/g, '&amp;')}">Verify email</a></p><p>If you did not create an account, you can ignore this email.</p>`;
+    const text = `Assalamu alaikum.\n\nConfirm this email for your Motive Fashion account (expires in 24 hours):\n${url}\n\nIf you did not create an account, ignore this email.`;
+    const result = await this.send(to, 'Verify your email · Motive Fashion', html, { text });
+    if (result && 'skipped' in result && result.skipped) {
+      this.log.log(`Email verification link (email skipped): ${url}`);
+    }
+    return result;
+  }
+
   async sendContactEnquiry(input: { name: string; email: string; phone?: string; message: string }) {
-    const to = process.env.CONTACT_TO ?? process.env.EMAIL_REPLY_TO ?? 'hello@motivefashion.ie';
+    const to = process.env.CONTACT_TO ?? process.env.EMAIL_REPLY_TO ?? BRAND.supportEmail;
     const phone = input.phone ? `<p>Phone: ${escapeHtml(input.phone)}</p>` : '';
     const html = `<p>Storefront message from ${escapeHtml(input.name)}.</p><p>Email: ${escapeHtml(input.email)}</p>${phone}<p>${escapeHtml(input.message).replace(/\n/g, '<br/>')}</p>`;
     const text = `Storefront message from ${input.name}.\nEmail: ${input.email}\n${input.phone ? `Phone: ${input.phone}\n` : ''}\n${input.message}`;

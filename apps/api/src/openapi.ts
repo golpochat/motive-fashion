@@ -222,8 +222,18 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' }, '401': { description: 'Missing owner or token' } },
       },
     },
-    '/auth/register': { post: { tags: ['Auth'], summary: 'Register', responses: { '200': { description: 'Sets mf_access / mf_refresh cookies' } } } },
-    '/auth/login': { post: { tags: ['Auth'], summary: 'Login', responses: { '200': { description: 'Sets cookies' } } } },
+    '/auth/register': { post: { tags: ['Auth'], summary: 'Register', responses: { '200': { description: 'Needs email verification; no cookies until verified' } } } },
+    '/auth/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Login',
+        responses: {
+          '200': { description: 'Sets cookies, or returns mfaRequired + mfaToken' },
+          '403': { description: 'Email not verified' },
+          '429': { description: 'Locked after failed attempts' },
+        },
+      },
+    },
     '/auth/refresh': { post: { tags: ['Auth'], summary: 'Rotate refresh token', responses: { '200': { description: 'OK' } } } },
     '/auth/logout': { post: { tags: ['Auth'], summary: 'Revoke refresh + clear cookies', responses: { '200': { description: 'OK' } } } },
     '/auth/forgot-password': {
@@ -237,7 +247,52 @@ export const openapiSpec = {
       post: {
         tags: ['Auth'],
         summary: 'Set a new password from a reset token',
+        responses: { '200': { description: 'Sets cookies, or needs verification / MFA' }, '400': { description: 'Invalid or expired token' } },
+      },
+    },
+    '/auth/verify-email': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Confirm email from a verification token',
         responses: { '200': { description: 'Sets cookies' }, '400': { description: 'Invalid or expired token' } },
+      },
+    },
+    '/auth/resend-verification': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Resend the verification email',
+        responses: { '200': { description: 'Always OK (does not reveal whether the email exists)' } },
+      },
+    },
+    '/auth/mfa/setup': {
+      post: {
+        tags: ['Auth'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Start TOTP setup; returns secret, otpauth URI, and backup codes once',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/auth/mfa/enable': {
+      post: {
+        tags: ['Auth'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Confirm TOTP and turn MFA on',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/auth/mfa/disable': {
+      post: {
+        tags: ['Auth'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Turn MFA off with password and authenticator or backup code',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/auth/mfa/verify': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Finish login with TOTP or a backup code',
+        responses: { '200': { description: 'Sets cookies' } },
       },
     },
     '/account/me': {
@@ -262,6 +317,109 @@ export const openapiSpec = {
     },
     '/stock/adjust': { post: { tags: ['Stock'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Adjust on-hand', responses: { '200': { description: 'OK' } } } },
     '/stock/transfer': { post: { tags: ['Stock'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Transfer between locations', responses: { '200': { description: 'OK' } } } },
+    '/admin/procurement/suppliers': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Suppliers with open buy, inbound, and 30-day sell-through',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/admin/procurement/suppliers/{id}': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'One supplier: purchase orders, on-hand, sold, and selling pace',
+        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+      },
+    },
+    '/admin/procurement/catalog': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Products that can be linked to a mill',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/admin/procurement/suppliers/{id}/products': {
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Link a product to a supplier (MOQ, factory cost, lead days)',
+        responses: { '201': { description: 'Created' }, '400': { description: 'Already linked' } },
+      },
+    },
+    '/admin/procurement/suppliers/{id}/products/{productId}': {
+      patch: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'productId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        summary: 'Update MOQ, factory cost, or lead days',
+        responses: { '200': { description: 'OK' }, '404': { description: 'Not linked' } },
+      },
+      delete: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'productId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        summary: 'Unlink a product from a supplier',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/admin/procurement/purchase-orders': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Purchase orders',
+        responses: { '200': { description: 'OK' } },
+      },
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Create a draft purchase order (supplier, SKUs, quantities)',
+        responses: { '201': { description: 'Created' }, '400': { description: 'Invalid lines or below MOQ' } },
+      },
+    },
+    '/admin/procurement/purchase-orders/{id}': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'One purchase order',
+        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+      },
+      patch: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Update a draft purchase order (qty, factory cost, notes)',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not a draft' } },
+      },
+    },
+    '/admin/procurement/purchase-orders/{id}/cancel': {
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Cancel a draft purchase order',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not a draft' } },
+      },
+    },
+    '/admin/procurement/suggestions': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Warehouse restock suggestions grouped for raising a PO',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
     '/channels/pos/sales': {
       post: {
         tags: ['POS'],
@@ -320,7 +478,7 @@ export const openapiSpec = {
       get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List products', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Create product', responses: { '200': { description: 'OK' } } },
     },
-    '/admin/orders': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List orders', responses: { '200': { description: 'OK' } } } },
+    '/admin/orders': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List all-channel orders including till sales', responses: { '200': { description: 'OK' } } } },
     '/admin/orders/{id}/status': {
       post: {
         tags: ['Admin'],

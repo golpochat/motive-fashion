@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { hasAnyPerm, homePath } from '@/lib/rbac';
+import { authHref, hasAnyPerm, homePath } from '@/lib/rbac';
 import { useSession } from '@/components/session-provider';
 
 function GateMessage({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream">
-      <p className="text-sm text-ink/60">{label}</p>
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <p className="text-sm text-ink/70">{label}</p>
     </div>
   );
 }
@@ -18,7 +18,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !me) {
       const next = `${window.location.pathname}${window.location.search}`;
-      window.location.replace(`/account?next=${encodeURIComponent(next)}`);
+      window.location.replace(authHref('/auth/login', next));
     }
   }, [loading, me]);
 
@@ -43,7 +43,8 @@ export function PermissionGate({
   useEffect(() => {
     if (loading) return;
     if (!me) {
-      window.location.replace('/account');
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.replace(authHref('/auth/login', next));
       return;
     }
     if (!allowed) {

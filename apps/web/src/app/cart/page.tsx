@@ -4,9 +4,11 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { formatEur } from '@motive-fashion/utils';
 import { BRAND } from '@motive-fashion/config';
+import { BagDeliveryNote } from '@/components/bag-delivery';
 import { CartLineRow } from '@/components/cart-line';
 import { useSession } from '@/components/session-provider';
 import { useCart } from '@/lib/cart-store';
+import { authHref } from '@/lib/rbac';
 
 export default function CartPage() {
   const { cart, loading, setQty, removeItem, close } = useCart();
@@ -57,14 +59,14 @@ export default function CartPage() {
             <span className="text-ink/70">Subtotal inc. VAT</span>
             <span className="font-medium tabular-nums">{formatEur(cart.subtotalCents)}</span>
           </div>
-          <p className="text-xs text-ink/55">Delivery is calculated at checkout.</p>
+          <BagDeliveryNote subtotalCents={cart.subtotalCents} showFeeLine />
           <Link href="/checkout" className="block rounded-full bg-primary px-5 py-3 text-center text-sm text-cream no-underline">
             Checkout
           </Link>
           {!me ? (
             <p className="text-center text-xs text-ink/55">
               Pay as a guest, or{' '}
-              <Link href="/account?next=/checkout" className="text-ink/70 hover:text-accent">
+              <Link href={authHref('/auth/login', '/checkout')} className="text-ink/70 hover:text-accent">
                 sign in
               </Link>
               .

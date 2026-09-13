@@ -6,7 +6,7 @@ This is a standalone product — not a marketplace.
 
 ## Stack
 
-- Next.js 15 App Router (storefront + `/super-admin`, `/admin`, `/staff`, `/user`)
+- Next.js 15 App Router (storefront + `/auth/login`, `/super-admin`, `/admin`, `/staff`, `/user`)
 - NestJS REST API (`/api/v1`)
 - PostgreSQL + Prisma
 - Redis + BullMQ
@@ -41,11 +41,14 @@ pnpm dev:web     # http://localhost:3000
 Liveness: `GET http://localhost:4000/api/v1/health`  
 Readiness (Postgres + Redis): `GET http://localhost:4000/api/v1/health/ready`
 
-Demo logins after seed:
+Demo logins after seed (emails are already verified; MFA is off):
 
-- Super-admin `superadmin@motivefashion.com` / `MotiveAdmin!2026` → `/super-admin`
-- Staff `floor@motivefashion.ie` / `MotiveStaff!2026` → `/staff`
-- Customer `guest@motivefashion.ie` / `MotiveUser!2026` → `/user`
+- Super-admin `superadmin@motivefashion.com` / `MotiveSuper!2026` → `/super-admin`
+- Admin `admin@motivefashion.com` / `MotiveAdmin!2026` → `/admin`
+- Staff `staff@motivefashion.com` / `MotiveStaff!2026` → `/staff`
+- Customer `guest@motivefashion.com` / `MotiveUser!2026` → `/user`
+
+New customer accounts must verify email before they can sign in. If `RESEND_API_KEY` is empty, the API logs the verification link. Authenticator (TOTP) is optional under `/user/profile`. Failed sign-ins lock the email for 15 minutes after 5 attempts when Redis is up.
 
 ## Inventory rule
 

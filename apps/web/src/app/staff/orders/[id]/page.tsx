@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { API } from '@/lib/api';
-import { PageHeader } from '@/components/page-header';
+import { ErrorState, LoadingState, PageHeader } from '@/components/page-header';
 import { DataTable, Panel, Td } from '@/components/dashboard-ui';
 import { StaffOrderActions } from '@/components/staff-order-actions';
 import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
@@ -26,6 +26,7 @@ type StaffSaleDetail = {
   shippingCents: number;
   taxCents: number;
   totalCents: number;
+  cashierName?: string | null;
   items: {
     title: string;
     sku: string;
@@ -48,27 +49,27 @@ export default function StaffOrderDetail() {
         if (!res.ok) throw new Error('not found');
         setOrder((await res.json()) as StaffSaleDetail);
       })
-      .catch(() => setError('This sale is not in your till history.'));
+      .catch(() => setError('This sale could not be loaded.'));
   }, [params.id]);
 
   if (error) {
     return (
       <div>
-        <p className="text-sm text-red-700">{error}</p>
-        <Link href="/staff/orders" className="mt-4 inline-block text-sm">
+        <ErrorState message={error} />
+        <Link href="/staff/orders" className="mt-4 inline-block min-h-11 text-sm">
           Back to orders
         </Link>
       </div>
     );
   }
 
-  if (!order) return <p className="text-sm text-ink/55">Loading…</p>;
+  if (!order) return <LoadingState label="Loading this sale…" />;
 
   return (
     <div>
       <PageHeader
         title={`Ticket ${order.ticket}`}
-        description={`${order.name} · ${new Date(order.createdAt).toLocaleString('en-IE', { hour12: false })}`}
+        description={`${order.name}${order.cashierName ? ` · ${order.cashierName}` : ''} · ${new Date(order.createdAt).toLocaleString('en-IE', { hour12: false })}`}
         actions={
           <Link href="/staff/orders" className="text-sm">
             Back to orders

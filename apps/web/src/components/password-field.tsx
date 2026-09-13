@@ -14,6 +14,7 @@ export function PasswordField({
   onChange,
   error,
   showRules,
+  accessory,
 }: {
   name?: string;
   label?: string;
@@ -23,6 +24,7 @@ export function PasswordField({
   onChange: (value: string) => void;
   error?: string;
   showRules?: boolean;
+  accessory?: JSX.Element | null;
 }) {
   const id = useId();
   const helpId = `${id}-help`;
@@ -43,9 +45,12 @@ export function PasswordField({
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">
-        {label}
-      </label>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <label htmlFor={id} className="block text-sm text-ink/70">
+          {label}
+        </label>
+        {accessory}
+      </div>
       <div className="relative">
         <input
           id={id}

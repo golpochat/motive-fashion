@@ -24,7 +24,7 @@ export default function PrivacyPage() {
         cookies (cart session, login) are required for the shop to work. Analytics stay off unless you accept them.
       </p>
       <p className="text-ink/70">
-        You can export or delete your account from <a href="/account">Account</a>. Deletion keeps order rows needed for
+        You can export or delete your account from <a href="/user/privacy">Account</a>. Deletion keeps order rows needed for
         tax and consumer-law records, with personal fields removed.
       </p>
       <p className="text-ink/70">We do not sell personal data. Hosting is in the EU / EEA or with processors under SCCs where required.</p>

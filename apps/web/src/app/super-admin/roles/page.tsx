@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
-import { PageHeader } from '@/components/page-header';
+import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
 import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
 
@@ -21,6 +21,8 @@ export default function SuperAdminRoles() {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [perms, setPerms] = useState<Perm[]>([]);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<RoleRow | 'new' | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -29,13 +31,24 @@ export default function SuperAdminRoles() {
   const [confirmDelete, setConfirmDelete] = useState<RoleRow | null>(null);
 
   function reload() {
+    setLoading(true);
     Promise.all([
-      fetch(`${API}/rbac/roles`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])) as Promise<RoleRow[]>,
-      fetch(`${API}/rbac/permissions`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])) as Promise<Perm[]>,
-    ]).then(([r, p]) => {
-      setRoles(Array.isArray(r) ? r : []);
-      setPerms(Array.isArray(p) ? p : []);
-    });
+      fetch(`${API}/rbac/roles`, { credentials: 'include' }),
+      fetch(`${API}/rbac/permissions`, { credentials: 'include' }),
+    ])
+      .then(async ([rolesRes, permsRes]) => {
+        if (!rolesRes.ok || !permsRes.ok) {
+          setLoadError('Could not load roles');
+          return;
+        }
+        const r = (await rolesRes.json()) as RoleRow[];
+        const p = (await permsRes.json()) as Perm[];
+        setRoles(Array.isArray(r) ? r : []);
+        setPerms(Array.isArray(p) ? p : []);
+        setLoadError('');
+      })
+      .catch(() => setLoadError('Could not load roles'))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -115,6 +128,14 @@ export default function SuperAdminRoles() {
       />
       <AccessTabs current="/super-admin/roles" />
       {error && !editing ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
+      <ConsoleSection
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        empty={roles.length === 0}
+        emptyTitle="No roles"
+        emptyBody="Create a role to grant permissions."
+      >
       <DataTable headers={['Role', 'People', 'Permissions', 'Action']}>
         {roles.map((r) => (
           <tr key={r.id} className="hover:bg-ink/[0.02]">
@@ -139,6 +160,7 @@ export default function SuperAdminRoles() {
           </tr>
         ))}
       </DataTable>
+      </ConsoleSection>
 
       {editing ? (
         <Modal title={editing === 'new' ? 'New role' : `Edit ${editing.name}`} onClose={() => setEditing(null)} wide>

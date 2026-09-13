@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
-import { PageHeader } from '@/components/page-header';
-import { DataTable, Panel, Td } from '@/components/dashboard-ui';
+import { ErrorState, LoadingState, PageHeader } from '@/components/page-header';
+import { DataTable, FilterTabs, Panel, Td } from '@/components/dashboard-ui';
 
 type Method = {
   id: string;
@@ -25,6 +25,7 @@ function euroInput(cents: number) {
 export default function AdminCheckout() {
   const [data, setData] = useState<Snapshot | null>(null);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState('fulfilment');
 
   async function load() {
     const res = await fetch(`${API}/admin/commerce`, { credentials: 'include' });
@@ -32,6 +33,7 @@ export default function AdminCheckout() {
       setError('Could not load checkout settings');
       return;
     }
+    setError('');
     setData((await res.json()) as Snapshot);
   }
 
@@ -58,7 +60,8 @@ export default function AdminCheckout() {
   if (!data) {
     return (
       <div>
-        <PageHeader title="Checkout" description="Loading fulfilment, county rates, and payments…" />
+        <PageHeader title="Checkout" description="Fulfilment, county rates, and payments." />
+        {error ? <ErrorState message={error} onRetry={() => void load()} /> : <LoadingState label="Loading fulfilment, county rates, and payments…" />}
       </div>
     );
   }
@@ -71,6 +74,20 @@ export default function AdminCheckout() {
       />
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
+      <div className="mb-6">
+        <FilterTabs
+          ariaLabel="Checkout settings"
+          current={tab}
+          onChange={setTab}
+          items={[
+            { id: 'fulfilment', label: 'Fulfilment' },
+            { id: 'payments', label: 'Payments' },
+            { id: 'counties', label: 'County rates' },
+          ]}
+        />
+      </div>
+
+      {tab === 'fulfilment' ? (
       <Panel title="Fulfilment">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -112,7 +129,7 @@ export default function AdminCheckout() {
                           type="number"
                           min={0}
                           step="0.01"
-                          className="w-24 rounded-lg border border-ink/15 px-2 py-1"
+                          className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
                           defaultValue={euroInput(row.feeCents ?? 0)}
                           onBlur={(e) =>
                             void patch(`/admin/commerce/fulfilment/${row.id}`, {
@@ -129,7 +146,7 @@ export default function AdminCheckout() {
                           type="number"
                           min={0}
                           step="0.01"
-                          className="w-24 rounded-lg border border-ink/15 px-2 py-1"
+                          className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
                           defaultValue={euroInput(row.freeOverCents ?? 0)}
                           onBlur={(e) =>
                             void patch(`/admin/commerce/fulfilment/${row.id}`, {
@@ -146,7 +163,9 @@ export default function AdminCheckout() {
           </table>
         </div>
       </Panel>
+      ) : null}
 
+      {tab === 'payments' ? (
       <Panel title="Payments">
         <DataTable headers={['Method', 'Published', 'Public', 'Default']}>
           {data.payments.map((row) => (
@@ -174,7 +193,9 @@ export default function AdminCheckout() {
           ))}
         </DataTable>
       </Panel>
+      ) : null}
 
+      {tab === 'counties' ? (
       <Panel title="County delivery rates">
         <DataTable headers={['County', 'Published', 'Rate']}>
           {data.counties.map((row) => (
@@ -195,7 +216,7 @@ export default function AdminCheckout() {
                     type="number"
                     min={0}
                     step="0.01"
-                    className="w-24 rounded-lg border border-ink/15 px-2 py-1"
+                    className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
                     defaultValue={euroInput(row.rateCents ?? 0)}
                     onBlur={(e) =>
                       void patch(`/admin/commerce/counties/${row.id}`, {
@@ -209,6 +230,7 @@ export default function AdminCheckout() {
           ))}
         </DataTable>
       </Panel>
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,8 @@ export type IconName =
   | 'orders'
   | 'customers'
   | 'locations'
+  | 'checkout'
+  | 'building'
   | 'pos'
   | 'suppliers'
   | 'procurement'
@@ -21,6 +23,7 @@ export type IconName =
   | 'search'
   | 'cart'
   | 'close'
+  | 'chevronRight'
   | 'eye'
   | 'eyeOff';
 
@@ -101,6 +104,19 @@ const paths = {
       <circle cx="12" cy="9.8" r="2.2" />
     </>
   ),
+  checkout: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="1.5" />
+      <path d="M3 10h18M7 15h4" />
+    </>
+  ),
+  building: (
+    <>
+      <path d="M4 20V8l8-4 8 4v12" />
+      <path d="M9 20v-6h6v6" />
+      <path d="M9 10h.01M12 10h.01M15 10h.01" />
+    </>
+  ),
   pos: (
     <>
       <rect x="4" y="3" width="16" height="12" rx="1.5" />
@@ -123,8 +139,9 @@ const paths = {
   ),
   marketing: (
     <>
-      <rect x="4" y="5" width="16" height="15" rx="1.5" />
-      <path d="M8 3v4M16 3v4M4 10h16" />
+      <path d="M4 10v4l11 5V5L4 10Z" />
+      <path d="M15 8.2v7.6" />
+      <path d="M6.6 14.2 8 19h2.2l-1.2-4.2" />
     </>
   ),
   whatsapp: (
@@ -168,13 +185,15 @@ const paths = {
   ),
   cart: (
     <>
-      <path d="M6 8h12l-1 13H7L6 8Z" />
-      <path d="M9 8V7a3 3 0 0 1 6 0v1" />
+      <path d="M6.5 3 3.5 7v12.5A1.5 1.5 0 0 0 5 21h14a1.5 1.5 0 0 0 1.5-1.5V7L17.5 3H6.5Z" />
+      <path d="M3.5 7h17" />
+      <path d="M15.5 11.5a3.5 3.5 0 0 1-7 0" />
     </>
   ),
   close: (
     <path d="M6 6l12 12M18 6 6 18" />
   ),
+  chevronRight: <path d="M9 6l6 6-6 6" />,
   eye: (
     <>
       <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" />

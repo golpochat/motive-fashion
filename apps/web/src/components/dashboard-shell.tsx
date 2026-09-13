@@ -30,7 +30,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { me, logout } = useSession();
+  const { me } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const ws = workspaceById(workspace);
@@ -102,16 +102,16 @@ export function DashboardShell({
           ) : (
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium tracking-[0.02em]">{BRAND.name}</span>
-              <span className="mt-0.5 block truncate text-[10px] uppercase tracking-[0.18em] text-accent">{ws.label}</span>
+              <span className="mt-0.5 block truncate text-[11px] font-medium text-accent">{ws.label}</span>
             </span>
           )}
         </div>
 
         <nav className="sidebar-nav min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2">
-          {workspaces.length > 1 ? (
-            <div className="mb-2">
+          {workspace !== 'customer' && workspaces.length > 1 ? (
+            <div className="mb-3">
               {narrow ? null : (
-                <p className="px-2 pb-1 text-[10px] uppercase tracking-widest text-sidebar-fg/40">Workspaces</p>
+                <p className="px-2 pb-1 text-[11px] font-medium text-sidebar-fg/45">Workspaces</p>
               )}
               <ul className="space-y-0.5">
                 {workspaces.map((item) => {
@@ -120,11 +120,18 @@ export function DashboardShell({
                     <li key={item.id}>
                       <Link
                         href={item.href}
-                        title={item.label}
-                        className={`flex items-center gap-3 rounded-lg text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2'} ${active ? 'bg-accent/25 text-sidebar-fg' : 'text-sidebar-fg/70 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
+                        title={`${item.label} · ${item.eyebrow}`}
+                        className={`flex min-h-11 items-center gap-3 rounded-md text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0' : 'px-2.5'} ${active ? 'bg-sidebar-fg/15 text-sidebar-fg' : 'text-sidebar-fg/65 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
                       >
                         <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
-                        {narrow ? <span className="sr-only">{item.label}</span> : item.label}
+                        {narrow ? (
+                          <span className="sr-only">{item.label}</span>
+                        ) : (
+                          <span className="min-w-0">
+                            <span className="block truncate">{item.label}</span>
+                            <span className="block truncate text-[11px] text-sidebar-fg/45">{item.eyebrow}</span>
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );
@@ -135,7 +142,7 @@ export function DashboardShell({
           {sections.map((section) => (
             <div key={section.name} className="mb-2 last:mb-0">
               {narrow ? null : (
-                <p className="px-2 pb-1 text-[10px] uppercase tracking-widest text-sidebar-fg/40">{section.name}</p>
+                <p className="px-2 pb-1 text-[11px] font-medium text-sidebar-fg/45">{section.name}</p>
               )}
               <ul className="space-y-0.5">
                 {section.items.map((item) => {
@@ -145,7 +152,7 @@ export function DashboardShell({
                       <Link
                         href={item.href}
                         title={item.label}
-                        className={`flex items-center gap-3 rounded-lg text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2'} ${active ? 'bg-accent/25 text-sidebar-fg' : 'text-sidebar-fg/70 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
+                        className={`flex min-h-11 items-center gap-3 rounded-md text-sm no-underline transition-colors duration-200 ${narrow ? 'justify-center px-0' : 'px-2.5'} ${active ? 'bg-sidebar-fg/15 text-sidebar-fg' : 'text-sidebar-fg/65 hover:bg-sidebar-fg/10 hover:text-sidebar-fg'}`}
                       >
                         <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
                         {narrow ? <span className="sr-only">{item.label}</span> : item.label}
@@ -157,26 +164,14 @@ export function DashboardShell({
             </div>
           ))}
         </nav>
-
-        <div className={`shrink-0 border-t border-sidebar-fg/10 ${narrow ? 'p-2' : 'p-3'}`}>
-          <button
-            type="button"
-            title="Sign out"
-            className={`flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-fg/20 text-sm text-sidebar-fg transition-colors duration-200 hover:bg-sidebar-fg/10 ${narrow ? 'py-2' : 'px-3 py-2'}`}
-            onClick={() => void logout()}
-          >
-            <Icon name="logout" className="h-4 w-4" />
-            {narrow ? <span className="sr-only">Sign out</span> : 'Sign out'}
-          </button>
-        </div>
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-surface px-3 py-3 md:px-6">
+        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-3 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink/15 bg-white"
               aria-label={mobileOpen || !narrow ? 'Hide navigation' : 'Show navigation'}
               aria-expanded={mobileOpen || !narrow}
               onClick={toggleNav}
@@ -184,7 +179,9 @@ export function DashboardShell({
               <MenuGlyph mobileOpen={mobileOpen} />
             </button>
             <div className="min-w-0">
-              <p className="truncate text-xs uppercase tracking-widest text-accent">{ws.label}</p>
+              <p className="truncate text-[11px] text-ink/45">
+                {ws.label} · {ws.eyebrow}
+              </p>
               <p className="truncate text-sm font-medium">{current?.label ?? ws.label}</p>
             </div>
           </div>
@@ -195,17 +192,9 @@ export function DashboardShell({
             className={
               till
                 ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-3 md:p-4'
-                : 'flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 md:px-8'
+                : 'flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 md:px-8'
             }
           >
-            {workspace === 'customer' && workspaces.some((item) => item.id === 'staff') ? (
-              <p className="mb-4 shrink-0 rounded-xl border border-accent/25 bg-accent/10 px-4 py-3 text-sm">
-                This is your personal customer account. Staff tools are on the shop floor.{' '}
-                <Link href="/staff" className="font-medium text-ink">
-                  Open shop floor
-                </Link>
-              </p>
-            ) : null}
             {children}
           </div>
           {till ? null : <ConsoleFooter />}
