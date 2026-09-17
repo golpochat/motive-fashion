@@ -20,6 +20,8 @@ import { CommerceModule } from './modules/commerce/commerce.module';
 import { HealthController } from './health.controller';
 import { OpenApiController } from './openapi.controller';
 import { ContactController } from './contact.controller';
+import { MediaController } from './media.controller';
+import { ConsentController } from './consent.controller';
 
 @Module({
   imports: [
@@ -42,6 +44,6 @@ import { ContactController } from './contact.controller';
     JobsModule,
     MailModule,
   ],
-  controllers: [HealthController, OpenApiController, ContactController],
+  controllers: [HealthController, OpenApiController, ContactController, MediaController, ConsentController],
 })
 export class AppModule {}

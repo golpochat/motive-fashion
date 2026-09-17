@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { loadCatalog, type Category, type Collection } from '@/lib/catalog';
-import type { ProductCard } from '@/lib/api';
+import { loadCatalog, loadCatalogPage, type Category, type Collection } from '@/lib/catalog';
 
 const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
@@ -20,7 +19,7 @@ const staticPaths = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, collections, categories] = await Promise.all([
-    loadCatalog<ProductCard[]>('/catalog/products'),
+    loadCatalogPage('/catalog/products'),
     loadCatalog<Collection[]>('/catalog/collections'),
     loadCatalog<Category[]>('/catalog/categories'),
   ]);
@@ -36,7 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const row of categories.data) extra.push(`/shop/${row.slug}`);
   }
   if (products.ok) {
-    for (const product of products.data) extra.push(`/product/${product.slug}`);
+    for (const product of products.data.items) extra.push(`/product/${product.slug}`);
   }
 
   return [...staticPaths, ...extra].map((path) => ({

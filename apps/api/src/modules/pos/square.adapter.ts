@@ -173,7 +173,7 @@ export class SquarePosAdapter implements PosAdapter {
 
   async listTillOrders(cashierId: string, allCashiers = false) {
     const sales = await this.prisma.posSale.findMany({
-      include: { order: { include: { items: true } } },
+      include: { order: { include: { items: true, refunds: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -234,6 +234,17 @@ export class SquarePosAdapter implements PosAdapter {
     return { sent: true, email: to };
   }
 
+  async refundTillOrder(
+    orderId: string,
+    cashierId: string,
+    amountCents: number,
+    reason: string,
+    allCashiers = false,
+  ) {
+    await this.ownedSale(orderId, cashierId, allCashiers);
+    return this.orders.refund(orderId, amountCents, reason, cashierId);
+  }
+
   private realEmail(email: string) {
     return Boolean(email) && email !== TILL_EMAIL && !email.toLowerCase().includes('@pos.motivefashion.ie');
   }
@@ -242,7 +253,7 @@ export class SquarePosAdapter implements PosAdapter {
     const sale = await this.prisma.posSale.findUnique({
       where: { orderId },
       include: {
-        order: { include: { items: true, address: true, promo: { select: { code: true } }, shipments: true } },
+        order: { include: { items: true, address: true, promo: { select: { code: true } }, shipments: true, refunds: true } },
       },
     });
     if (!sale) throw new NotFoundException('Sale not found');
@@ -285,7 +296,9 @@ export class SquarePosAdapter implements PosAdapter {
       quantity: number;
       unitPriceCents: number;
     }[];
+    refunds?: { amountCents: number }[];
   }) {
+    const refundedCents = (order.refunds ?? []).reduce((sum, row) => sum + row.amountCents, 0);
     return {
       id: order.id,
       ticket: tillTicketNo(order.id),
@@ -303,6 +316,7 @@ export class SquarePosAdapter implements PosAdapter {
       shippingCents: order.shippingCents,
       taxCents: order.taxCents,
       totalCents: order.totalCents,
+      refundedCents,
       items: order.items,
     };
   }

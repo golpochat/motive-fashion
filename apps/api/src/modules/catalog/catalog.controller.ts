@@ -22,8 +22,19 @@ export class CatalogController {
     @Query('q') q?: string,
     @Query('occasion') occasion?: string,
     @Query('sku') sku?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.catalog.list({ category, collection, q, occasion, sku });
+    const parsed = limit ? Number(limit) : undefined;
+    return this.catalog.list({
+      category,
+      collection,
+      q,
+      occasion,
+      sku,
+      cursor,
+      limit: Number.isFinite(parsed) ? parsed : undefined,
+    });
   }
 
   @Get('products/:slug')

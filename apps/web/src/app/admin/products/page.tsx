@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
@@ -20,6 +21,7 @@ import { useSession } from '@/components/session-provider';
 
 type Category = { id: string; name: string; slug: string };
 type Variant = { id: string; sku: string; size: string; color: string; priceCents: number; active: boolean };
+type ProductImage = { id: string; url: string; alt: string };
 type Product = {
   id: string;
   title: string;
@@ -29,6 +31,7 @@ type Product = {
   categoryId: string;
   category?: { name: string };
   variants: Variant[];
+  images?: ProductImage[];
 };
 
 function eurosToCents(value: FormDataEntryValue | null) {
@@ -46,9 +49,11 @@ export default function AdminProducts() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [variantFor, setVariantFor] = useState<Product | null>(null);
+  const [photosFor, setPhotosFor] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
   const rows = data ?? [];
   const categories = cats.data ?? [];
+  const photoProduct = photosFor ? (rows.find((row) => row.id === photosFor.id) ?? photosFor) : null;
 
   async function createProduct(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -153,11 +158,50 @@ export default function AdminProducts() {
     reload();
   }
 
+  async function addPhoto(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!photosFor) return;
+    setFormError('');
+    setBusy(true);
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const res = await fetch(`${API}/admin/products/${photosFor.id}/images`, {
+      method: 'POST',
+      credentials: 'include',
+      body: data,
+    });
+    const payload = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) {
+      setFormError(apiErrorMessage(payload, 'Could not upload this photo.'));
+      return;
+    }
+    form.reset();
+    reload();
+  }
+
+  async function removePhoto(imageId: string) {
+    if (!photosFor) return;
+    setFormError('');
+    setBusy(true);
+    const res = await fetch(`${API}/admin/products/${photosFor.id}/images/${imageId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    const payload = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) {
+      setFormError(apiErrorMessage(payload, 'Could not remove this photo.'));
+      return;
+    }
+    reload();
+  }
+
   return (
     <div>
       <PageHeader
         title="Products"
-        description="Create pieces, publish them, and add SKUs. Stock is adjusted on Inventory."
+        description="Create pieces, publish them, and add SKUs. Print hang-tag barcodes from Labels. Stock is adjusted on Inventory."
         actions={
           canWrite ? (
             <PrimaryButton type="button" onClick={() => { setFormError(''); setCreating(true); }}>
@@ -166,7 +210,7 @@ export default function AdminProducts() {
           ) : null
         }
       />
-      {formError && !creating && !editing && !variantFor ? (
+      {formError && !creating && !editing && !variantFor && !photosFor ? (
         <p className="mb-4 text-sm text-red-700" role="alert">
           {formError}
         </p>
@@ -198,16 +242,27 @@ export default function AdminProducts() {
               </Td>
               <Td muted>{r.published ? 'Published' : 'Hidden'}</Td>
               <Td>
-                {canWrite ? (
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/labels?product=${r.id}`}
+                    className="inline-flex min-h-11 items-center rounded-lg border border-ink/15 px-3 py-2.5 text-sm no-underline hover:border-ink/40"
+                  >
+                    Labels
+                  </Link>
+                  {canWrite ? (
+                    <>
                     <SecondaryButton type="button" onClick={() => { setFormError(''); setEditing(r); }}>
                       Edit
                     </SecondaryButton>
                     <SecondaryButton type="button" onClick={() => { setFormError(''); setVariantFor(r); }}>
                       Add SKU
                     </SecondaryButton>
-                  </div>
-                ) : null}
+                    <SecondaryButton type="button" onClick={() => { setFormError(''); setPhotosFor(r); }}>
+                      Photos
+                    </SecondaryButton>
+                    </>
+                  ) : null}
+                </div>
               </Td>
             </tr>
           ))}
@@ -322,6 +377,41 @@ export default function AdminProducts() {
               </PrimaryButton>
               <SecondaryButton type="button" onClick={() => setVariantFor(null)}>
                 Cancel
+              </SecondaryButton>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {photoProduct ? (
+        <Modal title={`Photos · ${photoProduct.title}`} onClose={() => setPhotosFor(null)} wide>
+          {formError ? <p className="mb-3 text-sm text-red-700">{formError}</p> : null}
+          <ul className="mb-4 space-y-2">
+            {(photoProduct.images ?? []).map((image) => (
+              <li key={image.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate">{image.alt || image.url}</span>
+                <SecondaryButton type="button" disabled={busy} onClick={() => void removePhoto(image.id)}>
+                  Remove
+                </SecondaryButton>
+              </li>
+            ))}
+            {(photoProduct.images ?? []).length === 0 ? (
+              <li className="text-sm text-ink/55">No photos yet. JPEG, PNG, WebP, or GIF up to 4 MB.</li>
+            ) : null}
+          </ul>
+          <form onSubmit={(e) => void addPhoto(e)} className="space-y-3">
+            <Field label="File">
+              <input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required className={fieldClass} />
+            </Field>
+            <Field label="Alt text">
+              <input name="alt" className={fieldClass} placeholder={photoProduct.title} />
+            </Field>
+            <div className="flex gap-2">
+              <PrimaryButton type="submit" disabled={busy}>
+                {busy ? 'Uploading…' : 'Upload'}
+              </PrimaryButton>
+              <SecondaryButton type="button" onClick={() => setPhotosFor(null)}>
+                Close
               </SecondaryButton>
             </div>
           </form>

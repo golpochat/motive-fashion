@@ -25,6 +25,7 @@ import {
   randomTotpSecret,
   verifyTotp,
 } from './totp';
+import { isStaffWorkspace, staffMfaRequired } from '../../common/security-config';
 
 const ACCESS_MS = 15 * 60 * 1000;
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
@@ -231,6 +232,10 @@ export class AuthService {
   async disableMfa(userId: string, password: string, code: string) {
     const user = await this.requireUser(userId);
     if (!user.mfaEnabled || !user.passwordHash) throw new BadRequestException('Authenticator is not on.');
+    const keys = await this.permissionKeys(userId);
+    if (staffMfaRequired() && isStaffWorkspace(keys)) {
+      throw new ForbiddenException('Authenticator stays on for staff and admin accounts.');
+    }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
     const totpOk = user.mfaSecret ? verifyTotp(user.mfaSecret, code) : false;
@@ -241,6 +246,18 @@ export class AuthService {
       data: { mfaEnabled: false, mfaSecret: null, mfaBackupHashes: [] },
     });
     return { ok: true as const };
+  }
+
+  private async permissionKeys(userId: string) {
+    const memberships = await this.prisma.userMembership.findMany({
+      where: { userId },
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    });
+    const keys = new Set<string>();
+    for (const row of memberships) {
+      for (const grant of row.role.permissions) keys.add(grant.permission.key);
+    }
+    return [...keys];
   }
 
   async verifyMfa(mfaToken: string, code: string) {

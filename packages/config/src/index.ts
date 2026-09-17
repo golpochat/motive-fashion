@@ -153,32 +153,39 @@ export const ORDER_ACTION_LABEL: Record<string, string> = {
 export const DELIVERY_STEPS = ['CONFIRMED', 'PACKING', 'SHIPPED', 'DELIVERED'] as const;
 export const COLLECTION_STEPS = ['CONFIRMED', 'PACKING', 'READY_FOR_COLLECTION', 'COLLECTED'] as const;
 
+/** Bump when the cookie policy text changes so the banner returns. */
+export const COOKIE_POLICY_VERSION = '2026-09-14';
+
 export const SHIP_CARRIERS = [
   {
     code: 'AN_POST',
     name: 'An Post',
+    bookUrl: 'https://www.anpost.com/Post-Parcels/Click-and-Drop',
     trackUrl: (trackingNo: string) =>
       `https://www.anpost.com/Post-Parcels/Track/History?item=${encodeURIComponent(trackingNo)}`,
   },
   {
     code: 'DPD',
     name: 'DPD',
+    bookUrl: 'https://www.dpd.ie/go/mydpd',
     trackUrl: (trackingNo: string) =>
       `https://www.dpd.ie/service/tracking?parcelNumber=${encodeURIComponent(trackingNo)}`,
   },
   {
     code: 'FASTWAY',
     name: 'Fastway',
+    bookUrl: 'https://www.fastway.ie/',
     trackUrl: (trackingNo: string) =>
       `https://www.fastway.ie/courier-services/track-your-parcel/?l=${encodeURIComponent(trackingNo)}`,
   },
   {
     code: 'NIGHTLINE',
     name: 'Nightline',
+    bookUrl: 'https://www.nightline.ie/',
     trackUrl: (trackingNo: string) =>
       `https://www.nightline.ie/tracking/${encodeURIComponent(trackingNo)}`,
   },
-  { code: 'OTHER', name: 'Other', trackUrl: null },
+  { code: 'OTHER', name: 'Other', bookUrl: null, trackUrl: null },
 ] as const;
 
 export function fulfilmentSteps(fulfillment?: string | null) {
@@ -209,6 +216,28 @@ export function carrierTrackUrl(carrier?: string | null, trackingNo?: string | n
 export function carrierLabel(carrier?: string | null) {
   if (!carrier) return '';
   return SHIP_CARRIERS.find((row) => row.code === carrier)?.name ?? carrier;
+}
+
+export function carrierBookUrl(carrier?: string | null) {
+  if (!carrier) return null;
+  return SHIP_CARRIERS.find((row) => row.code === carrier)?.bookUrl ?? null;
+}
+
+export function shipmentLabelText(input: {
+  name: string;
+  phone?: string | null;
+  address?: {
+    line1: string;
+    line2?: string | null;
+    city: string;
+    county?: string | null;
+    eircode?: string | null;
+  } | null;
+}) {
+  const lines = [input.name];
+  if (input.address) lines.push(formatIrelandAddress(input.address));
+  if (input.phone) lines.push(input.phone);
+  return lines.filter(Boolean).join('\n');
 }
 
 export function countyLabel(code?: string | null) {

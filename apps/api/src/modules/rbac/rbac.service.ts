@@ -1,12 +1,16 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeAudit } from '../../common/audit';
 import { CATALOG_KEYS, hasAll, HIDDEN_ROLE_SLUG, isLockedPermission, LOCKED_PERMISSION_KEYS, PERMISSION_CATALOG, ROLE_PERMISSIONS, slugifyRole, SYSTEM_ROLE_SLUGS } from './permissions';
 
 @Injectable()
-export class RbacService {
+export class RbacService implements OnModuleInit {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.syncCatalog();
+  }
 
   async syncCatalog() {
     for (const row of PERMISSION_CATALOG) {
@@ -28,16 +32,33 @@ export class RbacService {
         create: { slug, name, system: true, description: `System ${name} role` },
         update: { system: true },
       });
-      const grantCount = await this.prisma.rolePermission.count({ where: { roleId: role.id } });
-      if (slug !== HIDDEN_ROLE_SLUG && grantCount > 0) continue;
       const keys = ROLE_PERMISSIONS[slug];
-      await this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+      const grantCount = await this.prisma.rolePermission.count({ where: { roleId: role.id } });
+      if (slug === HIDDEN_ROLE_SLUG || grantCount === 0) {
+        await this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+        await this.prisma.rolePermission.createMany({
+          data: keys
+            .map((key) => byKey.get(key)?.id)
+            .filter((id): id is string => Boolean(id))
+            .map((permissionId) => ({ roleId: role.id, permissionId })),
+        });
+        continue;
+      }
       await this.prisma.rolePermission.createMany({
         data: keys
           .map((key) => byKey.get(key)?.id)
           .filter((id): id is string => Boolean(id))
           .map((permissionId) => ({ roleId: role.id, permissionId })),
+        skipDuplicates: true,
       });
+      if (slug === 'admin') {
+        const staffDash = byKey.get('dashboard.staff');
+        if (staffDash) {
+          await this.prisma.rolePermission.deleteMany({
+            where: { roleId: role.id, permissionId: staffDash.id },
+          });
+        }
+      }
     }
   }
 

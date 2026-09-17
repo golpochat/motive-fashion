@@ -6,6 +6,8 @@ export type Me = {
   role?: string;
   emailVerified?: boolean;
   mfaEnabled?: boolean;
+  mfaRequired?: boolean;
+  mfaLocked?: boolean;
   roles?: { id: string; slug: string; name: string }[];
   permissions?: string[];
   addresses?: {
@@ -29,8 +31,25 @@ export function hasAnyPerm(me: Me | null | undefined, keys: string[]) {
   return keys.some((key) => hasPerm(me, key));
 }
 
+export function isCommerceAdmin(me: Me | null | undefined) {
+  return hasPerm(me, 'dashboard.admin') && !hasPerm(me, 'dashboard.super');
+}
+
 export function seesAllStaffSales(me: Me | null | undefined) {
   return hasPerm(me, 'dashboard.admin') || me?.role === 'ADMIN';
+}
+
+/** Map a shop-floor URL to the Admin equivalent. Query strings stay on the request. */
+export function adminPathForStaffRoute(pathname: string) {
+  if (pathname === '/staff/pos' || pathname.startsWith('/staff/pos/')) {
+    return pathname.replace(/^\/staff\/pos/, '/admin/pos');
+  }
+  if (pathname === '/staff/pack') return '/admin/orders';
+  if (pathname.startsWith('/staff/pack/')) return pathname.replace(/^\/staff\/pack/, '/admin/pack');
+  if (pathname.startsWith('/staff/inventory')) return '/admin/inventory';
+  if (pathname.startsWith('/staff/locations')) return '/admin/locations';
+  if (pathname.startsWith('/staff/orders')) return '/admin/orders';
+  return '/admin';
 }
 
 export function roleLabel(me: Me | null | undefined) {
@@ -63,6 +82,7 @@ export function safeNext(next: string | null) {
     path.startsWith('/admin') ||
     path.startsWith('/staff') ||
     path.startsWith('/user') ||
+    path.startsWith('/product/') ||
     path === '/checkout' ||
     path === '/cart'
   ) {

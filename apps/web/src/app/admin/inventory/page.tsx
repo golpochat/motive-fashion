@@ -4,6 +4,6 @@ import { InventoryLedger } from '@/components/inventory-ledger';
 
 export default function AdminInventory() {
   return (
-    <InventoryLedger description="Warehouse and shop stock. Scan a SKU, then adjust or transfer without leaving the ledger." />
+    <InventoryLedger description="Warehouse and shop stock. Scan a barcode or SKU. Bins are optional until the room needs them." />
   );
 }

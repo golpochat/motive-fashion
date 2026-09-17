@@ -1,4 +1,4 @@
-import { hasAnyPerm, hasPerm, type Me } from '@/lib/rbac';
+import { hasAnyPerm, hasPerm, isCommerceAdmin, type Me } from '@/lib/rbac';
 import type { IconName } from '@/components/icons';
 
 export type NavItem = {
@@ -37,6 +37,7 @@ export const WORKSPACES: Workspace[] = [
       { href: '/super-admin/roles', label: 'Roles', icon: 'roles', perm: 'rbac.roles.write', section: 'Access' },
       { href: '/super-admin/users', label: 'Users', icon: 'users', perm: 'rbac.users.assign', section: 'Access' },
       { href: '/super-admin/permissions', label: 'Permissions', icon: 'permissions', perm: 'rbac.roles.write', section: 'Access' },
+      { href: '/super-admin/audit', label: 'Audit', icon: 'permissions', perm: 'audit.read', section: 'Access' },
     ],
   },
   {
@@ -50,11 +51,18 @@ export const WORKSPACES: Workspace[] = [
     nav: [
       { href: '/admin', label: 'Overview', icon: 'overview', exact: true, perm: 'analytics.read', section: 'Commerce' },
       { href: '/admin/products', label: 'Products', icon: 'products', perm: 'catalog.read', section: 'Commerce' },
+      { href: '/admin/labels', label: 'Labels', icon: 'products', perm: 'catalog.read', section: 'Commerce' },
       { href: '/admin/inventory', label: 'Inventory', icon: 'inventory', perm: 'inventory.read', section: 'Commerce' },
       { href: '/admin/orders', label: 'Orders', icon: 'orders', perm: 'orders.read', section: 'Commerce' },
       { href: '/admin/customers', label: 'Customers', icon: 'customers', perm: 'customers.read', section: 'Commerce' },
+      { href: '/admin/returns', label: 'Returns', icon: 'orders', perm: 'orders.read', section: 'Commerce' },
+      { href: '/admin/refunds', label: 'Refunds', icon: 'orders', perm: 'orders.refund', section: 'Commerce' },
+      { href: '/admin/reviews', label: 'Reviews', icon: 'products', perm: 'reviews.moderate', section: 'Commerce' },
+      { href: '/admin/coupons', label: 'Coupons', icon: 'coupon', perm: 'marketing.write', section: 'Commerce' },
       { href: '/admin/checkout', label: 'Checkout', icon: 'checkout', perm: 'commerce.settings', section: 'Operations' },
+      { href: '/admin/pos', label: 'POS', icon: 'pos', perm: 'pos.sale', section: 'Operations' },
       { href: '/admin/locations', label: 'Locations', icon: 'locations', perm: 'locations.read', section: 'Operations' },
+      { href: '/admin/audit', label: 'Audit', icon: 'permissions', perm: 'audit.read', section: 'Operations' },
       { href: '/admin/suppliers', label: 'Suppliers', icon: 'suppliers', perm: 'procurement.write', section: 'Supply' },
       { href: '/admin/procurement', label: 'Procurement', icon: 'procurement', perm: 'procurement.write', section: 'Supply' },
       { href: '/admin/marketing', label: 'Marketing', icon: 'marketing', perm: 'marketing.write', section: 'Growth' },
@@ -73,6 +81,7 @@ export const WORKSPACES: Workspace[] = [
       { href: '/staff', label: 'Overview', icon: 'overview', exact: true, section: 'Shop floor' },
       { href: '/staff/pos', label: 'POS', icon: 'pos', perm: 'pos.sale', section: 'Shop floor' },
       { href: '/staff/orders', label: 'Orders', icon: 'orders', perm: 'pos.sale', section: 'Shop floor' },
+      { href: '/staff/pack', label: 'Pack', icon: 'orders', perm: 'orders.pack', section: 'Shop floor' },
       { href: '/staff/inventory', label: 'Inventory', icon: 'inventory', perm: 'inventory.read', section: 'Shop floor' },
       { href: '/staff/locations', label: 'Locations', icon: 'locations', perm: 'locations.read', section: 'Shop floor' },
     ],
@@ -108,7 +117,10 @@ export function canAccessWorkspace(me: Me | null | undefined, id: WorkspaceId) {
   if (!me) return false;
   if (id === 'super-admin') return hasAnyPerm(me, ['dashboard.super', 'rbac.roles.write']);
   if (id === 'admin') return hasPerm(me, 'dashboard.admin');
-  if (id === 'staff') return hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale');
+  if (id === 'staff') {
+    if (isCommerceAdmin(me)) return false;
+    return hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale');
+  }
   return true;
 }
 

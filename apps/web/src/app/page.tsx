@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { CatalogEmpty, CatalogError, ProductGrid } from '@/components/catalog-state';
 import { HERO_IMAGE_SIZES, StorefrontImage } from '@/components/storefront-image';
-import { featuredProducts, loadCatalog } from '@/lib/catalog';
+import { featuredProducts, loadCatalogPage } from '@/lib/catalog';
 import { BRAND, liveSeasonalCta } from '@motive-fashion/config';
-import type { ProductCard } from '@/lib/api';
 
 export const metadata = {
   title: { absolute: `${BRAND.name} — modest wear, Dublin` },
@@ -21,8 +20,8 @@ const FEATURED_SLUGS = [
 ];
 
 export default async function HomePage() {
-  const result = await loadCatalog<ProductCard[]>('/catalog/products');
-  const featured = result.ok ? featuredProducts(result.data, FEATURED_SLUGS) : [];
+  const result = await loadCatalogPage('/catalog/products');
+  const featured = result.ok ? featuredProducts(result.data.items, FEATURED_SLUGS) : [];
   const seasonal = liveSeasonalCta();
 
   return (

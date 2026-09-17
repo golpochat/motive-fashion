@@ -1,4 +1,4 @@
-import { formatEur } from '@motive-fashion/utils';
+import { formatEur, unwrapCatalogList, type CatalogList } from '@motive-fashion/utils';
 import { api, type ProductCard } from '@/lib/api';
 
 export type CatalogOk<T> = { ok: true; data: T };
@@ -14,6 +14,12 @@ export async function loadCatalog<T>(path: string): Promise<CatalogResult<T>> {
   } catch {
     return { ok: false };
   }
+}
+
+export async function loadCatalogPage(path: string): Promise<CatalogResult<CatalogList<ProductCard>>> {
+  const result = await loadCatalog<unknown>(path);
+  if (!result.ok) return result;
+  return { ok: true, data: unwrapCatalogList<ProductCard>(result.data) };
 }
 
 export function variantPriceRange(variants: { priceCents: number }[]) {

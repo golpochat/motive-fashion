@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { registerPushToken } from '../src/push';
 
 export default function NotificationsScreen() {
   useEffect(() => {
-    Notifications.requestPermissionsAsync().catch(() => null);
+    void registerPushToken().catch(() => null);
   }, []);
   return (
     <View style={{ padding: 24 }}>
       <Text style={{ fontSize: 24 }}>Notifications</Text>
-      <Text>Order and restock alerts use Expo push tokens stored on your account.</Text>
+      <Text>Order alerts use an Expo push token stored on your account after you allow notifications.</Text>
     </View>
   );
 }

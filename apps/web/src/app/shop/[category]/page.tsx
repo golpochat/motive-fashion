@@ -21,9 +21,9 @@ export default async function CategoryPage({
   searchParams,
 }: {
   params: Promise<{ category: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; after?: string }>;
 }) {
   const { category } = await params;
-  const { q } = await searchParams;
-  return <ShopView category={category} q={q} />;
+  const { q, after } = await searchParams;
+  return <ShopView category={category} q={q} after={after} />;
 }

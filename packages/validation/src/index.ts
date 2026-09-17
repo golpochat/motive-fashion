@@ -153,6 +153,12 @@ export const inventoryAdjustSchema = z.object({
   reason: z.string().min(3).max(200),
 });
 
+export const inventoryBinSchema = z.object({
+  variantId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  binCode: z.string().max(24).optional().nullable(),
+});
+
 export const stockTransferSchema = z.object({
   variantId: z.string().uuid(),
   fromLocationId: z.string().uuid(),
@@ -193,16 +199,40 @@ export const returnRequestSchema = z.object({
   orderId: z.string().uuid(),
   reason: z.string().min(5).max(500),
   trackingToken: z.string().min(8).optional(),
-  items: z.array(
-    z.object({
-      orderItemId: z.string().uuid(),
-      quantity: z.number().int().min(1),
-    }),
-  ),
+  items: z
+    .array(
+      z.object({
+        orderItemId: z.string().uuid(),
+        quantity: z.number().int().min(1),
+      }),
+    )
+    .min(1),
+});
+
+export const reviewCreateSchema = z.object({
+  productId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+  body: z.string().trim().min(10).max(2000),
+});
+
+export const reviewModerateSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+});
+
+export const pushTokenSchema = z.object({
+  token: z.string().trim().min(8).max(400),
+  platform: z.enum(['ios', 'android', 'web']).default('ios'),
+});
+
+export const cookieConsentSchema = z.object({
+  choice: z.enum(['all', 'essential', 'rejected']),
+  version: z.string().min(4).max(40),
+  sessionKey: z.string().min(8).max(80).optional(),
 });
 
 export const variantCreateSchema = z.object({
   sku: z.string().min(2).max(40),
+  barcode: z.string().min(2).max(64).optional(),
   size: z.string().min(1).max(20),
   color: z.string().min(1).max(40),
   fabric: z.string().max(40).optional(),
@@ -212,20 +242,44 @@ export const variantCreateSchema = z.object({
 });
 
 /** PERCENT `value` is basis points (1000 = 10%). FIXED `value` is EUR cents. */
-export const promoCreateSchema = z.object({
-  code: z.string().min(2).max(40),
-  type: z.enum(['PERCENT', 'FIXED']),
-  value: z.number().int().min(1),
-  active: z.boolean().optional(),
-  maxUses: z.number().int().min(1).optional(),
-});
+export const promoCreateSchema = z
+  .object({
+    code: z.string().min(2).max(40),
+    type: z.enum(['PERCENT', 'FIXED']),
+    value: z.number().int().min(1),
+    active: z.boolean().optional(),
+    maxUses: z.number().int().min(1).nullable().optional(),
+    startsAt: z.string().datetime().nullable().optional(),
+    endsAt: z.string().datetime().nullable().optional(),
+  })
+  .strict()
+  .refine((d) => d.type !== 'PERCENT' || d.value <= 10000, {
+    message: 'Percent cannot exceed 100%.',
+    path: ['value'],
+  })
+  .refine((d) => !d.startsAt || !d.endsAt || new Date(d.startsAt) < new Date(d.endsAt), {
+    message: 'End must be after the start.',
+    path: ['endsAt'],
+  });
 
 export const promoPatchSchema = z
   .object({
     active: z.boolean().optional(),
     maxUses: z.number().int().min(1).nullable().optional(),
+    startsAt: z.string().datetime().nullable().optional(),
+    endsAt: z.string().datetime().nullable().optional(),
+    type: z.enum(['PERCENT', 'FIXED']).optional(),
+    value: z.number().int().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .refine((d) => d.type !== 'PERCENT' || d.value == null || d.value <= 10000, {
+    message: 'Percent cannot exceed 100%.',
+    path: ['value'],
+  })
+  .refine((d) => !d.startsAt || !d.endsAt || new Date(d.startsAt) < new Date(d.endsAt), {
+    message: 'End must be after the start.',
+    path: ['endsAt'],
+  });
 
 export const locationCreateSchema = z.object({
   code: z

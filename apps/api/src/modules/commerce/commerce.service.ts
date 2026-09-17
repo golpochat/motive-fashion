@@ -6,7 +6,7 @@ import {
   IE_COUNTIES,
   RETURN_POSTAGE_NOTICE,
 } from '@motive-fashion/config';
-import { promoDiscountCents, quoteShippingCents, splitVatInclusive } from '@motive-fashion/utils';
+import { promoDiscountCents, promoRejectReason, quoteShippingCents, splitVatInclusive } from '@motive-fashion/utils';
 import type { CheckoutQuoteInput } from '@motive-fashion/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -24,6 +24,11 @@ export type PricedCart = {
   promoCodeId?: string;
   shippingCounty?: string;
 };
+
+/** Click & collect stays on the till (and WhatsApp). Website and app are delivery-only for now. */
+export function collectionAllowedOnChannel(channel: SalesChannel) {
+  return channel === SalesChannel.POS || channel === SalesChannel.WHATSAPP;
+}
 
 @Injectable()
 export class CommerceService {
@@ -131,20 +136,21 @@ export class CommerceService {
       }),
     ]);
     const card = payments.find((p) => p.code === 'CARD');
+    const publicFulfilment = fulfilment.filter((row) => row.code !== 'COLLECTION');
     const blocked =
-      fulfilment.length === 0
+      publicFulfilment.length === 0
         ? 'Checkout is unavailable: no fulfilment method is published.'
         : !card
           ? 'Checkout is unavailable: card payments are not published.'
           : null;
     const defaultFulfilment =
-      fulfilment.find((m) => m.isDefault)?.code ??
-      fulfilment.find((m) => m.code === 'DELIVERY')?.code ??
-      fulfilment[0]?.code ??
+      publicFulfilment.find((m) => m.isDefault)?.code ??
+      publicFulfilment.find((m) => m.code === 'DELIVERY')?.code ??
+      publicFulfilment[0]?.code ??
       'DELIVERY';
     return {
       blocked,
-      fulfilment,
+      fulfilment: publicFulfilment,
       payments,
       counties,
       defaultFulfilment,
@@ -164,6 +170,9 @@ export class CommerceService {
 
   async quote(input: CheckoutQuoteInput, userId?: string): Promise<PricedCart> {
     await this.ensureDefaults();
+    if (input.fulfillment === 'COLLECTION') {
+      throw new BadRequestException('Collection is not available on the website yet');
+    }
     const cart = await this.loadPricedCart(input.cartId, userId, input.sessionKey);
     return this.price(cart, input.fulfillment, input.county, input.promoCode);
   }
@@ -234,7 +243,10 @@ export class CommerceService {
 
   async assertFulfilment(code: 'DELIVERY' | 'COLLECTION', channel: SalesChannel) {
     await this.ensureDefaults();
-    if (channel === SalesChannel.POS || channel === SalesChannel.WHATSAPP) {
+    if (code === 'COLLECTION' && !collectionAllowedOnChannel(channel)) {
+      throw new BadRequestException('Collection is not available on the website yet');
+    }
+    if (collectionAllowedOnChannel(channel)) {
       return code;
     }
     const method = await this.prisma.fulfilmentMethodConfig.findUnique({ where: { code } });
@@ -317,15 +329,9 @@ export class CommerceService {
   private async resolvePromo(subtotalCents: number, code?: string) {
     if (!code?.trim()) return { id: undefined as string | undefined, discountCents: 0 };
     const promo = await this.prisma.promoCode.findUnique({ where: { code: code.trim().toUpperCase() } });
-    const now = new Date();
-    const valid =
-      promo?.active &&
-      (!promo.startsAt || promo.startsAt <= now) &&
-      (!promo.endsAt || promo.endsAt >= now) &&
-      (promo.maxUses == null || promo.usedCount < promo.maxUses);
-    if (!valid || !promo) {
-      throw new BadRequestException('Promo code is not valid');
-    }
+    if (!promo) throw new BadRequestException('Promo code is not valid');
+    const reason = promoRejectReason(promo);
+    if (reason) throw new BadRequestException(reason);
     return { id: promo.id, discountCents: promoDiscountCents(subtotalCents, promo.type, promo.value) };
   }
 

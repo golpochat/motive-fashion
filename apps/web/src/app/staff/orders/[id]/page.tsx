@@ -26,6 +26,7 @@ type StaffSaleDetail = {
   shippingCents: number;
   taxCents: number;
   totalCents: number;
+  refundedCents?: number;
   cashierName?: string | null;
   items: {
     title: string;
@@ -77,7 +78,20 @@ export default function StaffOrderDetail() {
         }
       />
       <div className="mb-6">
-        <StaffOrderActions orderId={order.id} email={order.email} />
+        <StaffOrderActions
+          orderId={order.id}
+          email={order.email}
+          paymentMethod={order.paymentMethod}
+          remainingCents={order.totalCents - (order.refundedCents ?? 0)}
+          onDone={() => {
+            fetch(`${API}/staff/orders/${order.id}`, { credentials: 'include' })
+              .then(async (res) => {
+                if (!res.ok) return;
+                setOrder((await res.json()) as StaffSaleDetail);
+              })
+              .catch(() => undefined);
+          }}
+        />
       </div>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Panel title="Customer">

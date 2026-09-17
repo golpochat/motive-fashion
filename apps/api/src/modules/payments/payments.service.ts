@@ -138,17 +138,14 @@ export class PaymentsService {
   }
 
   async handleStripeWebhook(rawBody: Buffer, signature: string | undefined) {
-    if (!this.stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!secret) {
       if (process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException('Stripe webhook is not configured');
       }
       return { ignored: true };
     }
-    const event = this.stripe.webhooks.constructEvent(
-      rawBody,
-      signature ?? '',
-      process.env.STRIPE_WEBHOOK_SECRET,
-    );
+    const event = Stripe.webhooks.constructEvent(rawBody, signature ?? '', secret);
     const seen = await this.prisma.webhookEvent.findUnique({
       where: { provider_eventId: { provider: 'stripe', eventId: event.id } },
     });

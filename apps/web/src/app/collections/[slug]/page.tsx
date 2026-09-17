@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { CatalogEmpty, CatalogError, ProductGrid } from '@/components/catalog-state';
 import { HERO_IMAGE_SIZES, StorefrontImage } from '@/components/storefront-image';
-import { loadCatalog, type Collection } from '@/lib/catalog';
+import { loadCatalog, loadCatalogPage, type Collection } from '@/lib/catalog';
 import { pageMeta } from '@/lib/page-meta';
-import type { ProductCard } from '@/lib/api';
+import { ShareButton } from '@/components/share-button';
 
 const BANNERS: Record<string, { src: string; alt: string; blurb: string }> = {
   eid: {
@@ -34,6 +34,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return pageMeta(
     name,
     collection?.description || `The ${name} collection from Motive Fashion, Dublin. VAT included.`,
+    BANNERS[slug]?.src,
   );
 }
 
@@ -41,7 +42,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
   const { slug } = await params;
   const [collectionsResult, productsResult] = await Promise.all([
     loadCatalog<Collection[]>('/catalog/collections'),
-    loadCatalog<ProductCard[]>(`/catalog/products?collection=${encodeURIComponent(slug)}`),
+    loadCatalogPage(`/catalog/products?collection=${encodeURIComponent(slug)}`),
   ]);
 
   if (collectionsResult.ok && !collectionsResult.data.some((row) => row.slug === slug)) {
@@ -65,19 +66,25 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
             <h1 className="font-serif text-4xl text-cream">{title}</h1>
             {blurb ? <p className="mt-2 max-w-lg text-sm text-cream/85">{blurb}</p> : null}
           </div>
+          <div className="absolute right-4 top-4">
+            <ShareButton title={title} path={`/collections/${slug}`} text={blurb} image={banner.src} />
+          </div>
         </section>
       ) : (
-        <div className="mb-8">
-          <h1 className="font-serif text-4xl">{title}</h1>
-          {blurb ? <p className="mt-2 max-w-lg text-sm text-ink/70">{blurb}</p> : null}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-4xl">{title}</h1>
+            {blurb ? <p className="mt-2 max-w-lg text-sm text-ink/70">{blurb}</p> : null}
+          </div>
+          <ShareButton title={title} path={`/collections/${slug}`} text={blurb} />
         </div>
       )}
       {!productsResult.ok ? (
         <CatalogError />
-      ) : productsResult.data.length === 0 ? (
+      ) : productsResult.data.items.length === 0 ? (
         <CatalogEmpty title={`Nothing in ${title} yet`} body="This collection has no published pieces right now." />
       ) : (
-        <ProductGrid products={productsResult.data} />
+        <ProductGrid products={productsResult.data.items} />
       )}
     </div>
   );

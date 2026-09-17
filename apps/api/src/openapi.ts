@@ -70,6 +70,13 @@ export const openapiSpec = {
         responses: { '200': { description: 'Ready' }, '503': { description: 'Dependency down' } },
       },
     },
+    '/health/metrics': {
+      get: {
+        tags: ['Health'],
+        summary: 'Process uptime and memory (JSON)',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
     '/openapi.json': {
       get: { tags: ['Health'], summary: 'OpenAPI document', responses: { '200': { description: 'OK' } } },
     },
@@ -114,6 +121,8 @@ export const openapiSpec = {
           { name: 'q', in: 'query', schema: { type: 'string' } },
           { name: 'occasion', in: 'query', schema: { type: 'string' } },
           { name: 'sku', in: 'query', schema: { type: 'string' } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer' } },
         ],
         responses: { '200': { description: 'OK' } },
       },
@@ -304,9 +313,82 @@ export const openapiSpec = {
       },
     },
     '/account/orders': { get: { tags: ['Account'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'My orders', responses: { '200': { description: 'OK' } } } },
+    '/account/orders/{id}': {
+      get: {
+        tags: ['Account'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'One of my orders',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+      },
+    },
     '/account/wishlist': { get: { tags: ['Account'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Wishlist', responses: { '200': { description: 'OK' } } } },
     '/account/gdpr-export': { get: { tags: ['Account'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'DSR export', responses: { '200': { description: 'OK' } } } },
     '/account/gdpr-delete': { post: { tags: ['Account'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'DSR delete', responses: { '200': { description: 'OK' } } } },
+    '/account/reviews/eligibility': {
+      get: {
+        tags: ['Account'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Whether this account can review a product after delivery or collection',
+        parameters: [{ name: 'productId', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { '200': { description: 'OK' }, '400': { description: 'Invalid product' }, '401': { description: 'Unauthorized' } },
+      },
+    },
+    '/account/reviews': {
+      post: {
+        tags: ['Account'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Submit a product review after delivery or collection',
+        responses: { '200': { description: 'Pending moderation' }, '400': { description: 'Not eligible' } },
+      },
+    },
+    '/account/push-tokens': {
+      post: {
+        tags: ['Account'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Register an Expo push token',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/consent': {
+      post: {
+        tags: ['Account'],
+        summary: 'Record cookie consent choice and policy version',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/returns': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Request a return with tracking token or owner JWT',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not eligible' } },
+      },
+    },
+    '/admin/returns': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List returns', responses: { '200': { description: 'OK' } } } },
+    '/admin/reviews': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Moderate reviews', responses: { '200': { description: 'OK' } } } },
+    '/admin/promo-codes': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'List coupon codes with schedule and use cap',
+        responses: { '200': { description: 'OK' } },
+      },
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Create a coupon (PERCENT is basis points; FIXED is EUR cents)',
+        responses: { '200': { description: 'Created' }, '400': { description: 'Invalid or duplicate code' } },
+      },
+    },
+    '/admin/promo-codes/{id}': {
+      patch: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Update coupon schedule, cap, type, or on/off',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Invalid' } },
+      },
+    },
+    '/admin/audit': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Audit log', responses: { '200': { description: 'OK' } } } },
     '/stock/suggestions': {
       get: {
         tags: ['Stock'],
@@ -317,6 +399,7 @@ export const openapiSpec = {
     },
     '/stock/adjust': { post: { tags: ['Stock'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Adjust on-hand', responses: { '200': { description: 'OK' } } } },
     '/stock/transfer': { post: { tags: ['Stock'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Transfer between locations', responses: { '200': { description: 'OK' } } } },
+    '/stock/bin': { post: { tags: ['Stock'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Set warehouse bin code on an inventory level', responses: { '200': { description: 'OK' } } } },
     '/admin/procurement/suppliers': {
       get: {
         tags: ['Admin'],
@@ -473,12 +556,47 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' } },
       },
     },
+    '/staff/orders/{id}/refund': {
+      post: {
+        tags: ['POS'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Refund a till sale — cash drawer or Stripe card',
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not refundable' } },
+      },
+    },
     '/admin/analytics': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Dashboard stats', responses: { '200': { description: 'OK' } } } },
     '/admin/products': {
       get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List products', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Create product', responses: { '200': { description: 'OK' } } },
     },
     '/admin/orders': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List all-channel orders including till sales', responses: { '200': { description: 'OK' } } } },
+    '/admin/orders/{id}/pack': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Pick list for pack station (SKU, barcode, warehouse bin)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+      },
+    },
+    '/admin/refunds': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'List cash drawer and Stripe card refunds',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/admin/orders/{id}/refund': {
+      post: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Refund cash in-store or card via Stripe',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { '200': { description: 'OK' }, '400': { description: 'Not refundable' } },
+      },
+    },
     '/admin/orders/{id}/status': {
       post: {
         tags: ['Admin'],

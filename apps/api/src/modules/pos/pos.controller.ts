@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Inject, Param, Post, Req, UnauthorizedE
 import { Request } from 'express';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { SquarePosAdapter } from './square.adapter';
-import { posEmailSchema, posPrintSchema, posQuoteSchema, posSaleSchema } from '@motive-fashion/validation';
+import { posEmailSchema, posPrintSchema, posQuoteSchema, posSaleSchema, refundSchema } from '@motive-fashion/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isProduction } from '../../common/security-config';
 import { requestRawBody, squareSignatureValid } from '../../common/webhook-signature';
@@ -64,6 +64,18 @@ export class PosController {
   ) {
     const dto = posEmailSchema.parse(body ?? {});
     return this.square.emailTillOrder(id, user.sub, dto.email, canSeeAllTills(user));
+  }
+
+  @Post('staff/orders/:id/refund')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('pos.sale')
+  refundMine(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: { sub: string; permissions?: string[]; role?: string },
+  ) {
+    const dto = refundSchema.parse(body);
+    return this.square.refundTillOrder(id, user.sub, dto.amountCents, dto.reason, canSeeAllTills(user));
   }
 
   @Post('webhooks/square')

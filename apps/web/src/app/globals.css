@@ -76,3 +76,10 @@ a {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--mf-accent) / 0.35) transparent;
 }
+
+@media print {
+  .label-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

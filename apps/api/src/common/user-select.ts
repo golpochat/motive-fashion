@@ -22,4 +22,6 @@ export const gdprUserSelect = {
   addresses: true,
   orders: { include: { items: true } },
   wishlist: true,
+  reviews: true,
+  consents: true,
 } as const;

@@ -1,13 +1,26 @@
 import { randomUUID } from 'crypto';
 import type { NextFunction, Request, Response } from 'express';
+import { redisFailClosed, redisIncrWindow } from './redis';
+import { requestContext } from './log';
 
 const buckets = new Map<string, { count: number; resetAt: number }>();
+
+function memoryHit(key: string, max: number, windowMs: number) {
+  const now = Date.now();
+  const current = buckets.get(key);
+  if (!current || current.resetAt < now) {
+    buckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  current.count += 1;
+  return current.count <= max;
+}
 
 export function requestIdMiddleware(req: Request, res: Response, next: NextFunction) {
   const id = String(req.headers['x-request-id'] ?? randomUUID());
   req.headers['x-request-id'] = id;
   res.setHeader('x-request-id', id);
-  next();
+  requestContext.run({ requestId: id }, () => next());
 }
 
 export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
@@ -23,21 +36,36 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
 }
 
 export function rateLimit(max: number, windowMs: number) {
+  const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
   return (req: Request, res: Response, next: NextFunction) => {
-    const now = Date.now();
-    const key = `${req.ip}:${req.method}:${req.path}`;
-    const current = buckets.get(key);
-    if (!current || current.resetAt < now) {
-      buckets.set(key, { count: 1, resetAt: now + windowMs });
-      next();
-      return;
-    }
-    current.count += 1;
-    if (current.count > max) {
-      res.status(429).json({ statusCode: 429, message: 'Too many requests' });
-      return;
-    }
-    next();
+    const key = `rl:${req.ip}:${req.method}:${req.path}`;
+    void redisIncrWindow(key, windowSec)
+      .then((count) => {
+        if (count == null) {
+          if (redisFailClosed()) {
+            res.status(503).json({ statusCode: 503, message: 'Rate limit unavailable' });
+            return;
+          }
+          if (!memoryHit(key, max, windowMs)) {
+            res.status(429).json({ statusCode: 429, message: 'Too many requests' });
+            return;
+          }
+          next();
+          return;
+        }
+        if (count > max) {
+          res.status(429).json({ statusCode: 429, message: 'Too many requests' });
+          return;
+        }
+        next();
+      })
+      .catch(() => {
+        if (redisFailClosed()) {
+          res.status(503).json({ statusCode: 503, message: 'Rate limit unavailable' });
+          return;
+        }
+        next();
+      });
   };
 }
 

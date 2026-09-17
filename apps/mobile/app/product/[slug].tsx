@@ -1,8 +1,12 @@
+import Constants from 'expo-constants';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Share, Text, View } from 'react-native';
 import { api } from '../../src/api';
 import { getCartId, getSessionKey, setCartId } from '../../src/session';
+
+const SITE =
+  (Constants.expoConfig?.extra?.siteUrl as string | undefined) ?? 'https://motivefashion.com';
 
 export default function Pdp() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -17,6 +21,7 @@ export default function Pdp() {
     }
   }, [slug]);
   if (!product) return <Text style={{ padding: 24 }}>Loading…</Text>;
+  const url = `${SITE.replace(/\/$/, '')}/product/${slug}`;
   return (
     <View style={{ padding: 24, gap: 12 }}>
       <Text style={{ fontSize: 28 }}>{product.title}</Text>
@@ -39,6 +44,18 @@ export default function Pdp() {
         style={{ backgroundColor: '#1c1917', padding: 14, borderRadius: 999 }}
       >
         <Text style={{ color: '#f5f0e8', textAlign: 'center' }}>Add to cart</Text>
+      </Pressable>
+      <Pressable
+        onPress={() =>
+          Share.share({
+            title: product.title,
+            message: `${product.title} from Motive Fashion\n${url}`,
+            url,
+          })
+        }
+        style={{ borderColor: '#1c1917', borderWidth: 1, padding: 14, borderRadius: 999 }}
+      >
+        <Text style={{ color: '#1c1917', textAlign: 'center' }}>Share</Text>
       </Pressable>
     </View>
   );

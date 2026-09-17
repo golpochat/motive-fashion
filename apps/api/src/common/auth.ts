@@ -12,6 +12,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
 import { RbacService } from '../modules/rbac/rbac.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { isStaffWorkspace, staffMfaRequired } from './security-config';
 
 export const ROLES_KEY = 'roles';
 export const PERMS_KEY = 'permissions';
@@ -50,6 +52,7 @@ export class PermissionsGuard implements CanActivate {
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(RbacService) private readonly rbac: RbacService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(ctx: ExecutionContext) {
@@ -62,6 +65,15 @@ export class PermissionsGuard implements CanActivate {
     const keys = await this.rbac.permissionsFor(req.user.sub);
     req.user.permissions = keys;
     if (!this.rbac.has(keys, needed)) throw new ForbiddenException();
+    if (staffMfaRequired() && isStaffWorkspace(keys)) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: req.user.sub },
+        select: { mfaEnabled: true },
+      });
+      if (!user?.mfaEnabled) {
+        throw new ForbiddenException('Authenticator is required for this workspace');
+      }
+    }
     return true;
   }
 }

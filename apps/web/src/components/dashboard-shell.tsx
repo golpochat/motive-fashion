@@ -80,31 +80,38 @@ export function DashboardShell({
   const till = isTillPath(pathname);
 
   return (
-    <div data-theme={workspace} className="flex h-dvh overflow-hidden bg-surface">
+    <div data-theme={workspace} className="flex h-dvh overflow-hidden bg-surface print:h-auto print:overflow-visible">
       {mobileOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-primary/40 transition-opacity duration-300 md:hidden"
+          className="fixed inset-0 z-30 bg-primary/40 transition-opacity duration-300 print:hidden md:hidden"
           aria-label="Close navigation"
           onClick={() => setMobileOpen(false)}
         />
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-fg transition-[transform,width] duration-300 ease-in-out md:relative md:inset-auto md:h-full md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${narrow ? 'md:w-16' : 'md:w-64'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-fg print:hidden transition-[transform,width] duration-300 ease-in-out md:relative md:inset-auto md:h-full md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${narrow ? 'md:w-16' : 'md:w-64'}`}
       >
         <div className={`flex shrink-0 items-center border-b border-sidebar-fg/10 ${narrow ? 'justify-center px-2 py-4' : 'gap-2.5 px-4 py-4'}`}>
-          <BrandMark className="h-8 w-8 shrink-0" />
-          {narrow ? (
-            <span className="sr-only">
-              {BRAND.name}, {ws.label}
-            </span>
-          ) : (
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium tracking-[0.02em]">{BRAND.name}</span>
-              <span className="mt-0.5 block truncate text-[11px] font-medium text-accent">{ws.label}</span>
-            </span>
-          )}
+          <Link
+            href="/"
+            className={`flex min-w-0 items-center text-sidebar-fg no-underline ${narrow ? 'justify-center' : 'gap-2.5'}`}
+            aria-label={`${BRAND.name} storefront`}
+            title={`${BRAND.name} storefront`}
+          >
+            <BrandMark className="h-8 w-8 shrink-0" />
+            {narrow ? (
+              <span className="sr-only">
+                {BRAND.name} storefront
+              </span>
+            ) : (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium tracking-[0.02em]">{BRAND.name}</span>
+                <span className="mt-0.5 block truncate text-[11px] font-medium text-accent">{ws.label}</span>
+              </span>
+            )}
+          </Link>
         </div>
 
         <nav className="sidebar-nav min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2">
@@ -166,8 +173,8 @@ export function DashboardShell({
         </nav>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-3 py-3 md:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col print:overflow-visible">
+        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-3 py-3 print:hidden md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -187,17 +194,21 @@ export function DashboardShell({
           </div>
           <ProfileMenu variant="console" currentWorkspace={workspace} />
         </header>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden print:h-auto print:overflow-visible">
           <div
             className={
               till
                 ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-3 md:p-4'
-                : 'flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 md:px-8'
+                : 'flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 print:overflow-visible md:px-8'
             }
           >
             {children}
           </div>
-          {till ? null : <ConsoleFooter />}
+          {till ? null : (
+            <div className="print:hidden">
+              <ConsoleFooter />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -48,6 +48,7 @@ export default function SuperAdminHome() {
           <DashCard href="/super-admin/users" icon="users" label="Users" body="Search people and assign roles from a modal." />
           <DashCard href="/super-admin/roles" icon="roles" label="Roles" body="Create and edit roles, including which permissions they grant." />
           <DashCard href="/super-admin/permissions" icon="permissions" label="Permissions" body="Rename, group, and add keys. Built-in keys stay in the product." />
+          <DashCard href="/super-admin/audit" icon="permissions" label="Audit" body="Search recent admin writes: roles, catalog, orders, stock." />
         </div>
       </ConsoleSection>
     </div>

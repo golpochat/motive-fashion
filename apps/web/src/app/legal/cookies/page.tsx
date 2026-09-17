@@ -16,7 +16,8 @@ export default function CookiesPage() {
       </p>
       <p className="text-ink/70">
         On the banner you can Accept optional cookies, keep Essential only, or Reject optional cookies. Analytics and
-        marketing cookies stay off unless you accept them. Rejecting non-essential cookies does not stop checkout.
+        marketing cookies stay off unless you accept them. Rejecting non-essential cookies does not stop checkout. When
+        this policy version changes, the banner is shown again.
       </p>
       <p className="text-ink/70">
         See <a href="/legal/privacy">Privacy</a> for what we store on the server.

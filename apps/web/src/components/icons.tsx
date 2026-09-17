@@ -14,6 +14,7 @@ export type IconName =
   | 'suppliers'
   | 'procurement'
   | 'marketing'
+  | 'coupon'
   | 'whatsapp'
   | 'wishlist'
   | 'profile'
@@ -25,7 +26,10 @@ export type IconName =
   | 'close'
   | 'chevronRight'
   | 'eye'
-  | 'eyeOff';
+  | 'eyeOff'
+  | 'share'
+  | 'copy'
+  | 'mail';
 
 const stroke = {
   fill: 'none',
@@ -144,6 +148,15 @@ const paths = {
       <path d="M6.6 14.2 8 19h2.2l-1.2-4.2" />
     </>
   ),
+  coupon: (
+    <>
+      <path d="M4.5 8.2v7.6A1.5 1.5 0 0 0 6 17.3h12a1.5 1.5 0 0 0 1.5-1.5V8.2A1.5 1.5 0 0 0 18 6.7H6A1.5 1.5 0 0 0 4.5 8.2Z" />
+      <path d="M4.5 12H6.2a1.4 1.4 0 0 1 0 2.8H4.5M19.5 12h-1.7a1.4 1.4 0 0 0 0 2.8h1.7" />
+      <path d="m14.4 9.2-4.8 5.6" />
+      <circle cx="10" cy="10.2" r="0.7" />
+      <circle cx="14" cy="13.8" r="0.7" />
+    </>
+  ),
   whatsapp: (
     <>
       <path d="M5 19.5 6.2 16A8 8 0 1 1 12 20a8 8 0 0 1-3.3-.7Z" />
@@ -206,6 +219,26 @@ const paths = {
       <path d="M9.9 6C10.6 5.7 11.3 5.5 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-3.3 3.8" />
       <path d="M6.2 6.9C4.2 8.3 2.5 10.4 2.5 12S6 17.5 12 17.5c1.2 0 2.3-.2 3.3-.6" />
       <path d="M10.2 10.4a2.6 2.6 0 0 0 3.4 3.4" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5.2" r="2.2" />
+      <circle cx="6" cy="12" r="2.2" />
+      <circle cx="18" cy="18.8" r="2.2" />
+      <path d="M8.1 10.9 15.9 6.4M8.1 13.1 15.9 17.6" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="1.5" />
+      <path d="M15.5 8.5V6.5A1.5 1.5 0 0 0 14 5H6.5A1.5 1.5 0 0 0 5 6.5V14a1.5 1.5 0 0 0 1.5 1.5H8.5" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="1.5" />
+      <path d="M4 7.2 12 13l8-5.8" />
     </>
   ),
 } satisfies Record<IconName, unknown>;

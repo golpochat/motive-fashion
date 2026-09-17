@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAll, isLockedPermission, slugifyRole } from '../src/modules/rbac/permissions';
+import { hasAll, isLockedPermission, ROLE_PERMISSIONS, slugifyRole } from '../src/modules/rbac/permissions';
 
 describe('RBAC hasAll', () => {
   it('lets * satisfy any required keys', () => {
@@ -10,6 +10,14 @@ describe('RBAC hasAll', () => {
     expect(hasAll(['dashboard.staff', 'pos.sale'], ['pos.sale'])).toBe(true);
     expect(hasAll(['dashboard.staff'], ['pos.sale'])).toBe(false);
     expect(hasAll(['pos.sale'], ['pos.sale', 'orders.pack'])).toBe(false);
+  });
+});
+
+describe('system roles', () => {
+  it('keeps the till on admin without opening the staff workspace', () => {
+    expect(ROLE_PERMISSIONS.admin).toContain('pos.sale');
+    expect(ROLE_PERMISSIONS.admin).not.toContain('dashboard.staff');
+    expect(ROLE_PERMISSIONS.staff).toContain('dashboard.staff');
   });
 });
 

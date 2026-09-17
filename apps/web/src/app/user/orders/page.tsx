@@ -1,14 +1,25 @@
 'use client';
 
 import Link from 'next/link';
+import { CHANNEL_LABEL, ORDER_STATUS_LABEL, type SalesChannel } from '@motive-fashion/config';
+import { formatEur } from '@motive-fashion/utils';
 import { useConsoleQuery } from '@/lib/console-query';
+import { orderItemsLabel, orderRef, orderWhen } from '@/lib/order-display';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
+import { DataTable, Td } from '@/components/dashboard-ui';
 
-type OrderRow = { id: string; status: string; trackingToken?: string; channel?: string };
+export type AccountOrderRow = {
+  id: string;
+  status: string;
+  channel: SalesChannel;
+  fulfillment: string;
+  totalCents: number;
+  createdAt: string;
+  items: { title: string; quantity: number }[];
+};
 
 export default function UserOrders() {
-  const { data, error, loading, reload } = useConsoleQuery<OrderRow[]>(
+  const { data, error, loading, reload } = useConsoleQuery<AccountOrderRow[]>(
     '/account/orders',
     'Could not load your orders',
   );
@@ -25,19 +36,28 @@ export default function UserOrders() {
         emptyTitle="No orders yet"
         emptyBody="When you check out, they will appear here."
       >
-        <ul className="divide-y divide-ink/10 rounded-2xl border border-ink/10 bg-white">
-          {orders.map((o) => (
-            <li key={o.id} className="flex min-h-11 items-center justify-between px-5 py-3 text-sm">
-              <Link href={`/order/${o.id}${o.trackingToken ? `?token=${o.trackingToken}` : ''}`}>
-                {o.id.slice(0, 8)}
-              </Link>
-              <span className="text-ink/50">
-                {o.channel ? `${o.channel} · ` : ''}
-                {ORDER_STATUS_LABEL[o.status] ?? o.status}
-              </span>
-            </li>
+        <DataTable headers={['Order', 'Placed', 'Items', 'Fulfilment', 'Status', 'Total', '']}>
+          {orders.map((order) => (
+            <tr key={order.id} className="hover:bg-ink/[0.02]">
+              <Td>
+                <Link href={`/user/orders/${order.id}`} className="font-mono text-xs no-underline">
+                  {orderRef(order.id)}
+                </Link>
+                <span className="mt-1 block text-xs text-ink/45">{CHANNEL_LABEL[order.channel] ?? order.channel}</span>
+              </Td>
+              <Td muted>{orderWhen(order.createdAt)}</Td>
+              <Td>{orderItemsLabel(order.items)}</Td>
+              <Td muted>{order.fulfillment === 'COLLECTION' ? 'Collection' : 'Delivery'}</Td>
+              <Td>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Td>
+              <Td>{formatEur(order.totalCents)}</Td>
+              <Td>
+                <Link href={`/user/orders/${order.id}`} className="text-sm no-underline">
+                  View
+                </Link>
+              </Td>
+            </tr>
           ))}
-        </ul>
+        </DataTable>
       </ConsoleSection>
     </div>
   );

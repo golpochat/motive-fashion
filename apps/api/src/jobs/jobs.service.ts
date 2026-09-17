@@ -3,6 +3,7 @@ import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { CartService } from '../modules/cart/cart.service';
 import { StockService } from '../modules/inventory/stock.service';
+import { fireAlert } from '../common/alerts';
 
 function connection() {
   return new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
@@ -53,7 +54,9 @@ export class JobsService implements OnModuleDestroy {
       },
     );
     this.worker.on('failed', (job, err) => {
-      this.log.error(`Job ${job?.name} failed: ${err.message}`);
+      const name = job?.name ?? 'unknown';
+      this.log.error(`Job ${name} failed: ${err.message}`);
+      void fireAlert(`Motive Fashion job failed: ${name}`, err.message);
     });
     await this.scheduleRepeating();
     this.log.log('Motive Fashion worker running');

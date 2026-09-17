@@ -87,6 +87,12 @@ enum ReturnStatus {
   REJECTED
 }
 
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum WhatsappSessionState {
   WELCOME
   BROWSE
@@ -143,6 +149,7 @@ model User {
   returns         Return[]
   pushTokens      PushToken[]
   memberships     UserMembership[]
+  consents        CookieConsent[]
 }
 
 model Permission {
@@ -318,7 +325,7 @@ model ProductVariant {
   productId      String
   product        Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   sku            String           @unique
-  barcode        String?
+  barcode        String?          @unique
   size           String
   color          String
   fabric         String?
@@ -357,8 +364,10 @@ model InventoryLevel {
   onHand       Int            @default(0)
   reserved     Int            @default(0)
   reorderPoint Int            @default(5)
+  binCode      String?
 
   @@unique([variantId, locationId])
+  @@index([binCode])
 }
 
 model StockMovement {
@@ -526,16 +535,30 @@ model ReturnItem {
 }
 
 model Review {
-  id        String   @id @default(uuid())
+  id        String       @id @default(uuid())
   productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
   rating    Int
   body      String
-  createdAt DateTime @default(now())
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
 
   @@unique([productId, userId])
+}
+
+model CookieConsent {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionKey  String?
+  version     String
+  choice      String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([sessionKey])
 }
 
 model WishlistItem {
@@ -683,6 +706,7 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
+  @@index([createdAt])
 }
 
 model WebhookEvent {

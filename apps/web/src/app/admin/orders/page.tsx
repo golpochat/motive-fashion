@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import {
@@ -18,6 +19,7 @@ import {
   ORDER_ACTION_LABEL,
   ORDER_STATUS_LABEL,
   SHIP_CARRIERS,
+  carrierBookUrl,
   nextOrderStatus,
   type SalesChannel,
 } from '@motive-fashion/config';
@@ -44,6 +46,7 @@ type AdminOrder = {
 export default function AdminOrders() {
   const { me } = useSession();
   const canRefund = hasPerm(me, 'orders.refund');
+  const canPack = hasPerm(me, 'orders.pack');
   const [rows, setRows] = useState<AdminOrder[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -133,7 +136,7 @@ export default function AdminOrders() {
     <div>
       <PageHeader
         title="Orders"
-        description="Every paid web, till, WhatsApp, and app order — including sales taken by any staff member. Use Staff till to see cashiers only."
+        description="Every paid web, till, WhatsApp, and app order. Pack delivery and collection from the pack station so the wrong SKU never leaves."
       />
       {error && rows.length ? (
         <p className="mb-4 text-sm text-red-700" role="alert">
@@ -231,6 +234,11 @@ export default function AdminOrders() {
                           autoComplete="off"
                         />
                       </Field>
+                      {carrierBookUrl(carrier) ? (
+                        <a href={carrierBookUrl(carrier) ?? undefined} className="text-xs" rel="noreferrer" target="_blank">
+                          Open {SHIP_CARRIERS.find((row) => row.code === carrier)?.name} booking
+                        </a>
+                      ) : null}
                       <div className="flex gap-2">
                         <PrimaryButton
                           type="button"
@@ -246,6 +254,11 @@ export default function AdminOrders() {
                     </div>
                   ) : refunding ? (
                     <div className="flex min-w-[16rem] flex-col gap-2 py-2">
+                      <p className="text-xs text-ink/55">
+                        {order.paymentMethod === 'CASH'
+                          ? 'Cash — hand this amount back. It will appear under Refunds, not in Stripe.'
+                          : 'Card — Stripe will refund this amount to the original card.'}
+                      </p>
                       <Field label="Amount EUR">
                         <input
                           className={fieldClass}
@@ -267,7 +280,7 @@ export default function AdminOrders() {
                           disabled={busyId === order.id || refundReason.trim().length < 3}
                           onClick={() => void refund(order)}
                         >
-                          Refund
+                          {order.paymentMethod === 'CASH' ? 'Refund cash' : 'Refund card'}
                         </PrimaryButton>
                         <SecondaryButton type="button" onClick={() => setRefundId('')}>
                           Cancel
@@ -276,7 +289,14 @@ export default function AdminOrders() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-start gap-2">
-                      {next ? (
+                      {canPack && (next === 'PACKING' || order.status === 'PACKING') ? (
+                        <Link
+                          href={`/admin/pack/${order.id}`}
+                          className="inline-flex min-h-11 items-center rounded-lg border border-ink/15 px-3 py-2.5 text-sm no-underline hover:border-ink/40"
+                        >
+                          Pack station
+                        </Link>
+                      ) : next ? (
                         next === 'SHIPPED' ? (
                           <SecondaryButton type="button" onClick={() => setShipId(order.id)}>
                             Mark shipped

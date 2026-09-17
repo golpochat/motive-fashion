@@ -37,10 +37,10 @@ function unfilter(data: Buffer, width: number, height: number, bpp: number) {
   for (let y = 0; y < height; y++) {
     const filter = data[src++];
     for (let x = 0; x < stride; x++) {
-      const raw = data[src++];
-      const a = x >= bpp ? out[dst + x - bpp] : 0;
-      const b = y > 0 ? out[dst + x - stride] : 0;
-      const c = y > 0 && x >= bpp ? out[dst + x - stride - bpp] : 0;
+      const raw = data[src++] ?? 0;
+      const a = x >= bpp ? (out[dst + x - bpp] ?? 0) : 0;
+      const b = y > 0 ? (out[dst + x - stride] ?? 0) : 0;
+      const c = y > 0 && x >= bpp ? (out[dst + x - stride - bpp] ?? 0) : 0;
       let val = raw;
       if (filter === 1) val = (raw + a) & 255;
       else if (filter === 2) val = (raw + b) & 255;
@@ -55,12 +55,12 @@ function unfilter(data: Buffer, width: number, height: number, bpp: number) {
 
 function lumaAt(pixels: Buffer, i: number, bpp: number, palette?: Buffer) {
   if (bpp === 1 && palette) {
-    const idx = pixels[i] * 3;
-    return (palette[idx] + palette[idx + 1] + palette[idx + 2]) / 3;
+    const idx = (pixels[i] ?? 0) * 3;
+    return ((palette[idx] ?? 0) + (palette[idx + 1] ?? 0) + (palette[idx + 2] ?? 0)) / 3;
   }
-  if (bpp === 1) return pixels[i];
-  if (bpp === 2) return pixels[i];
-  return (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+  if (bpp === 1) return pixels[i] ?? 0;
+  if (bpp === 2) return pixels[i] ?? 0;
+  return ((pixels[i] ?? 0) + (pixels[i + 1] ?? 0) + (pixels[i + 2] ?? 0)) / 3;
 }
 
 function toMono(pixels: Buffer, width: number, height: number, bpp: number, palette?: Buffer) {
@@ -80,7 +80,7 @@ function scale(src: Uint8Array, sw: number, sh: number, dw: number, dh: number) 
     const sy = Math.min(sh - 1, Math.floor((y * sh) / dh));
     for (let x = 0; x < dw; x++) {
       const sx = Math.min(sw - 1, Math.floor((x * sw) / dw));
-      out[y * dw + x] = src[sy * sw + sx];
+      out[y * dw + x] = src[sy * sw + sx] ?? 0;
     }
   }
   return out;
@@ -91,7 +91,10 @@ function packBits(bits: Uint8Array, width: number, height: number) {
   const out = Buffer.alloc(rowBytes * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (bits[y * width + x]) out[y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7);
+      if (bits[y * width + x]) {
+        const at = y * rowBytes + (x >> 3);
+        out[at] = (out[at] ?? 0) | (0x80 >> (x & 7));
+      }
     }
   }
   return { bytes: out, rowBytes };

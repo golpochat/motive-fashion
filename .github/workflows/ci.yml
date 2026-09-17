@@ -8,6 +8,35 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: motive
+          POSTGRES_PASSWORD: motive
+          POSTGRES_DB: motive_fashion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U motive -d motive_fashion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://motive:motive@localhost:5432/motive_fashion?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-jwt-secret-not-a-placeholder-value
+      STRIPE_WEBHOOK_SECRET: whsec_ci_smoke
+      ALLOW_MOCK_PAYMENTS: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,6 +52,8 @@ jobs:
         working-directory: .
       - run: pnpm --filter "./packages/*" typecheck
       - run: pnpm --filter @motive-fashion/api typecheck
+      - run: pnpm --filter @motive-fashion/api exec prisma migrate deploy
+      - run: pnpm --filter @motive-fashion/api prisma:seed
       - run: pnpm --filter @motive-fashion/api test
       - run: pnpm --filter @motive-fashion/web typecheck
       - run: pnpm --filter @motive-fashion/mobile typecheck

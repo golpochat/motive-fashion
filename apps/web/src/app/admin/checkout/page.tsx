@@ -70,7 +70,7 @@ export default function AdminCheckout() {
     <div className="space-y-8">
       <PageHeader
         title="Checkout"
-        description="Publish fulfilment and card for the website. Cash stays on the till. County rates are VAT-inc and locked onto the order at pay."
+        description="Ireland delivery is the website checkout. Collect in Dublin stays on the till. Cash stays on the till. County rates are VAT-inc and locked onto the order at pay."
       />
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
@@ -105,6 +105,9 @@ export default function AdminCheckout() {
                   <td className="py-3">
                     {row.name}
                     <span className="ml-2 text-xs text-ink/45">{row.code}</span>
+                    {row.code === 'COLLECTION' ? (
+                      <span className="mt-1 block text-xs text-ink/45">Till and WhatsApp only. Not offered on the website yet.</span>
+                    ) : null}
                   </td>
                   <td>
                     <input

@@ -74,7 +74,7 @@ export default function CheckoutPage() {
       .then((r) => r.json() as Promise<Options>)
       .then((data) => {
         setOptions(data);
-        setFulfillment(data.defaultFulfilment);
+        setFulfillment(data.defaultFulfilment === 'COLLECTION' ? 'DELIVERY' : data.defaultFulfilment);
       })
       .catch(() => setError('Could not load checkout options'));
   }, []);
@@ -131,7 +131,8 @@ export default function CheckoutPage() {
   }, [cart?.id, cart?.subtotalCents, fulfillment, quoteCounty, promo, options]);
 
   const deliveryOn = options?.fulfilment.some((m) => m.code === 'DELIVERY') ?? false;
-  const showFulfilmentChoice = (options?.fulfilment.length ?? 0) > 1;
+  const publicFulfilment = (options?.fulfilment ?? []).filter((m) => m.code !== 'COLLECTION');
+  const showFulfilmentChoice = publicFulfilment.length > 1;
   const showAddress = fulfillment === 'DELIVERY' && deliveryOn;
   const cardOk = options?.payments.some((p) => p.code === 'CARD');
   const deliveryMethod = options?.fulfilment.find((m) => m.code === 'DELIVERY');
@@ -168,10 +169,11 @@ export default function CheckoutPage() {
     }
     setPaying(true);
     setError('');
+    const method = fulfillment === 'COLLECTION' ? 'DELIVERY' : fulfillment;
     const payload: Record<string, unknown> = {
       cartId: cart.id,
       sessionKey: cartSessionKey(),
-      fulfillment,
+      fulfillment: method,
       email: me?.email ?? String(form.get('email')),
       name: me?.name ?? String(form.get('name')),
       phone: String(form.get('phone') || '') || undefined,
@@ -180,7 +182,7 @@ export default function CheckoutPage() {
       paymentMethod: 'CARD',
       returnPolicyAck: true,
     };
-    if (fulfillment === 'DELIVERY') {
+    if (method === 'DELIVERY') {
       if (!usingNewAddress && addressId) {
         payload.addressId = addressId;
         payload.county = quoteCounty;
@@ -298,7 +300,7 @@ export default function CheckoutPage() {
             <h2 className="font-serif text-2xl">Fulfilment</h2>
             {showFulfilmentChoice ? (
               <fieldset className="flex flex-col gap-2">
-                {options.fulfilment.map((method) => (
+                {publicFulfilment.map((method) => (
                   <label key={method.id} className="flex min-h-11 items-center gap-2 text-sm">
                     <input
                       type="radio"
@@ -311,7 +313,9 @@ export default function CheckoutPage() {
                 ))}
               </fieldset>
             ) : (
-              <p className="text-sm text-ink/70">{options.fulfilment[0]?.name}</p>
+              <p className="text-sm text-ink/70">
+                {options.fulfilment.find((method) => method.code === 'DELIVERY')?.name ?? 'Ireland delivery'}
+              </p>
             )}
           </section>
         ) : null}

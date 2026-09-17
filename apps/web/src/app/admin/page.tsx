@@ -81,8 +81,11 @@ export default function AdminHome() {
               <Link href="/admin/checkout" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
                 Checkout
               </Link>
-              <Link href="/staff" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Staff
+              <Link href="/admin/coupons" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
+                Coupons
+              </Link>
+              <Link href="/admin/pos" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
+                POS
               </Link>
             </div>
           </>

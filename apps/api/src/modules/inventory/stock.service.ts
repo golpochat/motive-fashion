@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Prisma, SalesChannel, StockMovementType } from '../../../generated/prisma';
 import { PrismaService } from '../../prisma/prisma.service';
-import { availableStock } from '@motive-fashion/utils';
+import { availableStock, normalizeBinCode } from '@motive-fashion/utils';
 import { writeAudit } from '../../common/audit';
 
 const DEFAULT_LOCATION = 'warehouse';
@@ -267,6 +267,36 @@ export class StockService {
         meta: { toLocationId: params.toLocationId, quantity: params.quantity },
       });
     });
+  }
+
+  async setBin(params: {
+    variantId: string;
+    locationId: string;
+    binCode?: string | null;
+    actorId?: string;
+  }) {
+    const binCode = normalizeBinCode(params.binCode);
+    try {
+      const updated = await this.prisma.inventoryLevel.update({
+        where: {
+          variantId_locationId: { variantId: params.variantId, locationId: params.locationId },
+        },
+        data: { binCode },
+      });
+      await writeAudit(this.prisma, {
+        actorId: params.actorId,
+        action: 'inventory.bin',
+        entity: 'InventoryLevel',
+        entityId: updated.id,
+        meta: { binCode },
+      });
+      return updated;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new BadRequestException('SKU not stocked at location');
+      }
+      throw err;
+    }
   }
 
   async restockSuggestions() {

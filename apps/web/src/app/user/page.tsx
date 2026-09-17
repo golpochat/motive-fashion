@@ -4,8 +4,18 @@ import Link from 'next/link';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader, StatCard, DashCard } from '@/components/page-header';
 import { useSession } from '@/components/session-provider';
+import { DataTable, Td } from '@/components/dashboard-ui';
+import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
+import { formatEur } from '@motive-fashion/utils';
+import { orderItemsLabel, orderRef, orderWhen } from '@/lib/order-display';
 
-type OrderRow = { id: string; status: string; trackingToken?: string; totalCents?: number };
+type OrderRow = {
+  id: string;
+  status: string;
+  totalCents: number;
+  createdAt: string;
+  items: { title: string; quantity: number }[];
+};
 
 export default function UserHome() {
   const { me } = useSession();
@@ -45,15 +55,28 @@ export default function UserHome() {
           emptyTitle="No orders yet"
           emptyBody="When you check out, they will appear here."
         >
-          <ul className="divide-y divide-ink/10 rounded-2xl border border-ink/10 bg-white">
+          <DataTable headers={['Order', 'Placed', 'Items', 'Status', 'Total']}>
             {orders.slice(0, 5).map((o) => (
-              <li key={o.id} className="px-5 py-3 text-sm">
-                <Link href={`/order/${o.id}${o.trackingToken ? `?token=${o.trackingToken}` : ''}`}>
-                  {o.id.slice(0, 8)} — {o.status}
-                </Link>
-              </li>
+              <tr key={o.id} className="hover:bg-ink/[0.02]">
+                <Td>
+                  <Link href={`/user/orders/${o.id}`} className="font-mono text-xs no-underline">
+                    {orderRef(o.id)}
+                  </Link>
+                </Td>
+                <Td muted>{orderWhen(o.createdAt)}</Td>
+                <Td>{orderItemsLabel(o.items)}</Td>
+                <Td>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Td>
+                <Td>{formatEur(o.totalCents)}</Td>
+              </tr>
             ))}
-          </ul>
+          </DataTable>
+          {orders.length > 5 ? (
+            <p className="mt-3 text-sm">
+              <Link href="/user/orders" className="no-underline">
+                View all orders
+              </Link>
+            </p>
+          ) : null}
         </ConsoleSection>
       </div>
     </div>

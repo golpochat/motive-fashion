@@ -18,6 +18,11 @@ export default function UserProfile() {
         title="Profile"
         description="Account details on file. Support can update name and email if you write to us."
       />
+      {me.mfaRequired ? (
+        <p className="mb-4 rounded-2xl border border-ink/15 bg-white p-4 text-sm" role="status">
+          Staff and admin sign-in needs an authenticator. Turn it on below before opening the till or admin console.
+        </p>
+      ) : null}
       <dl className="max-w-lg space-y-4 rounded-2xl border border-ink/10 bg-white p-5 text-sm">
         <div>
           <dt className="text-xs uppercase tracking-widest text-ink/45">Name</dt>
@@ -32,7 +37,7 @@ export default function UserProfile() {
           <dd className="mt-1">{me.phone || 'Not set'}</dd>
         </div>
       </dl>
-      <MfaPanel enabled={Boolean(me.mfaEnabled)} />
+      <MfaPanel enabled={Boolean(me.mfaEnabled)} locked={Boolean(me.mfaLocked)} />
       <p className="mt-6 text-sm text-ink/70">
         Delivery addresses live under <Link href="/user/addresses">Addresses</Link>.
       </p>
@@ -40,7 +45,7 @@ export default function UserProfile() {
   );
 }
 
-function MfaPanel({ enabled }: { enabled: boolean }) {
+function MfaPanel({ enabled, locked }: { enabled: boolean; locked: boolean }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -111,7 +116,9 @@ function MfaPanel({ enabled }: { enabled: boolean }) {
       <h2 className="font-serif text-2xl">Authenticator</h2>
       <p className="mt-2 text-sm text-ink/70">
         {enabled
-          ? 'Sign-in asks for a code from your authenticator app.'
+          ? locked
+            ? 'Staff and admin accounts keep the authenticator on.'
+            : 'Sign-in asks for a code from your authenticator app.'
           : 'Add a TOTP app such as Google Authenticator. We show the secret here — we do not send it to a public QR service.'}
       </p>
       {error ? (
@@ -160,7 +167,7 @@ function MfaPanel({ enabled }: { enabled: boolean }) {
         </form>
       ) : null}
 
-      {enabled ? (
+      {enabled && !locked ? (
         <form onSubmit={(e) => void disable(e)} className="mt-4 space-y-3">
           <PasswordField
             label="Password"

@@ -17,3 +17,11 @@ export async function api<T>(path: string, token?: string, init?: RequestInit): 
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
 }
+
+export function catalogItems<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: T[] }).items)) {
+    return (payload as { items: T[] }).items;
+  }
+  return [];
+}

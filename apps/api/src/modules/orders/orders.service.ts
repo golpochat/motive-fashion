@@ -4,9 +4,10 @@ import {
   OrderStatus,
   PaymentStatus,
   ReturnStatus,
+  ReviewStatus,
   SalesChannel,
 } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { Prisma } from '../../../generated/prisma';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -14,9 +15,16 @@ import { StockService } from '../inventory/stock.service';
 import { MailService } from '../../common/mail.service';
 import { splitVatInclusive } from '@motive-fashion/utils';
 import type { CheckoutInput } from '@motive-fashion/validation';
-import { configuredStripeSecret } from '../../common/security-config';
+import { configuredStripeSecret, isProduction, mockPaymentsAllowed } from '../../common/security-config';
 import { addressLabelCode, canTransitionOrder, isValidEircode, normalizeEircode } from '@motive-fashion/config';
 import { CommerceService } from '../commerce/commerce.service';
+import {
+  isCashPayment,
+  paymentStatusAfterRefund,
+  refundableCents,
+  shouldRestockOnRefund,
+} from './refund-policy';
+import { shouldKeepReviewAfterRefund } from '../customers/review-eligibility';
 
 const receiptInclude = {
   items: true,
@@ -239,6 +247,7 @@ export class OrdersService {
         items: true,
         shipments: true,
         address: true,
+        returns: { include: { items: true } },
         promo: { select: { code: true } },
         payments: {
           where: { status: PaymentStatus.SUCCEEDED },
@@ -290,6 +299,49 @@ export class OrdersService {
         refundedCents: order.refunds.reduce((sum, row) => sum + row.amountCents, 0),
       };
     });
+  }
+
+  async packSheet(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            variant: { include: { inventory: { include: { location: true } } } },
+          },
+        },
+      },
+    });
+    if (!order) throw new NotFoundException();
+    const lines = order.items
+      .map((item) => {
+        const warehouse = item.variant.inventory.find((row) => row.location.code === 'warehouse');
+        const withBin = item.variant.inventory.find((row) => row.binCode);
+        return {
+          sku: item.sku,
+          barcode: item.variant.barcode,
+          title: item.title,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          binCode: warehouse?.binCode ?? withBin?.binCode ?? null,
+        };
+      })
+      .sort((a, b) => {
+        if (a.binCode && b.binCode) return a.binCode.localeCompare(b.binCode) || a.sku.localeCompare(b.sku);
+        if (a.binCode) return -1;
+        if (b.binCode) return 1;
+        return a.sku.localeCompare(b.sku);
+      });
+    return {
+      id: order.id,
+      status: order.status,
+      fulfillment: order.fulfillment,
+      name: order.name,
+      email: order.email,
+      ticket: order.id.replace(/-/g, '').slice(0, 8).toUpperCase(),
+      lines,
+    };
   }
 
   async transition(
@@ -360,6 +412,16 @@ export class OrdersService {
     if (!owner && !tokenOk) throw new ForbiddenException('Not allowed to return this order');
     const eligible: OrderStatus[] = [OrderStatus.DELIVERED, OrderStatus.COLLECTED];
     if (!eligible.includes(order.status)) throw new BadRequestException('Order not eligible for return');
+    const open = await this.prisma.return.findFirst({
+      where: { orderId: order.id, status: { in: [ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.RECEIVED] } },
+    });
+    if (open) throw new BadRequestException('A return is already open on this order');
+    const byId = new Map(order.items.map((item) => [item.id, item]));
+    for (const line of dto.items) {
+      const item = byId.get(line.orderItemId);
+      if (!item) throw new BadRequestException('That line is not on this order');
+      if (line.quantity > item.quantity) throw new BadRequestException('Return quantity is higher than the ordered quantity');
+    }
     return this.prisma.return.create({
       data: {
         orderId: order.id,
@@ -372,12 +434,19 @@ export class OrdersService {
   }
 
   async resolveReturn(returnId: string, status: ReturnStatus, actorId?: string) {
+    const previous = await this.prisma.return.findUnique({ where: { id: returnId } });
+    if (!previous) throw new NotFoundException();
     const ret = await this.prisma.return.update({
       where: { id: returnId },
       data: { status },
-      include: { items: { include: { orderItem: true } }, order: true },
+      include: {
+        items: { include: { orderItem: { include: { variant: { select: { productId: true } } } } } },
+        order: true,
+      },
     });
-    if (status === ReturnStatus.RECEIVED || status === ReturnStatus.REFUNDED) {
+    const alreadyStocked = previous.status === ReturnStatus.RECEIVED || previous.status === ReturnStatus.REFUNDED;
+    const shouldRestock = (status === ReturnStatus.RECEIVED || status === ReturnStatus.REFUNDED) && !alreadyStocked;
+    if (shouldRestock) {
       for (const item of ret.items) {
         await this.stock.receive({
           variantId: item.orderItem.variantId,
@@ -387,6 +456,25 @@ export class OrdersService {
         });
       }
     }
+    if (status === ReturnStatus.REFUNDED) {
+      const goodsCents = ret.items.reduce(
+        (sum, item) => sum + item.orderItem.unitPriceCents * item.quantity,
+        0,
+      );
+      const already = await this.prisma.refund.aggregate({
+        where: { orderId: ret.orderId },
+        _sum: { amountCents: true },
+      });
+      const cap = refundableCents(ret.order.totalCents, already._sum.amountCents ?? 0);
+      const amount = Math.min(goodsCents, cap);
+      if (amount > 0) {
+        await this.refund(ret.orderId, amount, `Return ${ret.id}`, actorId, { restock: false });
+      }
+      const productIds = [
+        ...new Set(ret.items.map((item) => item.orderItem.variant.productId)),
+      ];
+      await this.applyRefundReviewPolicy(ret.order.userId, productIds);
+    }
     await this.prisma.auditLog.create({
       data: {
         actorId,
@@ -395,37 +483,161 @@ export class OrdersService {
         entityId: returnId,
       },
     });
-    return ret;
+    return this.prisma.return.findUniqueOrThrow({
+      where: { id: returnId },
+      include: { items: { include: { orderItem: true } }, order: true },
+    });
   }
 
-  async refund(orderId: string, amountCents: number, reason: string, actorId?: string) {
-    const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
-    const key = configuredStripeSecret();
-    if (key && order.stripeSessionId) {
-      const stripe = new Stripe(key);
-      const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
-      const intent = session.payment_intent;
-      if (typeof intent === 'string') {
-        await stripe.refunds.create({ payment_intent: intent, amount: amountCents });
-      } else if (intent?.id) {
-        await stripe.refunds.create({ payment_intent: intent.id, amount: amountCents });
+  async listRefunds() {
+    const rows = await this.prisma.refund.findMany({
+      include: {
+        order: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            status: true,
+            channel: true,
+            paymentMethod: true,
+            totalCents: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return rows.map((row) => ({
+      ...row,
+      method: isCashPayment(row.order.paymentMethod) ? 'CASH' : 'CARD',
+    }));
+  }
+
+  async refund(
+    orderId: string,
+    amountCents: number,
+    reason: string,
+    actorId?: string,
+    opts?: { restock?: boolean },
+  ) {
+    const order = await this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: { items: { include: { variant: { select: { productId: true } } } }, refunds: true, payments: true },
+    });
+    if (order.status === OrderStatus.PENDING_PAYMENT) {
+      throw new BadRequestException('This order has not been paid');
+    }
+    const already = order.refunds.reduce((sum, row) => sum + row.amountCents, 0);
+    const remaining = refundableCents(order.totalCents, already);
+    if (remaining < 1) throw new BadRequestException('This order is already refunded');
+    if (amountCents > remaining) {
+      throw new BadRequestException(`Refund cannot exceed ${remaining} cents remaining`);
+    }
+
+    const cash = isCashPayment(order.paymentMethod);
+    const providerRef = cash
+      ? `cash:${randomUUID()}`
+      : await this.refundCard(order, amountCents, already);
+
+    const refundedTotal = already + amountCents;
+    const payStatus = paymentStatusAfterRefund(order.totalCents, refundedTotal);
+    await this.prisma.payment.updateMany({
+      where: {
+        orderId,
+        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+      },
+      data: { status: payStatus },
+    });
+    await this.prisma.refund.create({ data: { orderId, amountCents, reason, providerRef } });
+
+    const restock =
+      opts?.restock === false
+        ? false
+        : refundedTotal >= order.totalCents && shouldRestockOnRefund(order.status, order.fulfillment);
+    if (restock) {
+      for (const item of order.items) {
+        await this.stock.receive({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          refId: orderId,
+          note: `Refund ${orderId}`,
+        });
       }
     }
-    await this.prisma.payment.updateMany({
-      where: { orderId, status: PaymentStatus.SUCCEEDED },
-      data: {
-        status: amountCents >= order.totalCents ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
-      },
-    });
-    await this.prisma.refund.create({ data: { orderId, amountCents, reason } });
-    const nextStatus =
-      amountCents >= order.totalCents ? OrderStatus.REFUNDED : order.status;
+
+    const nextStatus = refundedTotal >= order.totalCents ? OrderStatus.REFUNDED : order.status;
+    if (nextStatus === OrderStatus.REFUNDED) {
+      await this.applyRefundReviewPolicy(
+        order.userId,
+        order.items.map((item) => item.variant.productId),
+      );
+    }
     await this.prisma.auditLog.create({
-      data: { actorId, action: 'order.refund', entity: 'Order', entityId: orderId, meta: { amountCents } },
+      data: {
+        actorId,
+        action: 'order.refund',
+        entity: 'Order',
+        entityId: orderId,
+        meta: { amountCents, method: cash ? 'CASH' : 'CARD', providerRef, restock },
+      },
     });
     return this.prisma.order.update({
       where: { id: orderId },
       data: { status: nextStatus },
+      include: { refunds: true, payments: true },
+    });
+  }
+
+  private async refundCard(
+    order: { id: string; stripeSessionId: string | null },
+    amountCents: number,
+    alreadyRefunded: number,
+  ) {
+    const key = configuredStripeSecret();
+    if (!order.stripeSessionId) {
+      if (isProduction() && key) {
+        throw new BadRequestException('This card order has no Stripe session to refund');
+      }
+      return `mock:${randomUUID()}`;
+    }
+    if (!key) {
+      if (mockPaymentsAllowed()) return `mock:${randomUUID()}`;
+      throw new BadRequestException('Card refunds need Stripe');
+    }
+    const stripe = new Stripe(key);
+    const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
+    const intent = session.payment_intent;
+    const intentId = typeof intent === 'string' ? intent : intent?.id;
+    if (!intentId) {
+      throw new BadRequestException('Stripe has no payment intent for this order');
+    }
+    try {
+      const refund = await stripe.refunds.create(
+        { payment_intent: intentId, amount: amountCents, reason: 'requested_by_customer' },
+        { idempotencyKey: `mf-refund-${order.id}-${alreadyRefunded}-${amountCents}` },
+      );
+      return refund.id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Stripe refund failed';
+      throw new BadRequestException(message);
+    }
+  }
+
+  private async applyRefundReviewPolicy(userId: string | null, productIds: string[]) {
+    if (!userId) return;
+    const ids = [...new Set(productIds.filter(Boolean))];
+    if (!ids.length) return;
+    const reviews = await this.prisma.review.findMany({
+      where: { userId, productId: { in: ids } },
+      select: { id: true, rating: true, status: true },
+    });
+    const drop = reviews.filter(
+      (review) => !shouldKeepReviewAfterRefund(review.rating) && review.status !== ReviewStatus.REJECTED,
+    );
+    if (!drop.length) return;
+    await this.prisma.review.updateMany({
+      where: { id: { in: drop.map((row) => row.id) } },
+      data: { status: ReviewStatus.REJECTED },
     });
   }
 }

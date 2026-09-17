@@ -29,3 +29,24 @@ export function configuredStripeSecret(env: NodeJS.ProcessEnv = process.env) {
   if (!key || key.includes('...')) return null;
   return key;
 }
+
+const STAFF_WORKSPACE_KEYS = [
+  '*',
+  'dashboard.super',
+  'dashboard.admin',
+  'dashboard.staff',
+  'rbac.roles.write',
+  'rbac.users.assign',
+  'pos.sale',
+];
+
+export function isStaffWorkspace(keys: string[]) {
+  return keys.some((key) => STAFF_WORKSPACE_KEYS.includes(key) || key.startsWith('rbac.'));
+}
+
+/** Privileged roles must use TOTP in production unless REQUIRE_STAFF_MFA=false. */
+export function staffMfaRequired(env: NodeJS.ProcessEnv = process.env) {
+  if (env.REQUIRE_STAFF_MFA === 'false') return false;
+  if (env.REQUIRE_STAFF_MFA === 'true') return true;
+  return env.NODE_ENV === 'production';
+}

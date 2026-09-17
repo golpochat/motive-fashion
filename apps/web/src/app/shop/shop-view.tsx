@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CatalogEmpty, CatalogError, ProductGrid } from '@/components/catalog-state';
 import { ShopSearch } from '@/components/shop-search';
-import { loadCatalog, type Category } from '@/lib/catalog';
-import type { ProductCard } from '@/lib/api';
+import { loadCatalog, loadCatalogPage, type Category } from '@/lib/catalog';
 
 function chipClass(active: boolean) {
   return `inline-flex min-h-11 items-center rounded-full border px-4 py-2.5 text-sm no-underline ${
@@ -11,13 +10,14 @@ function chipClass(active: boolean) {
   }`;
 }
 
-export async function ShopView({ category, q }: { category?: string; q?: string }) {
+export async function ShopView({ category, q, after }: { category?: string; q?: string; after?: string }) {
   const qs = new URLSearchParams();
   if (category) qs.set('category', category);
   if (q) qs.set('q', q);
+  if (after) qs.set('cursor', after);
   const query = qs.toString();
   const [productsResult, categoriesResult] = await Promise.all([
-    loadCatalog<ProductCard[]>(`/catalog/products${query ? `?${query}` : ''}`),
+    loadCatalogPage(`/catalog/products${query ? `?${query}` : ''}`),
     loadCatalog<Category[]>('/catalog/categories'),
   ]);
 
@@ -47,7 +47,7 @@ export async function ShopView({ category, q }: { category?: string; q?: string 
       </div>
       {!productsResult.ok ? (
         <CatalogError />
-      ) : productsResult.data.length === 0 ? (
+      ) : productsResult.data.items.length === 0 ? (
         <CatalogEmpty
           title={q ? `No results for “${q}”` : currentName ? `No ${currentName.toLowerCase()} in stock` : 'Nothing in this edit yet'}
           body={
@@ -59,7 +59,22 @@ export async function ShopView({ category, q }: { category?: string; q?: string 
           cta="View all"
         />
       ) : (
-        <ProductGrid products={productsResult.data} />
+        <>
+          <ProductGrid products={productsResult.data.items} />
+          {productsResult.data.nextCursor ? (
+            <p className="mt-8">
+              <Link
+                href={`${searchAction}?${new URLSearchParams({
+                  ...(q ? { q } : {}),
+                  after: productsResult.data.nextCursor,
+                }).toString()}`}
+                className="text-sm"
+              >
+                Next page
+              </Link>
+            </p>
+          ) : null}
+        </>
       )}
     </div>
   );

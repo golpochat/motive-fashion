@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import { PosTill } from '@/components/pos-till';
 
 export default function AdminPos() {
-  redirect('/staff/pos');
+  return <PosTill />;
 }

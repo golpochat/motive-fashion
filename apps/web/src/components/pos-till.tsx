@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { formatEur } from '@motive-fashion/utils';
+import { formatEur, scanMatchesVariant, unwrapCatalogList } from '@motive-fashion/utils';
 import { isValidEircode, normalizeEircode } from '@motive-fashion/config';
 import { API, apiErrorMessage, type ProductCard } from '@/lib/api';
 import { catalogPriceLabel, groupVariantsBySize, variantPriceRange } from '@/lib/catalog';
@@ -135,8 +135,8 @@ export function PosTill() {
     else if (slug) params.set('category', slug);
     else return;
     const res = await fetch(`${API}/catalog/products?${params}`, { credentials: 'include' });
-    const rows = (await res.json()) as ProductCard[];
-    setProducts(Array.isArray(rows) ? rows : []);
+    const rows = unwrapCatalogList<ProductCard>(await res.json()).items;
+    setProducts(rows);
   }, []);
 
   useEffect(() => {
@@ -253,10 +253,10 @@ export function PosTill() {
     const sku = query.trim();
     if (!sku) return;
     const res = await fetch(`${API}/catalog/products?sku=${encodeURIComponent(sku)}`, { credentials: 'include' });
-    const rows = (await res.json()) as ProductCard[];
-    const match = (Array.isArray(rows) ? rows : [])
+    const rows = unwrapCatalogList<ProductCard>(await res.json()).items;
+    const match = rows
       .flatMap((product) => product.variants.map((variant) => ({ product, variant })))
-      .find((row) => row.variant.sku.toLowerCase() === sku.toLowerCase());
+      .find((row) => scanMatchesVariant(sku, row.variant));
     if (match) {
       addVariant(match.product, match.variant.sku);
       setQuery('');
@@ -388,7 +388,7 @@ export function PosTill() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className={fieldClass}
-                placeholder="Search or scan SKU"
+                placeholder="Search or scan barcode / SKU"
                 autoFocus
               />
             </form>

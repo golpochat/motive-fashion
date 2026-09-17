@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { API } from '@/lib/api';
+import { fetchAuthed } from '@/lib/auth-fetch';
 import type { Me } from '@/lib/rbac';
 
 type Snapshot = { me: Me | null; loading: boolean };
@@ -20,7 +21,7 @@ function setSnapshot(next: Snapshot) {
 
 async function fetchMe(): Promise<Me | null> {
   try {
-    const res = await fetch(`${API}/account/me`, { credentials: 'include' });
+    const res = await fetchAuthed(`${API}/account/me`);
     if (!res.ok) return null;
     return (await res.json()) as Me;
   } catch {

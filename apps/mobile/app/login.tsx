@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { api } from '../src/api';
 import { setAccessToken } from '../src/session';
+import { registerPushToken } from '../src/push';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,7 +21,12 @@ export default function Login() {
               body: JSON.stringify({ email, password }),
             });
             setAccessToken(res.accessToken);
-            setMsg(res.accessToken ? 'Signed in' : 'Check details');
+            if (res.accessToken) {
+              await registerPushToken().catch(() => null);
+              setMsg('Signed in');
+            } else {
+              setMsg('Check details');
+            }
           } catch {
             setMsg('Check details');
           }

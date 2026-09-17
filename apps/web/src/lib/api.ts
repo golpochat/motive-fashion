@@ -1,3 +1,5 @@
+import { fetchAuthed } from './auth-fetch';
+
 export const API = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
 export function apiErrorMessage(payload: unknown, fallback: string) {
@@ -20,14 +22,13 @@ function apiBase() {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${apiBase()}${path}`, {
+  const res = await fetchAuthed(`${apiBase()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
     cache: 'no-store',
-    credentials: 'include',
   });
   if (!res.ok) {
     const text = await res.text();
@@ -47,6 +48,7 @@ export type ProductCard = {
   variants: {
     id: string;
     sku: string;
+    barcode?: string | null;
     size: string;
     color: string;
     fabric?: string | null;

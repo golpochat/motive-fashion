@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { adminPathForStaffRoute } from '@/lib/rbac';
 
-type Me = { permissions?: string[] };
+type Me = { permissions?: string[]; mfaRequired?: boolean };
 
 function has(keys: string[] | undefined, needed: string) {
   return Boolean(keys?.includes('*') || keys?.includes(needed));
+}
+
+function isCommerceAdmin(permissions: string[] | undefined) {
+  return has(permissions, 'dashboard.admin') && !has(permissions, 'dashboard.super');
 }
 
 function allowedFor(pathname: string, permissions: string[] | undefined) {
@@ -65,6 +70,17 @@ export async function middleware(request: NextRequest) {
     });
     if (res.ok) {
       const me = (await res.json()) as Me;
+      if (me.mfaRequired && !pathname.startsWith('/user/profile') && !pathname.startsWith('/user/privacy')) {
+        const setup = new URL('/user/profile', request.url);
+        setup.searchParams.set('mfa', '1');
+        setup.searchParams.set('next', pathname);
+        return NextResponse.redirect(setup);
+      }
+      if (pathname.startsWith('/staff') && isCommerceAdmin(me.permissions)) {
+        const url = request.nextUrl.clone();
+        url.pathname = adminPathForStaffRoute(pathname);
+        return NextResponse.redirect(url);
+      }
       if (allowedFor(pathname, me.permissions)) {
         return NextResponse.next();
       }

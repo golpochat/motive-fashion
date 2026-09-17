@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { OrderStatus, UserRole } from '@prisma/client';
-import { Prisma } from '../../../generated/prisma';
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { OrderStatus, Prisma, ReviewStatus, UserRole } from '../../../generated/prisma';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
@@ -19,10 +19,14 @@ import {
   paymentPatchSchema,
   locationCreateSchema,
   locationPatchSchema,
+  reviewModerateSchema,
 } from '@motive-fashion/validation';
 import { slugify } from '@motive-fashion/utils';
 import { customerPublicSelect } from '../../common/user-select';
 import { writeAudit } from '../../common/audit';
+import { saveProductImage, uploadDir } from '../../common/media';
+import { unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -111,7 +115,9 @@ export class AdminController {
   @RequirePermissions('catalog.write')
   async addVariant(@Param('id') productId: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = variantCreateSchema.parse(body);
-    const variant = await this.prisma.productVariant.create({ data: { ...dto, productId } });
+    const variant = await this.prisma.productVariant.create({
+      data: { ...dto, productId, barcode: dto.barcode?.trim() || dto.sku },
+    });
     await writeAudit(this.prisma, {
       actorId: user.sub,
       action: 'product.variant.create',
@@ -120,6 +126,61 @@ export class AdminController {
       meta: { productId, sku: dto.sku },
     });
     return variant;
+  }
+
+  @Post('products/:id/images')
+  @RequirePermissions('catalog.write')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 4_000_000 } }))
+  async addImage(
+    @Param('id') productId: string,
+    @UploadedFile() file: { buffer?: Buffer; path?: string; mimetype?: string; size?: number; originalname?: string },
+    @Body() body: { alt?: string },
+    @CurrentUser() user: { sub: string },
+  ) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId }, include: { images: true } });
+    if (!product) throw new BadRequestException('Product not found');
+    const saved = saveProductImage(file);
+    const image = await this.prisma.productImage.create({
+      data: {
+        productId,
+        url: saved.url,
+        alt: String(body.alt || product.title).slice(0, 120),
+        sortOrder: product.images.length,
+      },
+    });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'product.image.create',
+      entity: 'ProductImage',
+      entityId: image.id,
+      meta: { productId, url: saved.url },
+    });
+    return image;
+  }
+
+  @Delete('products/:id/images/:imageId')
+  @RequirePermissions('catalog.write')
+  async removeImage(
+    @Param('id') productId: string,
+    @Param('imageId') imageId: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const image = await this.prisma.productImage.findFirst({ where: { id: imageId, productId } });
+    if (!image) throw new BadRequestException('Image not found');
+    const filename = image.url.split('/').pop();
+    if (filename && filename.includes('.')) {
+      const path = join(uploadDir(), filename);
+      if (existsSync(path)) unlinkSync(path);
+    }
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'product.image.delete',
+      entity: 'ProductImage',
+      entityId: imageId,
+      meta: { productId },
+    });
+    return { ok: true as const };
   }
 
   @Get('inventory')
@@ -134,6 +195,18 @@ export class AdminController {
   @RequirePermissions('orders.read')
   orderList(@Query('status') status?: OrderStatus) {
     return this.orders.listAdmin(status);
+  }
+
+  @Get('orders/:id/pack')
+  @RequirePermissions('orders.pack')
+  packSheet(@Param('id') id: string) {
+    return this.orders.packSheet(id);
+  }
+
+  @Get('refunds')
+  @RequirePermissions('orders.refund')
+  refunds() {
+    return this.orders.listRefunds();
   }
 
   @Post('orders/:id/status')
@@ -211,7 +284,10 @@ export class AdminController {
   @Get('returns')
   @RequirePermissions('orders.read')
   returns() {
-    return this.prisma.return.findMany({ include: { items: true, order: true }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.return.findMany({
+      include: { items: { include: { orderItem: true } }, order: { include: { items: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   @Post('returns/:id')
@@ -221,34 +297,93 @@ export class AdminController {
     return this.orders.resolveReturn(id, dto.status, user.sub);
   }
 
+  @Get('reviews')
+  @RequirePermissions('reviews.moderate')
+  reviews(@Query('status') status?: ReviewStatus) {
+    return this.prisma.review.findMany({
+      where: status ? { status } : {},
+      include: { user: { select: { name: true, email: true } }, product: { select: { title: true, slug: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  @Post('reviews/:id')
+  @RequirePermissions('reviews.moderate')
+  async moderateReview(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = reviewModerateSchema.parse(body);
+    const review = await this.prisma.review.update({ where: { id }, data: { status: dto.status } });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: `review.${dto.status.toLowerCase()}`,
+      entity: 'Review',
+      entityId: id,
+    });
+    return review;
+  }
+
+  @Get('audit')
+  @RequirePermissions('audit.read')
+  audit(@Query('entity') entity?: string, @Query('action') action?: string, @Query('cursor') cursor?: string) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        ...(entity ? { entity } : {}),
+        ...(action ? { action: { contains: action, mode: 'insensitive' } } : {}),
+        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
   @Get('promo-codes')
   @RequirePermissions('marketing.write')
   promos() {
-    return this.prisma.promoCode.findMany();
+    return this.prisma.promoCode.findMany({ orderBy: { code: 'asc' } });
   }
 
   @Post('promo-codes')
   @RequirePermissions('marketing.write')
   async createPromo(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = promoCreateSchema.parse(body);
-    const promo = await this.prisma.promoCode.create({
-      data: { code: dto.code.toUpperCase(), type: dto.type, value: dto.value, active: dto.active ?? true, maxUses: dto.maxUses },
-    });
-    await writeAudit(this.prisma, {
-      actorId: user.sub,
-      action: 'promo.create',
-      entity: 'PromoCode',
-      entityId: promo.id,
-      meta: { type: dto.type, value: dto.value },
-    });
-    return promo;
+    try {
+      const promo = await this.prisma.promoCode.create({
+        data: {
+          code: dto.code.toUpperCase(),
+          type: dto.type,
+          value: dto.value,
+          active: dto.active ?? true,
+          maxUses: dto.maxUses ?? undefined,
+          startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
+          endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
+        },
+      });
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'promo.create',
+        entity: 'PromoCode',
+        entityId: promo.id,
+        meta: { type: dto.type, value: dto.value, maxUses: dto.maxUses ?? null },
+      });
+      return promo;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That coupon code is already in use');
+      }
+      throw err;
+    }
   }
 
   @Patch('promo-codes/:id')
   @RequirePermissions('marketing.write')
   async patchPromo(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = promoPatchSchema.parse(body);
-    const promo = await this.prisma.promoCode.update({ where: { id }, data: dto });
+    const data = {
+      ...dto,
+      startsAt: dto.startsAt === undefined ? undefined : dto.startsAt ? new Date(dto.startsAt) : null,
+      endsAt: dto.endsAt === undefined ? undefined : dto.endsAt ? new Date(dto.endsAt) : null,
+    };
+    const promo = await this.prisma.promoCode.update({ where: { id }, data });
     await writeAudit(this.prisma, {
       actorId: user.sub,
       action: 'promo.update',

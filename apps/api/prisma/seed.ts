@@ -573,8 +573,10 @@ async function main() {
     { key: 'locations.read', name: 'View locations', group: 'Shop floor' },
     { key: 'pos.sale', name: 'Take POS sales', group: 'Shop floor' },
     { key: 'commerce.settings', name: 'Edit checkout methods and county rates', group: 'Commerce' },
-    { key: 'marketing.write', name: 'Marketing calendar', group: 'Commerce' },
+    { key: 'marketing.write', name: 'Marketing calendar and coupons', group: 'Commerce' },
     { key: 'whatsapp.broadcast', name: 'WhatsApp broadcast', group: 'Commerce' },
+    { key: 'reviews.moderate', name: 'Moderate product reviews', group: 'Commerce' },
+    { key: 'audit.read', name: 'View audit log', group: 'Access' },
   ]) {
     await prisma.permission.upsert({
       where: { key: row.key },
@@ -588,7 +590,6 @@ async function main() {
     'super-admin': ['*'],
     admin: [
       'dashboard.admin',
-      'dashboard.staff',
       'analytics.read',
       'catalog.read',
       'catalog.write',
@@ -604,6 +605,8 @@ async function main() {
       'commerce.settings',
       'marketing.write',
       'whatsapp.broadcast',
+      'reviews.moderate',
+      'audit.read',
     ],
     staff: [
       'dashboard.staff',
@@ -835,6 +838,7 @@ async function main() {
           data: {
             productId: product.id,
             sku,
+            barcode: sku,
             size,
             color,
             costCents: p.cost,

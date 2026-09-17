@@ -4,7 +4,10 @@ import { gdprUserSelect } from '../../common/user-select';
 import { RbacService } from '../rbac/rbac.service';
 import { CommerceService } from '../commerce/commerce.service';
 import { addressLabelCode, isValidEircode, normalizeEircode } from '@motive-fashion/config';
+import { OrderStatus, PaymentStatus, ReturnStatus, ReviewStatus } from '../../../generated/prisma';
+import { isStaffWorkspace, staffMfaRequired } from '../../common/security-config';
 import type { AddressCreateInput, AddressPatchInput } from '@motive-fashion/validation';
+import { buildReviewEligibility, hasKeptPurchase } from './review-eligibility';
 
 @Injectable()
 export class CustomersService {
@@ -46,15 +49,38 @@ export class CustomersService {
       addresses: user.addresses,
       roles: user.memberships.map((m) => m.role),
       permissions,
+      mfaRequired: staffMfaRequired() && isStaffWorkspace(permissions) && !user.mfaEnabled,
+      mfaLocked: staffMfaRequired() && isStaffWorkspace(permissions),
     };
   }
 
   orders(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
-      include: { items: true },
+      include: { items: true, returns: { include: { items: true } }, shipments: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async order(userId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId },
+      include: {
+        items: true,
+        shipments: true,
+        address: true,
+        returns: { include: { items: true } },
+        promo: { select: { code: true } },
+        payments: {
+          where: { status: PaymentStatus.SUCCEEDED },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
+    });
+    if (!order) throw new NotFoundException();
+    return order;
   }
 
   addresses(userId: string) {
@@ -157,6 +183,61 @@ export class CustomersService {
   removeWish(userId: string, productId: string) {
     return this.prisma.wishlistItem.delete({
       where: { userId_productId: { userId, productId } },
+    });
+  }
+
+  async reviewEligibility(userId: string, productId: string) {
+    const [lines, existing] = await Promise.all([
+      this.prisma.orderItem.findMany({
+        where: {
+          variant: { productId },
+          quantity: { gt: 0 },
+          order: { userId, status: { in: [OrderStatus.DELIVERED, OrderStatus.COLLECTED] } },
+        },
+        select: {
+          quantity: true,
+          returnItems: {
+            where: { return: { status: { in: [ReturnStatus.RECEIVED, ReturnStatus.REFUNDED] } } },
+            select: { quantity: true },
+          },
+        },
+      }),
+      this.prisma.review.findUnique({
+        where: { productId_userId: { productId, userId } },
+        select: { status: true },
+      }),
+    ]);
+    const purchased = hasKeptPurchase(
+      lines.map((line) => ({
+        quantity: line.quantity,
+        returnedQty: line.returnItems.reduce((sum, row) => sum + row.quantity, 0),
+      })),
+    );
+    return buildReviewEligibility(purchased, existing?.status ?? null);
+  }
+
+  async addReview(userId: string, dto: { productId: string; rating: number; body: string }) {
+    const eligibility = await this.reviewEligibility(userId, dto.productId);
+    if (!eligibility.purchased) {
+      throw new BadRequestException('You can review a piece after it is delivered or collected, if you still have it.');
+    }
+    if (eligibility.alreadyReviewed) throw new BadRequestException('You already reviewed this piece.');
+    return this.prisma.review.create({
+      data: {
+        productId: dto.productId,
+        userId,
+        rating: dto.rating,
+        body: dto.body,
+        status: ReviewStatus.PENDING,
+      },
+    });
+  }
+
+  registerPush(userId: string, dto: { token: string; platform: string }) {
+    return this.prisma.pushToken.upsert({
+      where: { token: dto.token },
+      create: { userId, token: dto.token, platform: dto.platform },
+      update: { userId, platform: dto.platform },
     });
   }
 

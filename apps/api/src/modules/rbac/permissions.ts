@@ -19,8 +19,10 @@ export const PERMISSION_CATALOG = [
   { key: 'locations.read', name: 'View locations', group: 'Shop floor' },
   { key: 'pos.sale', name: 'Take POS sales', group: 'Shop floor' },
   { key: 'commerce.settings', name: 'Edit checkout methods and county rates', group: 'Commerce' },
-  { key: 'marketing.write', name: 'Marketing calendar', group: 'Commerce' },
+  { key: 'marketing.write', name: 'Marketing calendar and coupons', group: 'Commerce' },
   { key: 'whatsapp.broadcast', name: 'WhatsApp broadcast', group: 'Commerce' },
+  { key: 'reviews.moderate', name: 'Moderate product reviews', group: 'Commerce' },
+  { key: 'audit.read', name: 'View audit log', group: 'Access' },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_CATALOG)[number]['key'];
@@ -55,7 +57,6 @@ export const ROLE_PERMISSIONS: Record<(typeof SYSTEM_ROLE_SLUGS)[number], Permis
   'super-admin': ['*'],
   admin: [
     'dashboard.admin',
-    'dashboard.staff',
     'analytics.read',
     'catalog.read',
     'catalog.write',
@@ -71,6 +72,8 @@ export const ROLE_PERMISSIONS: Record<(typeof SYSTEM_ROLE_SLUGS)[number], Permis
     'commerce.settings',
     'marketing.write',
     'whatsapp.broadcast',
+    'reviews.moderate',
+    'audit.read',
   ],
   staff: [
     'dashboard.staff',

@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard } from '../../common/auth';
 import { CustomersService } from './customers.service';
-import { addressCreateSchema, addressPatchSchema } from '@motive-fashion/validation';
+import { addressCreateSchema, addressPatchSchema, pushTokenSchema, reviewCreateSchema } from '@motive-fashion/validation';
 
 @Controller('account')
 @UseGuards(JwtAuthGuard)
@@ -16,6 +16,11 @@ export class CustomersController {
   @Get('orders')
   orders(@CurrentUser() user: { sub: string }) {
     return this.customers.orders(user.sub);
+  }
+
+  @Get('orders/:id')
+  order(@CurrentUser() user: { sub: string }, @Param('id') id: string) {
+    return this.customers.order(user.sub, id);
   }
 
   @Get('wishlist')
@@ -56,6 +61,22 @@ export class CustomersController {
   @Delete('wishlist/:productId')
   removeWish(@CurrentUser() user: { sub: string }, @Param('productId') productId: string) {
     return this.customers.removeWish(user.sub, productId);
+  }
+
+  @Get('reviews/eligibility')
+  reviewEligibility(@CurrentUser() user: { sub: string }, @Query('productId') productId: string) {
+    const dto = reviewCreateSchema.pick({ productId: true }).parse({ productId });
+    return this.customers.reviewEligibility(user.sub, dto.productId);
+  }
+
+  @Post('reviews')
+  addReview(@CurrentUser() user: { sub: string }, @Body() body: unknown) {
+    return this.customers.addReview(user.sub, reviewCreateSchema.parse(body));
+  }
+
+  @Post('push-tokens')
+  registerPush(@CurrentUser() user: { sub: string }, @Body() body: unknown) {
+    return this.customers.registerPush(user.sub, pushTokenSchema.parse(body));
   }
 
   @Get('gdpr-export')

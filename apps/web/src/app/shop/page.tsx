@@ -9,8 +9,8 @@ export const metadata = pageMeta(
 export default async function ShopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; after?: string }>;
 }) {
   const q = await searchParams;
-  return <ShopView category={q.category} q={q.q} />;
+  return <ShopView category={q.category} q={q.q} after={q.after} />;
 }

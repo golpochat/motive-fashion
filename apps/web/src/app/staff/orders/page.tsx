@@ -20,6 +20,7 @@ export type StaffSale = {
   fulfillment: string;
   paymentMethod: string;
   totalCents: number;
+  refundedCents?: number;
   cashierName?: string | null;
   storeWide?: boolean;
   items: { title: string; quantity: number }[];
@@ -70,7 +71,13 @@ export default function StaffOrders() {
               <Td>{formatEur(order.totalCents)}</Td>
               <Td muted>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Td>
               <Td>
-                <StaffOrderActions orderId={order.id} email={order.email} />
+                <StaffOrderActions
+                  orderId={order.id}
+                  email={order.email}
+                  paymentMethod={order.paymentMethod}
+                  remainingCents={order.totalCents - (order.refundedCents ?? 0)}
+                  onDone={reload}
+                />
               </Td>
             </tr>
           ))}

@@ -23,7 +23,7 @@ export type TrackedOrder = {
   discountCents: number;
   shippingCents: number;
   totalCents: number;
-  items: { title: string; size: string; color: string; quantity: number; unitPriceCents: number }[];
+  items: { id: string; title: string; size: string; color: string; quantity: number; unitPriceCents: number }[];
   address?: {
     line1: string;
     line2?: string | null;
@@ -33,6 +33,7 @@ export type TrackedOrder = {
   } | null;
   promo?: { code: string } | null;
   payments?: { createdAt: string }[];
+  returns?: { id: string; status: string }[];
   shipments?: {
     carrier?: string | null;
     trackingNo?: string | null;
@@ -67,9 +68,11 @@ function stepTime(order: TrackedOrder, step: string) {
 export function OrderReceipt({
   initial,
   token,
+  tone = 'receipt',
 }: {
   initial: TrackedOrder;
   token: string;
+  tone?: 'receipt' | 'account';
 }) {
   const [order, setOrder] = useState(initial);
   const [busy, setBusy] = useState(initial.status === 'PENDING_PAYMENT');
@@ -214,17 +217,25 @@ export function OrderReceipt({
   const collecting = order.fulfillment === 'COLLECTION';
   const county = countyLabel(order.shippingCounty);
   const status = ORDER_STATUS_LABEL[order.status] ?? order.status.replaceAll('_', ' ');
+  const placed = formatWhen(order.payments?.[0]?.createdAt);
+  const account = tone === 'account';
 
   return (
-    <div className="mx-auto max-w-lg">
-      <p className="text-xs uppercase tracking-widest text-ink/45">{paid ? 'Order confirmed' : 'Payment'}</p>
-      <h1 className="mt-1 font-serif text-4xl">{paid ? 'Thank you' : busy ? 'Confirming payment' : 'Awaiting payment'}</h1>
+    <div className={account ? 'max-w-3xl' : 'mx-auto max-w-lg'}>
+      <p className="text-xs uppercase tracking-widest text-ink/45">{account ? 'Order' : paid ? 'Order confirmed' : 'Payment'}</p>
+      <h1 className="mt-1 font-serif text-4xl">
+        {account ? status : paid ? 'Thank you' : busy ? 'Confirming payment' : 'Awaiting payment'}
+      </h1>
       <p className="mt-2 text-sm text-ink/70">
-        {paid
-          ? `We've confirmed your order for ${order.email}. This page is your receipt and tracker.`
-          : busy
-            ? 'If the card payment succeeded, this page will update in a few seconds.'
-            : 'Your cart is still reserved. Complete payment to place the order.'}
+        {account
+          ? placed
+            ? `Placed ${placed} for ${order.email}.`
+            : `This purchase is on your account (${order.email}).`
+          : paid
+            ? `We've confirmed your order for ${order.email}. This page is your receipt and tracker.`
+            : busy
+              ? 'If the card payment succeeded, this page will update in a few seconds.'
+              : 'Your cart is still reserved. Complete payment to place the order.'}
       </p>
 
       <span
@@ -304,6 +315,7 @@ export function OrderReceipt({
       <p className="mt-2 text-sm">
         <Link href="/legal/returns">Returns policy</Link>
       </p>
+      <ReturnForm order={order} token={token} onDone={setOrder} />
 
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
 
@@ -333,8 +345,8 @@ export function OrderReceipt({
             Print ticket
           </button>
         ) : null}
-        <Link href="/shop" className="rounded-full border border-ink/15 px-6 py-3 text-sm no-underline">
-          Continue shopping
+        <Link href={account ? '/user/orders' : '/shop'} className="rounded-full border border-ink/15 px-6 py-3 text-sm no-underline">
+          {account ? 'Back to orders' : 'Continue shopping'}
         </Link>
       </div>
     </div>
@@ -384,4 +396,101 @@ function CourierLine({ order }: { order: TrackedOrder }) {
     );
   }
   return <p className="mt-2 text-ink/70">{label}</p>;
+}
+
+function ReturnForm({
+  order,
+  token,
+  onDone,
+}: {
+  order: TrackedOrder;
+  token: string;
+  onDone: (order: TrackedOrder) => void;
+}) {
+  const eligible = order.status === 'DELIVERED' || order.status === 'COLLECTED';
+  const open = order.returns?.some((row) => row.status === 'REQUESTED' || row.status === 'APPROVED' || row.status === 'RECEIVED');
+  const done = order.returns?.some((row) => row.status === 'REFUNDED' || row.status === 'REJECTED');
+  const [reason, setReason] = useState('');
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!eligible) return null;
+  if (open) {
+    return <p className="mt-4 text-sm text-ink/70">A return is already open on this order. We will email you when it is reviewed.</p>;
+  }
+  if (done) {
+    return <p className="mt-4 text-sm text-ink/70">This order already has a closed return.</p>;
+  }
+
+  async function submit() {
+    setError('');
+    const items = order.items
+      .filter((item) => selected[item.id])
+      .map((item) => ({ orderItemId: item.id, quantity: item.quantity }));
+    if (!items.length) {
+      setError('Select at least one piece to return.');
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setError('Tell us why you are returning this order.');
+      return;
+    }
+    setBusy(true);
+    const res = await fetch(`${API}/returns`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: order.id, reason: reason.trim(), trackingToken: token, items }),
+    });
+    const payload = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) {
+      setError(payload && typeof payload === 'object' && 'message' in payload ? String(payload.message) : 'Could not start this return.');
+      return;
+    }
+    onDone({ ...order, returns: [...(order.returns ?? []), { id: String(payload?.id ?? 'new'), status: 'REQUESTED' }] });
+  }
+
+  return (
+    <section className="mt-6 rounded-2xl border border-ink/10 bg-white p-5">
+      <h2 className="font-serif text-2xl">Start a return</h2>
+      <p className="mt-2 text-sm text-ink/70">{RETURN_POSTAGE_NOTICE}</p>
+      <ul className="mt-4 space-y-2 text-sm">
+        {order.items.map((item) => (
+          <li key={item.id}>
+            <label className="flex gap-2">
+              <input
+                type="checkbox"
+                checked={Boolean(selected[item.id])}
+                onChange={(e) => setSelected((prev) => ({ ...prev, [item.id]: e.target.checked }))}
+              />
+              <span>
+                {item.title} × {item.quantity}
+                <span className="block text-ink/50">
+                  {item.size} / {item.color}
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <label className="mt-4 block text-sm">
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Reason</span>
+        <textarea className="w-full rounded-xl border border-ink/15 px-3 py-2" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      {error ? (
+        <p className="mt-3 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="mt-4 rounded-full bg-primary px-6 py-3 text-sm text-cream"
+        disabled={busy}
+        onClick={() => void submit()}
+      >
+        {busy ? 'Sending…' : 'Request return'}
+      </button>
+    </section>
+  );
 }

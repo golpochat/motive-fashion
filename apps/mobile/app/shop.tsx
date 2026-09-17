@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, Text } from 'react-native';
 import { Link } from 'expo-router';
-import { api } from '../src/api';
+import { api, catalogItems } from '../src/api';
 
 export default function Shop() {
   const [items, setItems] = useState<{ id: string; slug: string; title: string }[]>([]);
   useEffect(() => {
-    api<{ id: string; slug: string; title: string }[]>('/catalog/products')
-      .then(setItems)
+    api<unknown>('/catalog/products')
+      .then((payload) => setItems(catalogItems<{ id: string; slug: string; title: string }>(payload)))
       .catch(() => setItems([]));
   }, []);
   return (

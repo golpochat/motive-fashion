@@ -6,6 +6,7 @@ import { ConsoleSection, EmptyState, PageHeader } from '@/components/page-header
 import { DataTable, Field, FilterTabs, PrimaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
 import { useSession } from '@/components/session-provider';
 import { hasPerm } from '@/lib/rbac';
+import { scanMatchesVariant } from '@motive-fashion/utils';
 
 type Level = {
   id: string;
@@ -13,7 +14,8 @@ type Level = {
   locationId: string;
   onHand: number;
   reserved: number;
-  variant: { sku: string; product: { title: string } };
+  binCode: string | null;
+  variant: { sku: string; barcode: string | null; product: { title: string } };
   location: { code: string };
 };
 
@@ -24,8 +26,72 @@ function freeOf(row: Level) {
   return Math.max(0, row.onHand - row.reserved);
 }
 
+function BinField({
+  row,
+  canAdjust,
+  onError,
+  onSaved,
+}: {
+  row: Level;
+  canAdjust: boolean;
+  onError: (message: string) => void;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState(row.binCode ?? '');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setValue(row.binCode ?? '');
+  }, [row.binCode]);
+
+  if (!canAdjust) {
+    return <span className="font-mono text-xs">{row.binCode || '—'}</span>;
+  }
+
+  async function save() {
+    const next = value.trim();
+    if (next === (row.binCode ?? '')) return;
+    setBusy(true);
+    const res = await fetch(`${API}/stock/bin`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        variantId: row.variantId,
+        locationId: row.locationId,
+        binCode: next,
+      }),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { message?: string };
+    setBusy(false);
+    if (!res.ok) {
+      onError(apiErrorMessage(payload, 'Could not save this bin.'));
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <input
+      className={`${fieldClass} font-mono text-xs`}
+      value={value}
+      disabled={busy}
+      placeholder="WH-A-01-02"
+      aria-label={`Bin for ${row.variant.sku}`}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
+
 export function InventoryLedger({
-  description = 'Scan a SKU to look it up. Available is on hand minus reserved.',
+  description = 'Scan a barcode or SKU. Set a bin when the room needs software locations.',
 }: {
   description?: string;
 }) {
@@ -81,15 +147,28 @@ export function InventoryLedger({
     return rows.filter((row) => {
       if (locationId && row.locationId !== locationId) return false;
       if (!q) return true;
-      return row.variant.sku.toLowerCase().includes(q) || row.variant.product.title.toLowerCase().includes(q);
+      return (
+        row.variant.sku.toLowerCase().includes(q) ||
+        (row.variant.barcode ?? '').toLowerCase().includes(q) ||
+        (row.binCode ?? '').toLowerCase().includes(q) ||
+        row.variant.product.title.toLowerCase().includes(q)
+      );
     });
   }, [rows, query, locationId]);
 
   function applySku(sku: string) {
     const needle = sku.trim();
     if (!needle) return;
-    const exact = rows.filter((row) => row.variant.sku.toLowerCase() === needle.toLowerCase());
-    const match = exact.length ? exact : rows.filter((row) => row.variant.sku.toLowerCase().includes(needle.toLowerCase()));
+    const exact = rows.filter((row) =>
+      scanMatchesVariant(needle, { sku: row.variant.sku, barcode: row.variant.barcode }),
+    );
+    const match = exact.length
+      ? exact
+      : rows.filter(
+          (row) =>
+            row.variant.sku.toLowerCase().includes(needle.toLowerCase()) ||
+            (row.variant.barcode ?? '').toLowerCase().includes(needle.toLowerCase()),
+        );
     if (!match.length) {
       setError(`No ledger row for ${needle}.`);
       setHighlighted('');
@@ -194,9 +273,9 @@ export function InventoryLedger({
             setHighlighted('');
           }}
           className={fieldClass}
-          placeholder="Search or scan SKU"
+          placeholder="Search or scan barcode / SKU"
           autoFocus
-          aria-label="Search or scan SKU"
+          aria-label="Search or scan barcode or SKU"
         />
       </form>
 
@@ -231,7 +310,7 @@ export function InventoryLedger({
           {visible.length === 0 ? (
             <EmptyState title="No rows" body="Scan a SKU or clear the search." />
           ) : (
-            <DataTable headers={['SKU', 'Location', 'On hand', 'Reserved', 'Free']}>
+            <DataTable headers={['SKU', 'Location', 'Bin', 'On hand', 'Reserved', 'Free']}>
               {visible.map((row) => {
                 const free = freeOf(row);
                 const active = highlighted.toLowerCase() === row.variant.sku.toLowerCase();
@@ -251,6 +330,18 @@ export function InventoryLedger({
                       </button>
                     </Td>
                     <Td muted>{row.location.code}</Td>
+                    <Td>
+                      <BinField
+                        row={row}
+                        canAdjust={canAdjust}
+                        onError={setError}
+                        onSaved={() => {
+                          setNotice('Bin saved.');
+                          setError('');
+                          reload();
+                        }}
+                      />
+                    </Td>
                     <Td>{row.onHand}</Td>
                     <Td>{row.reserved}</Td>
                     <Td>
