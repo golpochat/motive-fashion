@@ -139,6 +139,12 @@ export function InventoryLedger({
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('q') ?? params.get('sku') ?? '';
+    if (fromUrl) setQuery(fromUrl);
+  }, []);
+
   const variants = useMemo(() => Array.from(new Map(rows.map((row) => [row.variantId, row])).values()), [rows]);
   const low = rows.filter((row) => freeOf(row) <= 5).length;
 

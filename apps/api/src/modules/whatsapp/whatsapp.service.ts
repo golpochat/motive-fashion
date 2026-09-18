@@ -6,6 +6,7 @@ import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import { isProduction } from '../../common/security-config';
 import { metaSignatureValid } from '../../common/webhook-signature';
+import { decodeWhatsappPicks, encodeWhatsappPicks, whatsappIntent } from '@motive-fashion/utils';
 
 interface WaMessage {
   from: string;
@@ -61,70 +62,44 @@ export class WhatsappService {
     const session = await this.prisma.whatsappSession.upsert({
       where: { waId: msg.from },
       create: { waId: msg.from, state: WhatsappSessionState.WELCOME },
-      update: { lastMessage: msg.text ?? msg.buttonId },
+      update: {},
     });
-    const text = (msg.buttonId ?? msg.text ?? '').trim().toLowerCase();
+    const raw = (msg.buttonId ?? msg.text ?? '').trim();
+    const intent = whatsappIntent(raw);
 
-    if (!text || text === 'hi' || text === 'menu' || session.state === WhatsappSessionState.WELCOME) {
+    if (intent.type === 'menu') {
       await this.setState(session.id, WhatsappSessionState.BROWSE);
       return this.reply(session.id, msg.from, this.welcome());
     }
 
-    if (text.startsWith('cat:')) {
-      const slug = text.slice(4);
-      const products = await this.prisma.product.findMany({
-        where: { published: true, category: { slug } },
-        take: 8,
-      });
-      await this.setState(session.id, WhatsappSessionState.BROWSE);
-      const body =
-        products.length === 0
-          ? 'No pieces in that category yet. Reply MENU.'
-          : products.map((p) => `• ${p.title}\n  Add: ADD:${p.slug}`).join('\n');
-      return this.reply(session.id, msg.from, `Catalogue — ${slug}\n\n${body}`);
+    if (intent.type === 'category') {
+      return this.listCategory(session.id, msg.from, intent.slug);
     }
 
-    if (text.startsWith('add:')) {
-      const slug = text.slice(4);
-      const product = await this.prisma.product.findUnique({
-        where: { slug },
-        include: { variants: { include: { inventory: true } } },
-      });
-      const variant = product?.variants.find((v) =>
-        v.inventory.some((i) => i.onHand - i.reserved > 0),
-      );
-      if (!product || !variant) {
-        return this.reply(session.id, msg.from, 'That piece is out of stock. Reply MENU.');
+    if (intent.type === 'add') {
+      return this.addSlug(session.id, session.cartId, msg.from, intent.slug);
+    }
+
+    if (intent.type === 'pick') {
+      const slugs = decodeWhatsappPicks(session.lastMessage);
+      const slug = slugs[intent.index];
+      if (!slug) {
+        return this.reply(session.id, msg.from, 'That number is not on the last list. Tell me a piece or reply MENU.');
       }
-      const cart = await this.carts.getOrCreate({
-        cartId: session.cartId ?? undefined,
-        sessionKey: `wa:${msg.from}`,
-        channel: SalesChannel.WHATSAPP,
-        internal: true,
-      });
-      const updated = await this.carts.add(cart.id, variant.id, 1, SalesChannel.WHATSAPP, { internal: true });
-      await this.prisma.whatsappSession.update({
-        where: { id: session.id },
-        data: { cartId: updated.id, state: WhatsappSessionState.CART },
-      });
-      return this.reply(
-        session.id,
-        msg.from,
-        `Added ${product.title} (${variant.size}/${variant.color}).\nCart total: €${(updated.subtotalCents / 100).toFixed(2)}\nReply CHECKOUT or MENU.`,
-      );
+      return this.addSlug(session.id, session.cartId, msg.from, slug);
     }
 
-    if (text === 'cart') {
+    if (intent.type === 'cart') {
       const cart = session.cartId
         ? await this.carts.getOrCreate({ cartId: session.cartId, channel: SalesChannel.WHATSAPP, internal: true })
         : null;
-      if (!cart?.items.length) return this.reply(session.id, msg.from, 'Your cart is empty. Reply MENU.');
+      if (!cart?.items.length) return this.reply(session.id, msg.from, 'Your cart is empty. Tell me what you want, like “black hijab”.');
       const lines = cart.items.map((i) => `• ${i.title} × ${i.quantity}`).join('\n');
-      return this.reply(session.id, msg.from, `${lines}\nTotal €${(cart.subtotalCents / 100).toFixed(2)}\nReply CHECKOUT`);
+      return this.reply(session.id, msg.from, `${lines}\nTotal €${(cart.subtotalCents / 100).toFixed(2)}\nReply CHECKOUT to pay.`);
     }
 
-    if (text === 'checkout') {
-      if (!session.cartId) return this.reply(session.id, msg.from, 'Cart is empty. Reply MENU.');
+    if (intent.type === 'checkout') {
+      if (!session.cartId) return this.reply(session.id, msg.from, 'Your cart is empty. Tell me a piece first.');
       const cart = await this.carts.getOrCreate({ cartId: session.cartId, internal: true });
       const user = await this.prisma.user.findUnique({ where: { phone: msg.from } });
       const order = await this.orders.checkout(
@@ -147,7 +122,84 @@ export class WhatsappService {
       );
     }
 
-    return this.reply(session.id, msg.from, this.welcome());
+    return this.searchPieces(session.id, msg.from, intent.q);
+  }
+
+  private async listCategory(sessionId: string, to: string, slug: string) {
+    const products = await this.prisma.product.findMany({
+      where: { published: true, category: { slug } },
+      take: 8,
+      orderBy: { title: 'asc' },
+    });
+    await this.setState(sessionId, WhatsappSessionState.BROWSE);
+    if (!products.length) {
+      return this.reply(sessionId, to, `Nothing in ${slug} just now. Try “hijabs” or “abayas”.`);
+    }
+    await this.prisma.whatsappSession.update({
+      where: { id: sessionId },
+      data: { lastMessage: encodeWhatsappPicks(products.map((row) => row.slug)) },
+    });
+    const body = products.map((p, i) => `${i + 1}. ${p.title}`).join('\n');
+    return this.reply(sessionId, to, `${slug.replace(/-/g, ' ')}\n\n${body}\n\nReply a number to add it, or describe a colour.`);
+  }
+
+  private async searchPieces(sessionId: string, to: string, q: string) {
+    const products = await this.prisma.product.findMany({
+      where: {
+        published: true,
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { slug: { contains: q.replace(/\s+/g, '-'), mode: 'insensitive' } },
+          { category: { name: { contains: q, mode: 'insensitive' } } },
+          { variants: { some: { color: { contains: q, mode: 'insensitive' } } } },
+        ],
+      },
+      take: 8,
+      orderBy: { title: 'asc' },
+    });
+    if (!products.length) {
+      return this.reply(sessionId, to, `I could not find “${q}”. Try “black hijab”, “jilbabs”, or MENU.`);
+    }
+    if (products.length === 1 && products[0]) {
+      return this.addSlug(sessionId, undefined, to, products[0].slug);
+    }
+    await this.prisma.whatsappSession.update({
+      where: { id: sessionId },
+      data: { lastMessage: encodeWhatsappPicks(products.map((row) => row.slug)) },
+    });
+    const body = products.map((p, i) => `${i + 1}. ${p.title}`).join('\n');
+    return this.reply(sessionId, to, `Here’s what I found:\n\n${body}\n\nReply a number to add it.`);
+  }
+
+  private async addSlug(sessionId: string, cartId: string | null | undefined, from: string, slug: string) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        published: true,
+        OR: [{ slug }, { slug: slug.replace(/\s+/g, '-') }, { title: { equals: slug, mode: 'insensitive' } }],
+      },
+      include: { variants: { include: { inventory: true } } },
+    });
+    const variant = product?.variants.find((v) => v.inventory.some((i) => i.onHand - i.reserved > 0));
+    if (!product || !variant) {
+      return this.reply(sessionId, from, 'That piece is out of stock. Try another colour or MENU.');
+    }
+    const session = await this.prisma.whatsappSession.findUnique({ where: { id: sessionId } });
+    const cart = await this.carts.getOrCreate({
+      cartId: cartId ?? session?.cartId ?? undefined,
+      sessionKey: `wa:${from}`,
+      channel: SalesChannel.WHATSAPP,
+      internal: true,
+    });
+    const updated = await this.carts.add(cart.id, variant.id, 1, SalesChannel.WHATSAPP, { internal: true });
+    await this.prisma.whatsappSession.update({
+      where: { id: sessionId },
+      data: { cartId: updated.id, state: WhatsappSessionState.CART },
+    });
+    return this.reply(
+      sessionId,
+      from,
+      `Added ${product.title} (${variant.size}/${variant.color}).\nCart €${(updated.subtotalCents / 100).toFixed(2)}\nReply CHECKOUT to pay, or keep shopping.`,
+    );
   }
 
   async sendTemplate(to: string, template: string, body: string) {
@@ -176,9 +228,8 @@ export class WhatsappService {
   private welcome() {
     return [
       'Welcome to Motive Fashion, Dublin.',
-      'Reply:',
-      'CAT:hijabs  CAT:abayas  CAT:dresses  CAT:jilbabs  CAT:niqabs',
-      'CART  CHECKOUT  MENU',
+      'Tell me what you want — “black hijab”, “jilbabs”, or “abaya”.',
+      'Reply a number to add a piece, CART to see your bag, CHECKOUT to pay and collect.',
     ].join('\n');
   }
 

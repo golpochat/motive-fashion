@@ -6,7 +6,7 @@ import { formatEur } from '@motive-fashion/utils';
 import { useConsoleQuery } from '@/lib/console-query';
 import { orderItemsLabel, orderRef, orderWhen } from '@/lib/order-display';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Td } from '@/components/dashboard-ui';
+import { DataTable, IconButton, RowActions, Td } from '@/components/dashboard-ui';
 
 export type AccountOrderRow = {
   id: string;
@@ -36,7 +36,7 @@ export default function UserOrders() {
         emptyTitle="No orders yet"
         emptyBody="When you check out, they will appear here."
       >
-        <DataTable headers={['Order', 'Placed', 'Items', 'Fulfilment', 'Status', 'Total', '']}>
+        <DataTable headers={['Order', 'Placed', 'Items', 'Fulfilment', 'Status', 'Total', 'Action']}>
           {orders.map((order) => (
             <tr key={order.id} className="hover:bg-ink/[0.02]">
               <Td>
@@ -50,10 +50,10 @@ export default function UserOrders() {
               <Td muted>{order.fulfillment === 'COLLECTION' ? 'Collection' : 'Delivery'}</Td>
               <Td>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Td>
               <Td>{formatEur(order.totalCents)}</Td>
-              <Td>
-                <Link href={`/user/orders/${order.id}`} className="text-sm no-underline">
-                  View
-                </Link>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="View order" icon="open" href={`/user/orders/${order.id}`} />
+                </RowActions>
               </Td>
             </tr>
           ))}

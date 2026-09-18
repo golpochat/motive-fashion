@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Field, FilterTabs, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, FilterTabs, Modal, PrimaryButton, SecondaryButton, Td, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
 
 type Perm = { id: string; key: string; name: string; group: string; builtin?: boolean };
 
@@ -135,17 +135,13 @@ export default function SuperAdminPermissions() {
               <code>{p.key}</code>
             </Td>
             <Td>{p.group}</Td>
-            <Td>
-              <div className="flex flex-wrap gap-2">
-                <SecondaryButton type="button" onClick={() => openEdit(p)}>
-                  Edit
-                </SecondaryButton>
+            <Td nowrap>
+              <RowActions>
+                <IconButton label="Edit permission" icon="edit" onClick={() => openEdit(p)} />
                 {p.builtin ? null : (
-                  <SecondaryButton type="button" onClick={() => setConfirmDelete(p)}>
-                    Delete
-                  </SecondaryButton>
+                  <IconButton label="Delete permission" icon="trash" tone="danger" onClick={() => setConfirmDelete(p)} />
                 )}
-              </div>
+              </RowActions>
             </Td>
           </tr>
         ))}

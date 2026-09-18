@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { ErrorState, LoadingState, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, Panel, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, Panel, Td, Toggle } from '@/components/dashboard-ui';
 
 type Method = {
   id: string;
@@ -106,21 +106,23 @@ export default function AdminCheckout() {
                     {row.name}
                     <span className="ml-2 text-xs text-ink/45">{row.code}</span>
                     {row.code === 'COLLECTION' ? (
-                      <span className="mt-1 block text-xs text-ink/45">Till and WhatsApp only. Not offered on the website yet.</span>
+                      <span className="mt-1 block text-xs text-ink/45">Shown at web checkout when published. Same Dublin collection as till and WhatsApp.</span>
                     ) : null}
                   </td>
                   <td>
-                    <input
-                      type="checkbox"
+                    <Toggle
                       checked={row.published}
-                      onChange={(e) => void patch(`/admin/commerce/fulfilment/${row.id}`, { published: e.target.checked })}
+                      onChange={(next) => void patch(`/admin/commerce/fulfilment/${row.id}`, { published: next })}
+                      label={row.published ? 'Unpublish fulfilment' : 'Publish fulfilment'}
+                      showLabel={false}
                     />
                   </td>
                   <td>
-                    <input
-                      type="checkbox"
+                    <Toggle
                       checked={row.isDefault}
                       onChange={() => void patch(`/admin/commerce/fulfilment/${row.id}`, { isDefault: true })}
+                      label="Set as default fulfilment"
+                      showLabel={false}
                     />
                   </td>
                   <td>
@@ -178,18 +180,20 @@ export default function AdminCheckout() {
                 <span className="ml-2 text-xs text-ink/45">{row.code}</span>
               </Td>
               <Td>
-                <input
-                  type="checkbox"
+                <Toggle
                   checked={row.published}
-                  onChange={(e) => void patch(`/admin/commerce/payments/${row.id}`, { published: e.target.checked })}
+                  onChange={(next) => void patch(`/admin/commerce/payments/${row.id}`, { published: next })}
+                  label={row.published ? 'Unpublish payment' : 'Publish payment'}
+                  showLabel={false}
                 />
               </Td>
               <Td muted>{row.publicChannel ? 'Web / app' : 'Till only'}</Td>
               <Td>
-                <input
-                  type="checkbox"
+                <Toggle
                   checked={row.isDefault}
                   onChange={() => void patch(`/admin/commerce/payments/${row.id}`, { isDefault: true })}
+                  label="Set as default payment"
+                  showLabel={false}
                 />
               </Td>
             </tr>
@@ -205,10 +209,11 @@ export default function AdminCheckout() {
             <tr key={row.id} className="hover:bg-ink/[0.02]">
               <Td>{row.name}</Td>
               <Td>
-                <input
-                  type="checkbox"
+                <Toggle
                   checked={row.published}
-                  onChange={(e) => void patch(`/admin/commerce/counties/${row.id}`, { published: e.target.checked })}
+                  onChange={(next) => void patch(`/admin/commerce/counties/${row.id}`, { published: next })}
+                  label={row.published ? 'Unpublish county' : 'Publish county'}
+                  showLabel={false}
                 />
               </Td>
               <Td>

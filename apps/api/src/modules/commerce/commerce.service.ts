@@ -25,9 +25,9 @@ export type PricedCart = {
   shippingCounty?: string;
 };
 
-/** Click & collect stays on the till (and WhatsApp). Website and app are delivery-only for now. */
-export function collectionAllowedOnChannel(channel: SalesChannel) {
-  return channel === SalesChannel.POS || channel === SalesChannel.WHATSAPP;
+/** Click & collect is a published fulfilment method on every channel, including the website. */
+export function collectionAllowedOnChannel(_channel: SalesChannel) {
+  return true;
 }
 
 @Injectable()
@@ -136,21 +136,20 @@ export class CommerceService {
       }),
     ]);
     const card = payments.find((p) => p.code === 'CARD');
-    const publicFulfilment = fulfilment.filter((row) => row.code !== 'COLLECTION');
     const blocked =
-      publicFulfilment.length === 0
+      fulfilment.length === 0
         ? 'Checkout is unavailable: no fulfilment method is published.'
         : !card
           ? 'Checkout is unavailable: card payments are not published.'
           : null;
     const defaultFulfilment =
-      publicFulfilment.find((m) => m.isDefault)?.code ??
-      publicFulfilment.find((m) => m.code === 'DELIVERY')?.code ??
-      publicFulfilment[0]?.code ??
+      fulfilment.find((m) => m.isDefault)?.code ??
+      fulfilment.find((m) => m.code === 'DELIVERY')?.code ??
+      fulfilment[0]?.code ??
       'DELIVERY';
     return {
       blocked,
-      fulfilment: publicFulfilment,
+      fulfilment,
       payments,
       counties,
       defaultFulfilment,
@@ -170,9 +169,6 @@ export class CommerceService {
 
   async quote(input: CheckoutQuoteInput, userId?: string): Promise<PricedCart> {
     await this.ensureDefaults();
-    if (input.fulfillment === 'COLLECTION') {
-      throw new BadRequestException('Collection is not available on the website yet');
-    }
     const cart = await this.loadPricedCart(input.cartId, userId, input.sessionKey);
     return this.price(cart, input.fulfillment, input.county, input.promoCode);
   }
@@ -241,14 +237,8 @@ export class CommerceService {
     return 'CARD' as const;
   }
 
-  async assertFulfilment(code: 'DELIVERY' | 'COLLECTION', channel: SalesChannel) {
+  async assertFulfilment(code: 'DELIVERY' | 'COLLECTION', _channel: SalesChannel) {
     await this.ensureDefaults();
-    if (code === 'COLLECTION' && !collectionAllowedOnChannel(channel)) {
-      throw new BadRequestException('Collection is not available on the website yet');
-    }
-    if (collectionAllowedOnChannel(channel)) {
-      return code;
-    }
     const method = await this.prisma.fulfilmentMethodConfig.findUnique({ where: { code } });
     if (!method?.published) {
       throw new BadRequestException('That fulfilment method is not available');

@@ -106,6 +106,25 @@ export {
 } from './scan';
 export { code128Checksum, encodeCode128Modules } from './code128';
 export { qrModules, qrSize, qrVersionFor } from './qr';
+export {
+  CATALOG_COLORS,
+  CATALOG_OCCASIONS,
+  CATALOG_SIZES,
+  cartesianStyleRows,
+  defaultProductDescription,
+  styleComboKey,
+  styleDefaultsForCategory,
+  uniqueColors,
+  uniqueSizes,
+  variantSku,
+  type StyleDefaults,
+} from './style-catalog';
+export {
+  decodeWhatsappPicks,
+  encodeWhatsappPicks,
+  whatsappIntent,
+  type WhatsappIntent,
+} from './whatsapp-intent';
 
 export function quoteShippingCents(input: {
   fulfillment: 'DELIVERY' | 'COLLECTION';

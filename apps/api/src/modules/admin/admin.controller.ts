@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { OrderStatus, Prisma, ReviewStatus, UserRole } from '../../../generated/prisma';
+import { OrderStatus, Prisma, ReturnStatus, ReviewStatus, UserRole } from '../../../generated/prisma';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
@@ -9,6 +9,8 @@ import {
   productCreateSchema,
   productPatchSchema,
   variantCreateSchema,
+  variantBulkCreateSchema,
+  variantPatchSchema,
   promoCreateSchema,
   promoPatchSchema,
   orderStatusSchema,
@@ -21,7 +23,7 @@ import {
   locationPatchSchema,
   reviewModerateSchema,
 } from '@motive-fashion/validation';
-import { slugify } from '@motive-fashion/utils';
+import { slugify, styleComboKey, styleDefaultsForCategory } from '@motive-fashion/utils';
 import { customerPublicSelect } from '../../common/user-select';
 import { writeAudit } from '../../common/audit';
 import { saveProductImage, uploadDir } from '../../common/media';
@@ -40,7 +42,7 @@ export class AdminController {
   @Get('analytics')
   @RequirePermissions('analytics.read')
   async analytics() {
-    const [orderAgg, orders, low] = await Promise.all([
+    const [orderAgg, orders, low, toPack, unpublished, noPhoto, openReturns] = await Promise.all([
       this.prisma.order.aggregate({
         _sum: { totalCents: true },
         _count: true,
@@ -53,6 +55,14 @@ export class AdminController {
       }),
       this.prisma.inventoryLevel.count({
         where: { onHand: { lte: 5 } },
+      }),
+      this.prisma.order.count({
+        where: { status: { in: [OrderStatus.CONFIRMED, OrderStatus.PACKING] } },
+      }),
+      this.prisma.product.count({ where: { published: false } }),
+      this.prisma.product.count({ where: { images: { none: {} } } }),
+      this.prisma.return.count({
+        where: { status: { in: [ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.RECEIVED] } },
       }),
     ]);
     const top = await this.prisma.orderItem.groupBy({
@@ -67,6 +77,13 @@ export class AdminController {
       stockouts: low,
       byChannel: orders,
       topSkus: top,
+      next: {
+        pack: toPack,
+        unpublished,
+        noPhoto,
+        returns: openReturns,
+        lowStock: low,
+      },
     };
   }
 
@@ -74,26 +91,108 @@ export class AdminController {
   @RequirePermissions('catalog.read')
   products() {
     return this.prisma.product.findMany({
-      include: { category: true, variants: true, images: true },
+      include: { category: true, images: true, variants: { include: { inventory: true } } },
       orderBy: { title: 'asc' },
     });
   }
 
+  @Get('search')
+  @RequirePermissions('orders.read')
+  async search(@Query('q') q: string, @CurrentUser() user: { permissions?: string[] }) {
+    const needle = (q ?? '').trim();
+    if (needle.length < 2) return { products: [], orders: [], customers: [], coupons: [] };
+    const keys = user.permissions ?? [];
+    const all = keys.includes('*');
+    const term = { contains: needle, mode: 'insensitive' as const };
+    const [products, orders, customers, coupons] = await Promise.all([
+      all || keys.includes('catalog.read')
+        ? this.prisma.product.findMany({
+            where: {
+              OR: [
+                { title: term },
+                { slug: term },
+                { variants: { some: { OR: [{ sku: term }, { barcode: term }] } } },
+              ],
+            },
+            take: 8,
+            orderBy: { title: 'asc' },
+            select: { id: true, title: true, slug: true, published: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.order.findMany({
+        where: {
+          OR: [{ ticket: term }, { email: term }, { name: term }, { id: { startsWith: needle } }],
+        },
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, ticket: true, email: true, name: true, status: true, totalCents: true },
+      }),
+      all || keys.includes('customers.read')
+        ? this.prisma.user.findMany({
+            where: { deletedAt: null, OR: [{ email: term }, { name: term }, { phone: term }] },
+            take: 8,
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, email: true },
+          })
+        : Promise.resolve([]),
+      all || keys.includes('marketing.write')
+        ? this.prisma.promoCode.findMany({
+            where: { code: term },
+            take: 5,
+            orderBy: { code: 'asc' },
+            select: { id: true, code: true, active: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    return { products, orders, customers, coupons };
+  }
+
   @Post('products')
   @RequirePermissions('catalog.write')
-  createProduct(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+  async createProduct(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = productCreateSchema.parse(body);
-    return this.prisma.product.create({
-      data: { ...dto, slug: dto.slug?.trim() || slugify(dto.title) },
-    }).then(async (product) => {
-      await writeAudit(this.prisma, {
-        actorId: user.sub,
-        action: 'product.create',
-        entity: 'Product',
-        entityId: product.id,
+    const category = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
+    if (!category) throw new BadRequestException('Unknown category.');
+    const defaults = styleDefaultsForCategory(category.slug);
+    const { variants, ...productData } = dto;
+    try {
+      const product = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.product.create({
+          data: {
+            ...productData,
+            slug: dto.slug?.trim() || slugify(dto.title),
+            occasion: dto.occasion ?? defaults.occasion,
+            coverage: dto.coverage ?? defaults.coverage ?? undefined,
+            prayerReady: dto.prayerReady ?? defaults.prayerReady,
+            published: dto.published ?? false,
+            variants: variants?.length
+              ? {
+                  create: variants.map((variant) => ({
+                    ...variant,
+                    barcode: variant.barcode?.trim() || variant.sku,
+                    fabric: variant.fabric ?? defaults.fabric,
+                    weightGrams: defaults.weightGrams,
+                  })),
+                }
+              : undefined,
+          },
+          include: { category: true, variants: true, images: true },
+        });
+        await writeAudit(tx, {
+          actorId: user.sub,
+          action: 'product.create',
+          entity: 'Product',
+          entityId: created.id,
+        });
+        return created;
       });
       return product;
-    });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('A product or SKU with this code already exists.');
+      }
+      throw err;
+    }
   }
 
   @Patch('products/:id')
@@ -114,18 +213,93 @@ export class AdminController {
   @Post('products/:id/variants')
   @RequirePermissions('catalog.write')
   async addVariant(@Param('id') productId: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
-    const dto = variantCreateSchema.parse(body);
-    const variant = await this.prisma.productVariant.create({
-      data: { ...dto, productId, barcode: dto.barcode?.trim() || dto.sku },
+    const bulk = (body as { variants?: unknown })?.variants
+      ? variantBulkCreateSchema.parse(body).variants
+      : [variantCreateSchema.parse(body)];
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      include: { category: true, variants: true },
     });
-    await writeAudit(this.prisma, {
-      actorId: user.sub,
-      action: 'product.variant.create',
-      entity: 'ProductVariant',
-      entityId: variant.id,
-      meta: { productId, sku: dto.sku },
+    if (!product) throw new BadRequestException('Product not found');
+    const defaults = styleDefaultsForCategory(product.category.slug);
+    const existing = new Set(product.variants.map((row) => styleComboKey(row.size, row.color)));
+    for (const dto of bulk) {
+      if (existing.has(styleComboKey(dto.size, dto.color))) {
+        throw new BadRequestException(`${dto.size} / ${dto.color} is already on this product.`);
+      }
+      existing.add(styleComboKey(dto.size, dto.color));
+    }
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const rows = [];
+        for (const dto of bulk) {
+          const variant = await tx.productVariant.create({
+            data: {
+              ...dto,
+              productId,
+              barcode: dto.barcode?.trim() || dto.sku,
+              fabric: dto.fabric ?? defaults.fabric,
+              weightGrams: defaults.weightGrams,
+            },
+          });
+          await writeAudit(tx, {
+            actorId: user.sub,
+            action: 'product.variant.create',
+            entity: 'ProductVariant',
+            entityId: variant.id,
+            meta: { productId, sku: dto.sku },
+          });
+          rows.push(variant);
+        }
+        return rows;
+      });
+      return bulk.length === 1 ? created[0] : created;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That SKU or barcode is already in use.');
+      }
+      throw err;
+    }
+  }
+
+  @Patch('products/:id/variants/:variantId')
+  @RequirePermissions('catalog.write')
+  async updateVariant(
+    @Param('id') productId: string,
+    @Param('variantId') variantId: string,
+    @Body() body: unknown,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const dto = variantPatchSchema.parse(body);
+    const variant = await this.prisma.productVariant.findFirst({ where: { id: variantId, productId } });
+    if (!variant) throw new BadRequestException('SKU not found');
+    const nextSize = dto.size ?? variant.size;
+    const nextColor = dto.color ?? variant.color;
+    const clash = await this.prisma.productVariant.findFirst({
+      where: {
+        productId,
+        id: { not: variantId },
+        size: { equals: nextSize, mode: 'insensitive' },
+        color: { equals: nextColor, mode: 'insensitive' },
+      },
     });
-    return variant;
+    if (clash) throw new BadRequestException(`${nextSize} / ${nextColor} is already on this product.`);
+    try {
+      const updated = await this.prisma.productVariant.update({ where: { id: variantId }, data: dto });
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'product.variant.update',
+        entity: 'ProductVariant',
+        entityId: variantId,
+        meta: { productId, ...dto },
+      });
+      return updated;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That SKU or barcode is already in use.');
+      }
+      throw err;
+    }
   }
 
   @Post('products/:id/images')

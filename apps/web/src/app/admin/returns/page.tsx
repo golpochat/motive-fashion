@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, PrimaryButton, SecondaryButton, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, IconButton, RowActions, Td } from '@/components/dashboard-ui';
 import { formatEur } from '@motive-fashion/utils';
 import { hasPerm } from '@/lib/rbac';
 import { useSession } from '@/components/session-provider';
@@ -24,13 +24,13 @@ type ReturnRow = {
   items: { quantity: number; orderItem?: { title: string; sku: string } }[];
 };
 
-const NEXT: Record<string, { id: string; label: string }[]> = {
+const NEXT: Record<string, { id: string; label: string; icon: 'check' | 'x' | 'pack' | 'refund'; tone?: 'success' | 'danger' }[]> = {
   REQUESTED: [
-    { id: 'APPROVED', label: 'Approve' },
-    { id: 'REJECTED', label: 'Reject' },
+    { id: 'APPROVED', label: 'Approve return', icon: 'check', tone: 'success' },
+    { id: 'REJECTED', label: 'Reject return', icon: 'x', tone: 'danger' },
   ],
-  APPROVED: [{ id: 'RECEIVED', label: 'Mark received' }],
-  RECEIVED: [{ id: 'REFUNDED', label: 'Mark refunded' }],
+  APPROVED: [{ id: 'RECEIVED', label: 'Mark received', icon: 'pack' }],
+  RECEIVED: [{ id: 'REFUNDED', label: 'Mark refunded', icon: 'refund' }],
 };
 
 export default function AdminReturns() {
@@ -97,7 +97,7 @@ export default function AdminReturns() {
         emptyTitle="No returns"
         emptyBody="Customer return requests appear here after delivery or collection."
       >
-        <DataTable headers={['Order', 'Reason', 'Items', 'Status', '']}>
+        <DataTable headers={['Order', 'Reason', 'Items', 'Status', 'Action']}>
           {visible.map((row) => (
             <tr key={row.id} className="hover:bg-ink/5">
               <Td>
@@ -115,25 +115,28 @@ export default function AdminReturns() {
                 ))}
               </Td>
               <Td muted>{row.status}</Td>
-              <Td>
+              <Td nowrap>
                 {canPack ? (
-                  <div className="flex flex-wrap gap-2">
+                  <RowActions>
                     {(NEXT[row.status] ?? []).map((action) => (
-                      <SecondaryButton
+                      <IconButton
                         key={action.id}
-                        type="button"
+                        label={action.label}
+                        icon={action.icon}
+                        tone={action.tone}
                         disabled={busyId === row.id}
                         onClick={() => void setStatus(row.id, action.id)}
-                      >
-                        {action.label}
-                      </SecondaryButton>
+                      />
                     ))}
                     {row.status === 'APPROVED' ? (
-                      <PrimaryButton type="button" disabled={busyId === row.id} onClick={() => void setStatus(row.id, 'REFUNDED')}>
-                        Receive and refund
-                      </PrimaryButton>
+                      <IconButton
+                        label="Receive and refund"
+                        icon="refund"
+                        disabled={busyId === row.id}
+                        onClick={() => void setStatus(row.id, 'REFUNDED')}
+                      />
                     ) : null}
-                  </div>
+                  </RowActions>
                 ) : null}
               </Td>
             </tr>

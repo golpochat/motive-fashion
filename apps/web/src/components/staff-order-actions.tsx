@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
-import { Field, Modal, PrimaryButton, SecondaryButton, fieldClass } from '@/components/dashboard-ui';
+import { Field, Modal, PrimaryButton, SecondaryButton, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
 import { formatEur } from '@motive-fashion/utils';
 
 export function StaffOrderActions({
@@ -104,34 +104,35 @@ export function StaffOrderActions({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <div className="flex flex-wrap gap-2">
-        <SecondaryButton type="button" disabled={Boolean(busy)} onClick={() => void reprint()}>
-          {busy === 'print' ? 'Printing…' : 'Reprint'}
-        </SecondaryButton>
-        <SecondaryButton
-          type="button"
+      <RowActions>
+        <IconButton
+          label={busy === 'print' ? 'Printing…' : 'Reprint ticket'}
+          icon="print"
+          disabled={Boolean(busy)}
+          onClick={() => void reprint()}
+        />
+        <IconButton
+          label="Email receipt"
+          icon="mail"
           disabled={Boolean(busy)}
           onClick={() => {
             setTo(email ?? '');
             setEmailOpen(true);
           }}
-        >
-          Email receipt
-        </SecondaryButton>
+        />
         {canRefund ? (
-          <SecondaryButton
-            type="button"
+          <IconButton
+            label={cash ? 'Refund cash' : 'Refund card'}
+            icon="refund"
             disabled={Boolean(busy)}
             onClick={() => {
               setRefundEur(((remainingCents ?? 0) / 100).toFixed(2));
               setRefundReason('');
               setRefundOpen(true);
             }}
-          >
-            {cash ? 'Refund cash' : 'Refund card'}
-          </SecondaryButton>
+          />
         ) : null}
-      </div>
+      </RowActions>
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
       {note ? <p className="text-xs text-ink/55">{note}</p> : null}
       {emailOpen ? (

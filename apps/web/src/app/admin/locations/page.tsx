@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, IconButton, Modal, PrimaryButton, RowActions, SecondaryButton, Select, Td, Toggle, fieldClass } from '@/components/dashboard-ui';
 import { hasPerm } from '@/lib/rbac';
 import { useSession } from '@/components/session-provider';
 
@@ -66,7 +66,7 @@ export default function AdminLocations() {
         name: form.get('name'),
         type: form.get('type'),
         address: String(form.get('address') || '') || null,
-        active: form.get('active') === 'true',
+        active: form.get('active') === 'on',
       }),
     });
     const payload = await res.json().catch(() => null);
@@ -76,6 +76,22 @@ export default function AdminLocations() {
       return;
     }
     setEditing(null);
+    reload();
+  }
+
+  async function setActive(location: Location, active: boolean) {
+    setFormError('');
+    const res = await fetch(`${API}/admin/locations/${location.id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      setFormError(apiErrorMessage(payload, 'Could not update this location.'));
+      return;
+    }
     reload();
   }
 
@@ -100,7 +116,7 @@ export default function AdminLocations() {
         emptyTitle="No locations"
         emptyBody="Add a stock room before you transfer inventory."
       >
-        <DataTable headers={['Code', 'Name', 'Type', 'Status', '']}>
+        <DataTable headers={['Code', 'Name', 'Type', 'Active', 'Action']}>
           {rows.map((l) => (
             <tr key={l.id} className="hover:bg-ink/5">
               <Td>{l.code}</Td>
@@ -109,12 +125,21 @@ export default function AdminLocations() {
                 {l.address ? <span className="mt-1 block text-xs text-ink/45">{l.address}</span> : null}
               </Td>
               <Td muted>{TYPES.find((t) => t.value === l.type)?.label ?? l.type}</Td>
-              <Td muted>{l.active ? 'Active' : 'Inactive'}</Td>
-              <Td>
+              <Td nowrap>
                 {canWrite ? (
-                  <SecondaryButton type="button" onClick={() => { setFormError(''); setEditing(l); }}>
-                    Edit
-                  </SecondaryButton>
+                  <Toggle
+                    checked={l.active}
+                    onChange={(next) => void setActive(l, next)}
+                    label={l.active ? 'Deactivate location' : 'Activate location'}
+                    showLabel={false}
+                  />
+                ) : null}
+              </Td>
+              <Td nowrap>
+                {canWrite ? (
+                  <RowActions>
+                    <IconButton label="Edit location" icon="edit" onClick={() => { setFormError(''); setEditing(l); }} />
+                  </RowActions>
                 ) : null}
               </Td>
             </tr>
@@ -161,16 +186,12 @@ export default function AdminLocations() {
             <Field label="Address">
               <input name="address" defaultValue={editing.address ?? ''} className={fieldClass} />
             </Field>
-            <Field label="Status">
-              <Select
-                name="active"
-                defaultValue={editing.active ? 'true' : 'false'}
-                options={[
-                  { value: 'true', label: 'Active' },
-                  { value: 'false', label: 'Inactive' },
-                ]}
-              />
-            </Field>
+            <Toggle
+              checked={editing.active}
+              onChange={(next) => setEditing({ ...editing, active: next })}
+              name="active"
+              label={editing.active ? 'Active' : 'Inactive'}
+            />
             <div className="flex gap-2">
               <PrimaryButton type="submit" disabled={busy}>
                 Save

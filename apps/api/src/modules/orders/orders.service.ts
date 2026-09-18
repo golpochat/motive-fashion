@@ -4,11 +4,10 @@ import {
   OrderStatus,
   PaymentStatus,
   ReturnStatus,
-  ReviewStatus,
   SalesChannel,
 } from '@prisma/client';
 import { randomBytes, randomUUID } from 'crypto';
-import { Prisma } from '../../../generated/prisma';
+import { Prisma, ReviewStatus } from '../../../generated/prisma';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';

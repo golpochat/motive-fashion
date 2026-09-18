@@ -166,17 +166,72 @@ export const stockTransferSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
-export const productCreateSchema = z.object({
-  title: z.string().min(2),
-  slug: z.string().min(2).optional(),
-  description: z.string().min(10),
-  categoryId: z.string().uuid(),
-  occasion: z.string().optional(),
-  coverage: z.string().optional(),
-  opacity: z.string().optional(),
-  hijabStyle: z.string().optional(),
-  prayerReady: z.boolean().optional(),
+export const variantCreateSchema = z.object({
+  sku: z.string().min(2).max(40),
+  barcode: z.string().min(2).max(64).optional(),
+  size: z.string().min(1).max(20),
+  color: z.string().min(1).max(40),
+  fabric: z.string().max(40).optional(),
+  costCents: z.number().int().min(0),
+  priceCents: z.number().int().min(0),
+  compareAtCents: z.number().int().min(0).optional(),
 });
+
+export const variantPatchSchema = z
+  .object({
+    sku: z.string().min(2).max(40).optional(),
+    barcode: z.string().min(2).max(64).nullable().optional(),
+    size: z.string().min(1).max(20).optional(),
+    color: z.string().min(1).max(40).optional(),
+    fabric: z.string().max(40).nullable().optional(),
+    costCents: z.number().int().min(0).optional(),
+    priceCents: z.number().int().min(0).optional(),
+    compareAtCents: z.number().int().min(0).nullable().optional(),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
+function uniqueStyleVariants(
+  variants: { sku: string; size: string; color: string }[],
+  ctx: z.RefinementCtx,
+) {
+  const skus = new Set<string>();
+  const combos = new Set<string>();
+  variants.forEach((row, index) => {
+    const sku = row.sku.trim().toUpperCase();
+    const combo = `${row.size.trim().toLowerCase()}|${row.color.trim().toLowerCase()}`;
+    if (skus.has(sku)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Each SKU must be unique.', path: ['variants', index, 'sku'] });
+    }
+    if (combos.has(combo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Each size and colour pair must be unique.',
+        path: ['variants', index, 'color'],
+      });
+    }
+    skus.add(sku);
+    combos.add(combo);
+  });
+}
+
+export const productCreateSchema = z
+  .object({
+    title: z.string().min(2),
+    slug: z.string().min(2).optional(),
+    description: z.string().min(10),
+    categoryId: z.string().uuid(),
+    occasion: z.string().optional(),
+    coverage: z.string().optional(),
+    opacity: z.string().optional(),
+    hijabStyle: z.string().optional(),
+    prayerReady: z.boolean().optional(),
+    published: z.boolean().optional(),
+    variants: z.array(variantCreateSchema).max(48).optional(),
+  })
+  .superRefine((dto, ctx) => {
+    if (dto.variants?.length) uniqueStyleVariants(dto.variants, ctx);
+  });
 
 export const productPatchSchema = z
   .object({
@@ -230,16 +285,11 @@ export const cookieConsentSchema = z.object({
   sessionKey: z.string().min(8).max(80).optional(),
 });
 
-export const variantCreateSchema = z.object({
-  sku: z.string().min(2).max(40),
-  barcode: z.string().min(2).max(64).optional(),
-  size: z.string().min(1).max(20),
-  color: z.string().min(1).max(40),
-  fabric: z.string().max(40).optional(),
-  costCents: z.number().int().min(0),
-  priceCents: z.number().int().min(0),
-  compareAtCents: z.number().int().min(0).optional(),
-});
+export const variantBulkCreateSchema = z
+  .object({
+    variants: z.array(variantCreateSchema).min(1).max(48),
+  })
+  .superRefine((dto, ctx) => uniqueStyleVariants(dto.variants, ctx));
 
 /** PERCENT `value` is basis points (1000 = 10%). FIXED `value` is EUR cents. */
 export const promoCreateSchema = z

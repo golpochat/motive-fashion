@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
+import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import {
   DataTable,
   Field,
   FilterTabs,
+  IconButton,
   PrimaryButton,
+  RowActions,
   SecondaryButton,
   Select,
   Td,
@@ -47,42 +49,39 @@ export default function AdminOrders() {
   const { me } = useSession();
   const canRefund = hasPerm(me, 'orders.refund');
   const canPack = hasPerm(me, 'orders.pack');
-  const [rows, setRows] = useState<AdminOrder[]>([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const { data, error: loadError, loading, reload } = useConsoleQuery<AdminOrder[]>(
+    '/admin/orders',
+    'Could not load orders',
+  );
+  const rows = data ?? [];
+  const [formError, setFormError] = useState('');
   const [busyId, setBusyId] = useState('');
   const [shipId, setShipId] = useState('');
   const [refundId, setRefundId] = useState('');
   const [channel, setChannel] = useState('ALL');
+  const [q, setQ] = useState('');
   const [carrier, setCarrier] = useState('AN_POST');
   const [trackingNo, setTrackingNo] = useState('');
   const [refundEur, setRefundEur] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const error = formError || loadError;
 
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`${API}/admin/orders`, { credentials: 'include' });
-    if (!res.ok) {
-      setError('Could not load orders');
-      setLoading(false);
-      return;
-    }
-    setError('');
-    setRows((await res.json()) as AdminOrder[]);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const visible = useMemo(
-    () => (channel === 'ALL' ? rows : rows.filter((row) => row.channel === channel)),
-    [channel, rows],
-  );
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (channel !== 'ALL' && row.channel !== channel) return false;
+      if (!needle) return true;
+      return (
+        row.id.toLowerCase().includes(needle) ||
+        (row.ticket ?? '').toLowerCase().includes(needle) ||
+        row.email.toLowerCase().includes(needle) ||
+        row.name.toLowerCase().includes(needle)
+      );
+    });
+  }, [channel, q, rows]);
 
   async function advance(order: AdminOrder, status: string) {
-    setError('');
+    setFormError('');
     setBusyId(order.id);
     const body: { status: string; carrier?: string; trackingNo?: string } = { status };
     if (status === 'SHIPPED') {
@@ -98,19 +97,19 @@ export default function AdminOrders() {
     const payload = (await res.json()) as { message?: string };
     setBusyId('');
     if (!res.ok) {
-      setError(payload.message ?? 'Could not update this order');
+      setFormError(payload.message ?? 'Could not update this order');
       return;
     }
     setShipId('');
     setTrackingNo('');
-    await load();
+    reload();
   }
 
   async function refund(order: AdminOrder) {
-    setError('');
+    setFormError('');
     const amountCents = Math.round(Number(refundEur) * 100);
     if (!Number.isFinite(amountCents) || amountCents < 1) {
-      setError('Enter a refund amount');
+      setFormError('Enter a refund amount');
       return;
     }
     setBusyId(order.id);
@@ -123,27 +122,27 @@ export default function AdminOrders() {
     const payload = await res.json().catch(() => null);
     setBusyId('');
     if (!res.ok) {
-      setError(apiErrorMessage(payload, 'Could not refund this order'));
+      setFormError(apiErrorMessage(payload, 'Could not refund this order'));
       return;
     }
     setRefundId('');
     setRefundEur('');
     setRefundReason('');
-    await load();
+    reload();
   }
 
   return (
     <div>
       <PageHeader
         title="Orders"
-        description="Every paid web, till, WhatsApp, and app order. Pack delivery and collection from the pack station so the wrong SKU never leaves."
+        description="Every paid web, till, WhatsApp, and app order. Open a ticket to pack, or filter by channel and search."
       />
       {error && rows.length ? (
         <p className="mb-4 text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <FilterTabs
           ariaLabel="Sales channel"
           current={channel}
@@ -156,13 +155,22 @@ export default function AdminOrders() {
             { id: 'MOBILE', label: 'App' },
           ]}
         />
+        <Field label="Find an order">
+          <input
+            className={fieldClass}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Ticket, name, or email"
+            autoComplete="off"
+          />
+        </Field>
       </div>
       <ConsoleSection
         loading={loading}
         error={rows.length ? '' : error}
-        onRetry={() => void load()}
+        onRetry={reload}
         empty={visible.length === 0}
-        emptyTitle={channel === 'ALL' ? 'No orders' : 'No orders in this channel'}
+        emptyTitle={q.trim() ? 'No matching orders' : channel === 'ALL' ? 'No orders' : 'No orders in this channel'}
         emptyBody={
           channel === 'POS'
             ? 'Every POS sale from any cashier appears here once it is taken.'
@@ -172,8 +180,8 @@ export default function AdminOrders() {
         <DataTable
           headers={
             channel === 'POS'
-              ? ['Ticket', 'Staff', 'Customer', 'Pay', 'Status', 'Total', 'Next']
-              : ['Order', 'Channel', 'Staff', 'Customer', 'Status', 'Total', 'Next']
+              ? ['Ticket', 'Staff', 'Customer', 'Pay', 'Status', 'Total', 'Action']
+              : ['Order', 'Channel', 'Staff', 'Customer', 'Status', 'Total', 'Action']
           }
         >
           {visible.map((order) => {
@@ -288,44 +296,34 @@ export default function AdminOrders() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-start gap-2">
-                      {canPack && (next === 'PACKING' || order.status === 'PACKING') ? (
-                        <Link
-                          href={`/admin/pack/${order.id}`}
-                          className="inline-flex min-h-11 items-center rounded-lg border border-ink/15 px-3 py-2.5 text-sm no-underline hover:border-ink/40"
-                        >
-                          Pack station
-                        </Link>
-                      ) : next ? (
+                    <RowActions>
+                      {canPack ? (
+                        <IconButton label="Open ticket" icon="pack" href={`/admin/pack/${order.id}`} />
+                      ) : null}
+                      {canPack && (next === 'PACKING' || order.status === 'PACKING') ? null : next ? (
                         next === 'SHIPPED' ? (
-                          <SecondaryButton type="button" onClick={() => setShipId(order.id)}>
-                            Mark shipped
-                          </SecondaryButton>
+                          <IconButton label="Mark shipped" icon="truck" onClick={() => setShipId(order.id)} />
                         ) : (
-                          <SecondaryButton
-                            type="button"
+                          <IconButton
+                            label={ORDER_ACTION_LABEL[next] ?? next}
+                            icon={next === 'READY_FOR_COLLECTION' || next === 'DELIVERED' || next === 'COLLECTED' ? 'check' : 'pack'}
                             disabled={busyId === order.id}
                             onClick={() => void advance(order, next)}
-                          >
-                            {ORDER_ACTION_LABEL[next] ?? next}
-                          </SecondaryButton>
+                          />
                         )
-                      ) : (
-                        <span className="text-ink/45">—</span>
-                      )}
+                      ) : null}
                       {canRefund && remaining > 0 && order.status !== 'CANCELLED' && order.status !== 'PENDING_PAYMENT' ? (
-                        <SecondaryButton
-                          type="button"
+                        <IconButton
+                          label="Refund"
+                          icon="refund"
                           onClick={() => {
                             setRefundId(order.id);
                             setRefundEur((remaining / 100).toFixed(2));
                             setRefundReason('');
                           }}
-                        >
-                          Refund
-                        </SecondaryButton>
+                        />
                       ) : null}
-                    </div>
+                    </RowActions>
                   )}
                 </Td>
               </tr>

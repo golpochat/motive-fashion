@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, IconButton, Modal, PrimaryButton, RowActions, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
 import { formatUnits } from '@/lib/supply';
 import {
   DEFAULT_SUPPLIER_COUNTRY,
@@ -129,7 +129,7 @@ export default function AdminSuppliers() {
         emptyTitle="No suppliers"
         emptyBody="Add a mill or wholesaler to raise purchase orders."
       >
-        <DataTable headers={['Supplier', 'Ordered', 'On the way', 'Sold (30d)', 'SKUs', '']}>
+        <DataTable headers={['Supplier', 'Ordered', 'On the way', 'Sold (30d)', 'SKUs', 'Action']}>
           {rows.map((s) => (
             <tr key={s.id} className="hover:bg-ink/5">
               <Td>
@@ -145,15 +145,11 @@ export default function AdminSuppliers() {
               <Td>{formatUnits(s.inTransitUnits)}</Td>
               <Td>{formatUnits(s.sold30d)}</Td>
               <Td muted>{formatUnits(s.skuCount)}</Td>
-              <Td>
-                <div className="flex flex-wrap gap-2">
-                  <Link href={`/admin/suppliers/${s.id}`} className="rounded-lg border border-ink/15 px-3 py-1.5 text-sm no-underline hover:border-ink/40">
-                    Open
-                  </Link>
-                  <SecondaryButton type="button" onClick={() => { setFormError(''); setEditing(s); }}>
-                    Edit
-                  </SecondaryButton>
-                </div>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="Open supplier" icon="open" href={`/admin/suppliers/${s.id}`} />
+                  <IconButton label="Edit supplier" icon="edit" onClick={() => { setFormError(''); setEditing(s); }} />
+                </RowActions>
               </Td>
             </tr>
           ))}

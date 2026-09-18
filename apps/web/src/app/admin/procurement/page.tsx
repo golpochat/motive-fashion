@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Field, FilterTabs, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, FilterTabs, IconButton, RowActions, Td, fieldClass } from '@/components/dashboard-ui';
 import { formatUnits } from '@/lib/supply';
 import { supplierCountryLabel } from '@motive-fashion/config';
 
@@ -140,7 +140,7 @@ export default function AdminProcurement() {
         emptyTitle={tab === 'ALL' ? 'No purchase orders' : 'No purchase orders in this status'}
         emptyBody="Raise a draft with New purchase order, then mark it ordered when the mill confirms."
       >
-        <DataTable headers={['Month', 'Supplier', 'Lines', 'Status', 'Next']}>
+        <DataTable headers={['Month', 'Supplier', 'Lines', 'Status', 'Action']}>
           {visible.map((p) => {
             const inbound = p.shipments.find((s) => s.status !== 'RECEIVED');
             return (
@@ -160,33 +160,28 @@ export default function AdminProcurement() {
                   ))}
                 </Td>
                 <Td>{p.status.replaceAll('_', ' ')}</Td>
-                <Td>
+                <Td nowrap>
                   {p.status === 'DRAFT' ? (
-                    <div className="flex min-w-[12rem] flex-col gap-2">
-                      <SecondaryButton
-                        type="button"
+                    <RowActions>
+                      <IconButton
+                        label="Mark ordered"
+                        icon="check"
+                        tone="success"
                         disabled={busyId === p.id}
                         onClick={() => void post(`/admin/procurement/purchase-orders/${p.id}/order`, undefined, p.id)}
-                      >
-                        Mark ordered
-                      </SecondaryButton>
-                      <Link
-                        href={`/admin/procurement/new?edit=${p.id}`}
-                        className="rounded-lg border border-ink/15 px-3 py-2.5 text-center text-sm no-underline hover:border-ink/40"
-                      >
-                        Edit
-                      </Link>
-                      <SecondaryButton
-                        type="button"
+                      />
+                      <IconButton label="Edit purchase order" icon="edit" href={`/admin/procurement/new?edit=${p.id}`} />
+                      <IconButton
+                        label="Cancel draft"
+                        icon="trash"
+                        tone="danger"
                         disabled={busyId === p.id}
                         onClick={() => void post(`/admin/procurement/purchase-orders/${p.id}/cancel`, undefined, p.id)}
-                      >
-                        Cancel draft
-                      </SecondaryButton>
-                    </div>
+                      />
+                    </RowActions>
                   ) : null}
                   {p.status === 'ORDERED' || p.status === 'IN_TRANSIT' ? (
-                    <div className="flex min-w-[14rem] flex-col gap-2">
+                    <div className="flex min-w-[14rem] flex-col items-end gap-2">
                       {!inbound ? (
                         <>
                           <Field label="Tracking">
@@ -196,8 +191,9 @@ export default function AdminProcurement() {
                               onChange={(e) => setTracking((prev) => ({ ...prev, [p.id]: e.target.value }))}
                             />
                           </Field>
-                          <PrimaryButton
-                            type="button"
+                          <IconButton
+                            label="Ship inbound"
+                            icon="truck"
                             disabled={busyId === p.id}
                             onClick={() =>
                               void post(
@@ -206,18 +202,15 @@ export default function AdminProcurement() {
                                 p.id,
                               )
                             }
-                          >
-                            Ship inbound
-                          </PrimaryButton>
+                          />
                         </>
                       ) : (
-                        <SecondaryButton
-                          type="button"
+                        <IconButton
+                          label="Receive stock"
+                          icon="pack"
                           disabled={busyId === inbound.id}
                           onClick={() => void post(`/admin/procurement/shipments/${inbound.id}/receive`, undefined, inbound.id)}
-                        >
-                          Receive stock
-                        </SecondaryButton>
+                        />
                       )}
                     </div>
                   ) : null}

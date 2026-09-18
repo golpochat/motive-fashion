@@ -33,10 +33,10 @@ describe('catalog list envelope', () => {
 });
 
 describe('collection availability', () => {
-  it('is staff/till only, not website or app', () => {
+  it('is offered on every sales channel when the method is published', () => {
     expect(collectionAllowedOnChannel(SalesChannel.POS)).toBe(true);
     expect(collectionAllowedOnChannel(SalesChannel.WHATSAPP)).toBe(true);
-    expect(collectionAllowedOnChannel(SalesChannel.WEB)).toBe(false);
-    expect(collectionAllowedOnChannel(SalesChannel.MOBILE)).toBe(false);
+    expect(collectionAllowedOnChannel(SalesChannel.WEB)).toBe(true);
+    expect(collectionAllowedOnChannel(SalesChannel.MOBILE)).toBe(true);
   });
 });

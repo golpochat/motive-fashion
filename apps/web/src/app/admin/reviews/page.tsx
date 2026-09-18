@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, SecondaryButton, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, IconButton, RowActions, Td } from '@/components/dashboard-ui';
 
 type ReviewRow = {
   id: string;
@@ -77,7 +77,7 @@ export default function AdminReviews() {
         emptyTitle="No reviews"
         emptyBody="Verified buyers can submit a review after delivery. Refunded pieces keep 4–5 star reviews only."
       >
-        <DataTable headers={['Product', 'Customer', 'Rating', 'Review', '']}>
+        <DataTable headers={['Product', 'Customer', 'Rating', 'Review', 'Action']}>
           {rows.map((row) => (
             <tr key={row.id} className="hover:bg-ink/5">
               <Td>{row.product.title}</Td>
@@ -87,16 +87,24 @@ export default function AdminReviews() {
               </Td>
               <Td>{row.rating} / 5</Td>
               <Td muted>{row.body}</Td>
-              <Td>
+              <Td nowrap>
                 {row.status === 'PENDING' ? (
-                  <div className="flex flex-wrap gap-2">
-                    <SecondaryButton type="button" disabled={busyId === row.id} onClick={() => void setStatus(row.id, 'APPROVED')}>
-                      Approve
-                    </SecondaryButton>
-                    <SecondaryButton type="button" disabled={busyId === row.id} onClick={() => void setStatus(row.id, 'REJECTED')}>
-                      Reject
-                    </SecondaryButton>
-                  </div>
+                  <RowActions>
+                    <IconButton
+                      label="Approve review"
+                      icon="check"
+                      tone="success"
+                      disabled={busyId === row.id}
+                      onClick={() => void setStatus(row.id, 'APPROVED')}
+                    />
+                    <IconButton
+                      label="Reject review"
+                      icon="x"
+                      tone="danger"
+                      disabled={busyId === row.id}
+                      onClick={() => void setStatus(row.id, 'REJECTED')}
+                    />
+                  </RowActions>
                 ) : (
                   <span className="text-xs text-ink/45">{row.status}</span>
                 )}

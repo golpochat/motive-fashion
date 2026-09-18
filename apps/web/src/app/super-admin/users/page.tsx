@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PermissionGate } from '@/components/permission-gate';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Modal, PrimaryButton, SecondaryButton, Td, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
 import { API, apiErrorMessage } from '@/lib/api';
 
 type Role = { id: string; slug: string; name: string; system?: boolean };
@@ -116,10 +116,10 @@ export default function SuperAdminUsers() {
                 <span className="text-ink/55">{p.email}</span>
               </Td>
               <Td>{p.memberships.map((m) => m.role.name).join(', ') || 'Customer'}</Td>
-              <Td>
-                <SecondaryButton type="button" onClick={() => openEdit(p)}>
-                  Edit roles
-                </SecondaryButton>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="Edit roles" icon="edit" onClick={() => openEdit(p)} />
+                </RowActions>
               </Td>
             </tr>
           ))}

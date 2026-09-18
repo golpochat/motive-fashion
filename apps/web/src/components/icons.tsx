@@ -29,7 +29,19 @@ export type IconName =
   | 'eyeOff'
   | 'share'
   | 'copy'
-  | 'mail';
+  | 'mail'
+  | 'edit'
+  | 'plus'
+  | 'trash'
+  | 'check'
+  | 'x'
+  | 'photo'
+  | 'barcode'
+  | 'pack'
+  | 'truck'
+  | 'print'
+  | 'refund'
+  | 'open';
 
 const stroke = {
   fill: 'none',
@@ -239,6 +251,81 @@ const paths = {
     <>
       <rect x="3.5" y="6" width="17" height="12" rx="1.5" />
       <path d="M4 7.2 12 13l8-5.8" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4.5 16.7 16.2 5a1.6 1.6 0 0 1 2.3 2.3L6.8 19.2H4.5v-2.5Z" />
+      <path d="M14.2 6.7 17.3 9.8" />
+    </>
+  ),
+  plus: (
+    <>
+      <path d="M12 5v14M5 12h14" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M5 7h14" />
+      <path d="M9.5 7V5h5v2" />
+      <path d="M7 7l.8 12h8.4L17 7" />
+      <path d="M10 11v5M14 11v5" />
+    </>
+  ),
+  check: (
+    <>
+      <path d="M5 12.5 10 17.5 19 7" />
+    </>
+  ),
+  x: (
+    <>
+      <path d="M6 6 18 18M18 6 6 18" />
+    </>
+  ),
+  photo: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m7.5 16.5 3.2-3.6 2.3 2.4 2.4-2.8 3.1 4" />
+    </>
+  ),
+  barcode: (
+    <>
+      <path d="M5 6v12M8 6v12M10 6v12M13.5 6v12M16 6v12M19 6v12" />
+    </>
+  ),
+  pack: (
+    <>
+      <path d="M4.5 8.5 12 4.5l7.5 4V16.5L12 20.5 4.5 16.5V8.5Z" />
+      <path d="M12 12v8.5M4.5 8.5 12 12l7.5-3.5" />
+    </>
+  ),
+  truck: (
+    <>
+      <path d="M3.5 8h10v9H3.5Z" />
+      <path d="M13.5 11h4.2L20.5 14v3h-7" />
+      <circle cx="7" cy="17.5" r="1.6" />
+      <circle cx="16.5" cy="17.5" r="1.6" />
+    </>
+  ),
+  print: (
+    <>
+      <path d="M7 9V4.5h10V9" />
+      <path d="M6 13h12v6.5H6Z" />
+      <path d="M5 9h14v6h-2v-2H7v2H5V9Z" />
+    </>
+  ),
+  refund: (
+    <>
+      <path d="M8 7H4.5v3.5" />
+      <path d="M4.8 8.8A8 8 0 1 1 4 12" />
+      <path d="M9.5 12h5M12 9.5v5" />
+    </>
+  ),
+  open: (
+    <>
+      <path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V14" />
+      <path d="M12 12 19 5M14 5h5v5" />
     </>
   ),
 } satisfies Record<IconName, unknown>;

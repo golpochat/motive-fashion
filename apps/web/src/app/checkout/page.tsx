@@ -74,7 +74,7 @@ export default function CheckoutPage() {
       .then((r) => r.json() as Promise<Options>)
       .then((data) => {
         setOptions(data);
-        setFulfillment(data.defaultFulfilment === 'COLLECTION' ? 'DELIVERY' : data.defaultFulfilment);
+        setFulfillment(data.defaultFulfilment);
       })
       .catch(() => setError('Could not load checkout options'));
   }, []);
@@ -131,7 +131,7 @@ export default function CheckoutPage() {
   }, [cart?.id, cart?.subtotalCents, fulfillment, quoteCounty, promo, options]);
 
   const deliveryOn = options?.fulfilment.some((m) => m.code === 'DELIVERY') ?? false;
-  const publicFulfilment = (options?.fulfilment ?? []).filter((m) => m.code !== 'COLLECTION');
+  const publicFulfilment = options?.fulfilment ?? [];
   const showFulfilmentChoice = publicFulfilment.length > 1;
   const showAddress = fulfillment === 'DELIVERY' && deliveryOn;
   const cardOk = options?.payments.some((p) => p.code === 'CARD');
@@ -169,7 +169,7 @@ export default function CheckoutPage() {
     }
     setPaying(true);
     setError('');
-    const method = fulfillment === 'COLLECTION' ? 'DELIVERY' : fulfillment;
+    const method = fulfillment;
     const payload: Record<string, unknown> = {
       cartId: cart.id,
       sessionKey: cartSessionKey(),
@@ -265,6 +265,50 @@ export default function CheckoutPage() {
         ) : null}
         {options?.blocked ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{options.blocked}</p> : null}
 
+        {options && !options.blocked ? (
+          <section className="space-y-3">
+            <h2 className="font-serif text-2xl">Collection or delivery</h2>
+            {showFulfilmentChoice ? (
+              <fieldset className="grid gap-2 sm:grid-cols-2">
+                {publicFulfilment.map((method) => {
+                  const selected = fulfillment === method.code;
+                  const fee =
+                    method.code === 'DELIVERY' && quote?.shippingCents != null
+                      ? quote.shippingWaived
+                        ? 'Free delivery'
+                        : formatEur(quote.shippingCents)
+                      : method.feeCents > 0
+                        ? formatEur(method.feeCents)
+                        : 'No extra fee';
+                  return (
+                    <label
+                      key={method.id}
+                      className={`flex min-h-11 cursor-pointer flex-col gap-1 rounded-2xl border p-4 text-sm ${selected ? 'border-accent bg-accent/5' : 'border-ink/10 bg-white'}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          className={radioClass}
+                          checked={selected}
+                          onChange={() => setFulfillment(method.code)}
+                        />
+                        <span className="font-medium">{method.name}</span>
+                      </span>
+                      <span className="pl-6 text-ink/60">{fee}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            ) : (
+              <p className="text-sm text-ink/70">
+                {options.fulfilment.find((method) => method.code === fulfillment)?.name ??
+                  options.fulfilment.find((method) => method.code === 'DELIVERY')?.name ??
+                  'Ireland delivery'}
+              </p>
+            )}
+          </section>
+        ) : null}
+
         <section className="space-y-3">
           <h2 className="font-serif text-2xl">Contact</h2>
           {me ? (
@@ -294,31 +338,6 @@ export default function CheckoutPage() {
             </>
           )}
         </section>
-
-        {options && !options.blocked ? (
-          <section className="space-y-3">
-            <h2 className="font-serif text-2xl">Fulfilment</h2>
-            {showFulfilmentChoice ? (
-              <fieldset className="flex flex-col gap-2">
-                {publicFulfilment.map((method) => (
-                  <label key={method.id} className="flex min-h-11 items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      className={radioClass}
-                      checked={fulfillment === method.code}
-                      onChange={() => setFulfillment(method.code)}
-                    />
-                    {method.name}
-                  </label>
-                ))}
-              </fieldset>
-            ) : (
-              <p className="text-sm text-ink/70">
-                {options.fulfilment.find((method) => method.code === 'DELIVERY')?.name ?? 'Ireland delivery'}
-              </p>
-            )}
-          </section>
-        ) : null}
 
         {showAddress ? (
           <section className="space-y-3">

@@ -19,7 +19,7 @@ export default function StaffHome() {
 
   return (
     <div>
-      <PageHeader title="Overview" description="Till, your sales, and stock. Packing of web orders lives in Admin." />
+      <PageHeader title="Overview" description="Till, your sales, pack bench, and stock." />
       <ConsoleSection loading={loading} error={error} onRetry={() => { salesQ.reload(); stockQ.reload(); }}>
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="My till sales" value={String(sales.length)} />
@@ -28,6 +28,7 @@ export default function StaffHome() {
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <DashCard href="/staff/pos" icon="pos" label="POS" body="Take cash or card and print the ticket." />
+          <DashCard href="/staff/pack" icon="pack" label="Pack" body="Scan SKUs on confirmed web and WhatsApp orders." />
           <DashCard href="/staff/orders" icon="orders" label="Orders" body="Your sales: details, reprint, email receipt." />
           <DashCard href="/staff/inventory" icon="inventory" label="Inventory" body="Adjust and transfer stock." />
           <DashCard href="/staff/locations" icon="locations" label="Locations" body="Warehouse, shop floor, and pop-up rooms." />

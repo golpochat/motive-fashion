@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Td, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
 
 type Perm = { id: string; key: string; name: string; group: string };
 type RoleRow = {
@@ -145,17 +145,13 @@ export default function SuperAdminRoles() {
             </Td>
             <Td>{r._count.members}</Td>
             <Td>{r.permissions.length}</Td>
-            <Td>
-              <div className="flex flex-wrap gap-2">
-                <SecondaryButton type="button" onClick={() => openEdit(r)}>
-                  Edit
-                </SecondaryButton>
+            <Td nowrap>
+              <RowActions>
+                <IconButton label="Edit role" icon="edit" onClick={() => openEdit(r)} />
                 {r.system ? null : (
-                  <SecondaryButton type="button" onClick={() => setConfirmDelete(r)}>
-                    Delete
-                  </SecondaryButton>
+                  <IconButton label="Delete role" icon="trash" tone="danger" onClick={() => setConfirmDelete(r)} />
                 )}
-              </div>
+              </RowActions>
             </Td>
           </tr>
         ))}

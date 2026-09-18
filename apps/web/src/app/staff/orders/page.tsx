@@ -53,7 +53,7 @@ export default function StaffOrders() {
         emptyTitle="No till sales yet"
         emptyBody={storeWide ? 'POS sales from any staff member will appear here.' : 'Sales you take on POS will appear here.'}
       >
-        <DataTable headers={storeWide ? ['Ticket', 'When', 'Staff', 'Customer', 'Pay', 'Total', 'Status', ''] : ['Ticket', 'When', 'Customer', 'Pay', 'Total', 'Status', '']}>
+        <DataTable headers={storeWide ? ['Ticket', 'When', 'Staff', 'Customer', 'Pay', 'Total', 'Status', 'Action'] : ['Ticket', 'When', 'Customer', 'Pay', 'Total', 'Status', 'Action']}>
           {rows.map((order) => (
             <tr key={order.id} className="hover:bg-ink/5">
               <Td>

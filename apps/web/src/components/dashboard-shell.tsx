@@ -8,6 +8,7 @@ import { accessibleWorkspaces, navActive, workspaceById, type WorkspaceId } from
 import { ProfileMenu } from '@/components/profile-menu';
 import { useSession } from '@/components/session-provider';
 import { ConsoleFooter } from '@/components/dashboard-ui';
+import { ConsoleSearch } from '@/components/console-search';
 import { Icon } from '@/components/icons';
 import { BrandMark } from '@/components/brand-logo';
 import { BRAND } from '@motive-fashion/config';
@@ -192,7 +193,10 @@ export function DashboardShell({
               <p className="truncate text-sm font-medium">{current?.label ?? ws.label}</p>
             </div>
           </div>
-          <ProfileMenu variant="console" currentWorkspace={workspace} />
+          <div className="flex min-w-0 items-center justify-end gap-3">
+            {workspace === 'customer' || till ? null : <ConsoleSearch />}
+            <ProfileMenu variant="console" currentWorkspace={workspace} />
+          </div>
         </header>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden print:h-auto print:overflow-visible">
           <div

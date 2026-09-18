@@ -5,5 +5,5 @@ import { PackStation } from '@/components/pack-station';
 
 export default function AdminPackPage() {
   const params = useParams<{ id: string }>();
-  return <PackStation orderId={params.id} backHref="/admin/orders" backLabel="Back to orders" />;
+  return <PackStation orderId={params.id} backHref="/admin/pack" backLabel="Back to pack" />;
 }

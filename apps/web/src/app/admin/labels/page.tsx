@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { PrimaryButton, SecondaryButton, Select } from '@/components/dashboard-ui';
+import { PrimaryButton, Select, Toggle } from '@/components/dashboard-ui';
 import { BinCard, HangTag, type LabelSku } from '@/components/sku-labels';
 import { absoluteUrl } from '@/lib/share';
 
@@ -101,9 +101,11 @@ export default function AdminLabelsPage() {
               ]}
             />
             {kind === 'hang' ? (
-              <SecondaryButton type="button" onClick={() => setShowQr((on) => !on)}>
-                {showQr ? 'Hide product QR' : 'Show product QR'}
-              </SecondaryButton>
+              <Toggle
+                checked={showQr}
+                onChange={setShowQr}
+                label="Product QR"
+              />
             ) : null}
             <Link href="/admin/products" className="text-sm">
               Back to products

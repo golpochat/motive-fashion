@@ -77,6 +77,25 @@ export function IrelandAddressFields({
         <input type="hidden" name="label" value="HOME" />
       )}
       <label className="block">
+        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Eircode</span>
+        <input
+          name="eircode"
+          required
+          defaultValue={defaults?.eircode ?? ''}
+          autoComplete="postal-code"
+          aria-invalid={Boolean(errors?.eircode)}
+          className={fieldErrorClass(errors?.eircode)}
+          onBlur={formatEircode}
+        />
+        {errors?.eircode ? (
+          <p className="mt-1.5 text-sm text-red-700" role="alert">
+            {errors.eircode}
+          </p>
+        ) : (
+          <span className="mt-1.5 block text-xs text-ink/55">Start here. Example: D02 AF30.</span>
+        )}
+      </label>
+      <label className="block">
         <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Address line 1</span>
         <input
           name="line1"
@@ -142,25 +161,6 @@ export function IrelandAddressFields({
             {errors.county}
           </p>
         ) : null}
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Eircode</span>
-        <input
-          name="eircode"
-          required
-          defaultValue={defaults?.eircode ?? ''}
-          autoComplete="postal-code"
-          aria-invalid={Boolean(errors?.eircode)}
-          className={fieldErrorClass(errors?.eircode)}
-          onBlur={formatEircode}
-        />
-        {errors?.eircode ? (
-          <p className="mt-1.5 text-sm text-red-700" role="alert">
-            {errors.eircode}
-          </p>
-        ) : (
-          <span className="mt-1.5 block text-xs text-ink/55">Required for Ireland. Example: D02 AF30.</span>
-        )}
       </label>
     </div>
   );

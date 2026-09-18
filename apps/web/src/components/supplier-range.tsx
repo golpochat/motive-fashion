@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, IconButton, Modal, PrimaryButton, RowActions, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
 import { formatEuro, formatUnits } from '@/lib/supply';
 
 export type SupplierLink = {
@@ -162,7 +162,7 @@ export function SupplierRange({
       {links.length === 0 ? (
         <p className="text-sm text-ink/55">Nothing linked yet. Add the styles this mill supplies, then raise a draft PO.</p>
       ) : (
-        <DataTable headers={['Style', 'SKUs', 'MOQ', 'Cost', 'Lead', '']}>
+        <DataTable headers={['Style', 'SKUs', 'MOQ', 'Cost', 'Lead', 'Action']}>
           {links.map((row) => (
             <tr key={row.productId} className="hover:bg-ink/5">
               <Td>{row.title}</Td>
@@ -170,21 +170,18 @@ export function SupplierRange({
               <Td>{formatUnits(row.moq)}</Td>
               <Td>{formatEuro(row.unitCostCents)}</Td>
               <Td muted>{row.leadDays}d</Td>
-              <Td>
-                <div className="flex flex-wrap gap-2">
-                  <SecondaryButton
-                    type="button"
+              <Td nowrap>
+                <RowActions>
+                  <IconButton
+                    label="Edit link"
+                    icon="edit"
                     onClick={() => {
                       setFormError('');
                       setEditing(row);
                     }}
-                  >
-                    Edit
-                  </SecondaryButton>
-                  <SecondaryButton type="button" disabled={busy} onClick={() => void unlink(row.productId)}>
-                    Unlink
-                  </SecondaryButton>
-                </div>
+                  />
+                  <IconButton label="Unlink product" icon="trash" tone="danger" disabled={busy} onClick={() => void unlink(row.productId)} />
+                </RowActions>
               </Td>
             </tr>
           ))}

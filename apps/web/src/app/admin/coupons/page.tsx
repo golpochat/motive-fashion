@@ -8,13 +8,16 @@ import {
   DataTable,
   Field,
   FilterTabs,
+  IconButton,
   Modal,
-  Panel,
   PrimaryButton,
+  RowActions,
   SecondaryButton,
-  Td,
-  fieldClass,
   Select,
+  StatusBadge,
+  Td,
+  Toggle,
+  fieldClass,
 } from '@/components/dashboard-ui';
 import { PROMO_STATUS_LABEL, promoOfferLabel, promoStatus, type PromoStatus } from '@motive-fashion/utils';
 
@@ -30,12 +33,12 @@ type Promo = {
   endsAt: string | null;
 };
 
-const STATUS_CLASS: Record<PromoStatus, string> = {
-  live: 'bg-emerald-50 text-emerald-800',
-  scheduled: 'bg-sky-50 text-sky-800',
-  expired: 'bg-ink/5 text-ink/60',
-  exhausted: 'bg-amber-50 text-amber-800',
-  inactive: 'bg-ink/5 text-ink/55',
+const STATUS_TONE: Record<PromoStatus, 'live' | 'muted' | 'warn' | 'info'> = {
+  live: 'live',
+  scheduled: 'info',
+  expired: 'muted',
+  exhausted: 'warn',
+  inactive: 'muted',
 };
 
 function toIso(value: FormDataEntryValue | null) {
@@ -73,10 +76,11 @@ export default function AdminCoupons() {
   const promos = useConsoleQuery<Promo[]>('/admin/promo-codes', 'Could not load coupons');
   const [formError, setFormError] = useState('');
   const [tab, setTab] = useState('ALL');
-  const [createType, setCreateType] = useState('PERCENT');
-  const [editing, setEditing] = useState<Promo | null>(null);
-  const [editType, setEditType] = useState('PERCENT');
+  const [draft, setDraft] = useState<Promo | 'new' | null>(null);
+  const [offerType, setOfferType] = useState('PERCENT');
+  const [live, setLive] = useState(true);
   const rows = promos.data ?? [];
+  const editing = draft && draft !== 'new' ? draft : null;
 
   const visible = useMemo(() => {
     return rows.filter((row) => {
@@ -87,74 +91,57 @@ export default function AdminCoupons() {
     });
   }, [rows, tab]);
 
-  async function addPromo(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  function openCreate() {
     setFormError('');
-    const form = new FormData(e.currentTarget);
-    const type = String(form.get('type'));
-    const raw = Number(form.get('value'));
-    const maxRaw = String(form.get('maxUses') ?? '').trim();
-    const res = await fetch(`${API}/admin/promo-codes`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: form.get('code'),
-        type,
-        value: storedValue(raw),
-        active: form.get('active') === 'on',
-        maxUses: maxRaw ? Number(maxRaw) : null,
-        startsAt: toIso(form.get('startsAt')),
-        endsAt: toIso(form.get('endsAt')),
-      }),
-    });
-    const payload = await res.json().catch(() => null);
-    if (!res.ok) {
-      setFormError(apiErrorMessage(payload, 'Could not create this coupon.'));
-      return;
-    }
-    e.currentTarget.reset();
-    setCreateType('PERCENT');
-    promos.reload();
+    setOfferType('PERCENT');
+    setLive(true);
+    setDraft('new');
+  }
+
+  function openEdit(row: Promo) {
+    setFormError('');
+    setOfferType(row.type);
+    setLive(row.active);
+    setDraft(row);
   }
 
   async function savePromo(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!editing) return;
     setFormError('');
     const form = new FormData(e.currentTarget);
     const type = String(form.get('type'));
     const raw = Number(form.get('value'));
     const maxRaw = String(form.get('maxUses') ?? '').trim();
-    const res = await fetch(`${API}/admin/promo-codes/${editing.id}`, {
-      method: 'PATCH',
+    const body = {
+      type,
+      value: storedValue(raw),
+      active: live,
+      maxUses: maxRaw ? Number(maxRaw) : null,
+      startsAt: toIso(form.get('startsAt')),
+      endsAt: toIso(form.get('endsAt')),
+    };
+    const res = await fetch(editing ? `${API}/admin/promo-codes/${editing.id}` : `${API}/admin/promo-codes`, {
+      method: editing ? 'PATCH' : 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type,
-        value: storedValue(raw),
-        active: form.get('active') === 'on',
-        maxUses: maxRaw ? Number(maxRaw) : null,
-        startsAt: toIso(form.get('startsAt')),
-        endsAt: toIso(form.get('endsAt')),
-      }),
+      body: JSON.stringify(editing ? body : { ...body, code: form.get('code') }),
     });
     const payload = await res.json().catch(() => null);
     if (!res.ok) {
-      setFormError(apiErrorMessage(payload, 'Could not update this coupon.'));
+      setFormError(apiErrorMessage(payload, editing ? 'Could not update this coupon.' : 'Could not create this coupon.'));
       return;
     }
-    setEditing(null);
+    setDraft(null);
     promos.reload();
   }
 
-  async function togglePromo(promo: Promo) {
+  async function togglePromo(promo: Promo, active: boolean) {
     setFormError('');
     const res = await fetch(`${API}/admin/promo-codes/${promo.id}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: !promo.active }),
+      body: JSON.stringify({ active }),
     });
     const payload = await res.json().catch(() => null);
     if (!res.ok) {
@@ -169,146 +156,109 @@ export default function AdminCoupons() {
       <PageHeader
         title="Coupons"
         description="Checkout and till codes. Percent is off the goods subtotal; a start/end and a use cap are optional."
+        actions={
+          <PrimaryButton type="button" onClick={openCreate}>
+            Add coupon
+          </PrimaryButton>
+        }
       />
-      {formError ? (
+      {formError && !draft ? (
         <p className="mb-4 text-sm text-red-700" role="alert">
           {formError}
         </p>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr]">
-        <Panel title="New coupon">
-          <form onSubmit={(e) => void addPromo(e)} className="space-y-3">
-            <Field label="Code">
-              <input name="code" required minLength={2} maxLength={40} className={fieldClass} placeholder="EID10" />
-            </Field>
-            <Field label="Type">
-              <Select
-                name="type"
-                value={createType}
-                onChange={setCreateType}
-                options={[
-                  { value: 'PERCENT', label: 'Percent off' },
-                  { value: 'FIXED', label: 'Fixed EUR off' },
-                ]}
-              />
-            </Field>
-            <Field label={createType === 'PERCENT' ? 'Percent' : 'Amount (EUR)'}>
-              <input
-                name="value"
-                required
-                inputMode="decimal"
-                min={createType === 'PERCENT' ? 0.01 : 0.01}
-                max={createType === 'PERCENT' ? 100 : undefined}
-                step="0.01"
-                className={fieldClass}
-                placeholder={createType === 'PERCENT' ? '10 for 10%' : '10 for €10'}
-              />
-            </Field>
-            <Field label="Max uses">
-              <input name="maxUses" inputMode="numeric" min={1} className={fieldClass} placeholder="Unlimited" />
-            </Field>
-            <Field label="Starts">
-              <input name="startsAt" type="datetime-local" className={fieldClass} />
-            </Field>
-            <Field label="Ends">
-              <input name="endsAt" type="datetime-local" className={fieldClass} />
-            </Field>
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input name="active" type="checkbox" defaultChecked className="h-4 w-4 accent-ink" />
-              Live when the window opens
-            </label>
-            <PrimaryButton type="submit">Create coupon</PrimaryButton>
-          </form>
-        </Panel>
-        <div>
-          <div className="mb-4">
-            <FilterTabs
-              ariaLabel="Coupon status"
-              current={tab}
-              onChange={setTab}
-              items={[
-                { id: 'ALL', label: 'All' },
-                { id: 'live', label: 'Live' },
-                { id: 'scheduled', label: 'Scheduled' },
-                { id: 'ENDED', label: 'Ended' },
-                { id: 'inactive', label: 'Off' },
-              ]}
-            />
-          </div>
-          <ConsoleSection
-            loading={promos.loading}
-            error={promos.error}
-            onRetry={promos.reload}
-            empty={visible.length === 0}
-            emptyTitle={tab === 'ALL' ? 'No coupons' : 'No coupons in this filter'}
-            emptyBody="Create a code with an optional start, end, and use cap."
-          >
-            <DataTable headers={['Code', 'Offer', 'Window', 'Uses', 'Status', '']}>
-              {visible.map((row) => {
-                const status = promoStatus(row);
-                return (
-                  <tr key={row.id} className="hover:bg-ink/5">
-                    <Td>
-                      <span className="font-mono text-xs tracking-wide">{row.code}</span>
-                    </Td>
-                    <Td muted>{promoOfferLabel(row.type, row.value)}</Td>
-                    <Td muted>{windowLabel(row)}</Td>
-                    <Td muted>
-                      {row.usedCount}
-                      {row.maxUses ? ` / ${row.maxUses}` : ' / ∞'}
-                    </Td>
-                    <Td>
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${STATUS_CLASS[status]}`}>
-                        {PROMO_STATUS_LABEL[status]}
-                      </span>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-2">
-                        <SecondaryButton
-                          type="button"
-                          onClick={() => {
-                            setEditing(row);
-                            setEditType(row.type);
-                          }}
-                        >
-                          Edit
-                        </SecondaryButton>
-                        <SecondaryButton type="button" onClick={() => void togglePromo(row)}>
-                          {row.active ? 'Turn off' : 'Turn on'}
-                        </SecondaryButton>
-                      </div>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </DataTable>
-          </ConsoleSection>
-        </div>
+      <div className="mb-4">
+        <FilterTabs
+          ariaLabel="Coupon status"
+          current={tab}
+          onChange={setTab}
+          items={[
+            { id: 'ALL', label: 'All' },
+            { id: 'live', label: 'Live' },
+            { id: 'scheduled', label: 'Scheduled' },
+            { id: 'ENDED', label: 'Ended' },
+            { id: 'inactive', label: 'Off' },
+          ]}
+        />
       </div>
-      {editing ? (
-        <Modal title={`Edit ${editing.code}`} onClose={() => setEditing(null)}>
-          <form key={editing.id} onSubmit={(e) => void savePromo(e)} className="space-y-3">
+      <ConsoleSection
+        loading={promos.loading}
+        error={promos.error}
+        onRetry={promos.reload}
+        empty={visible.length === 0}
+        emptyTitle={tab === 'ALL' ? 'No coupons' : 'No coupons in this filter'}
+        emptyBody="Add a code with an optional start, end, and use cap."
+      >
+        <DataTable headers={['Code', 'Offer', 'Window', 'Uses', 'Status', 'Published', 'Action']}>
+          {visible.map((row) => {
+            const status = promoStatus({ ...row, active: true });
+            return (
+              <tr key={row.id} className="hover:bg-ink/5">
+                <Td>
+                  <span className="font-mono text-xs tracking-wide">{row.code}</span>
+                </Td>
+                <Td muted>{promoOfferLabel(row.type, row.value)}</Td>
+                <Td muted>{windowLabel(row)}</Td>
+                <Td muted>
+                  {row.usedCount}
+                  {row.maxUses ? ` / ${row.maxUses}` : ' / ∞'}
+                </Td>
+                <Td>
+                  <StatusBadge tone={STATUS_TONE[status]}>{PROMO_STATUS_LABEL[status]}</StatusBadge>
+                </Td>
+                <Td nowrap>
+                  <Toggle
+                    checked={row.active}
+                    onChange={(next) => void togglePromo(row, next)}
+                    label={row.active ? 'Unpublish coupon' : 'Publish coupon'}
+                    showLabel={false}
+                  />
+                </Td>
+                <Td nowrap>
+                  <RowActions>
+                    <IconButton label="Edit coupon" icon="edit" onClick={() => openEdit(row)} />
+                  </RowActions>
+                </Td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      </ConsoleSection>
+      {draft ? (
+        <Modal title={editing ? `Edit ${editing.code}` : 'Add coupon'} onClose={() => setDraft(null)}>
+          {formError ? (
+            <p className="mb-3 text-sm text-red-700" role="alert">
+              {formError}
+            </p>
+          ) : null}
+          <form key={editing?.id ?? 'new'} onSubmit={(e) => void savePromo(e)} className="space-y-3">
+            {editing ? null : (
+              <Field label="Code">
+                <input name="code" required minLength={2} maxLength={40} className={fieldClass} placeholder="EID10" />
+              </Field>
+            )}
             <Field label="Type">
               <Select
                 name="type"
-                value={editType}
-                onChange={setEditType}
+                value={offerType}
+                onChange={setOfferType}
                 options={[
                   { value: 'PERCENT', label: 'Percent off' },
                   { value: 'FIXED', label: 'Fixed EUR off' },
                 ]}
               />
             </Field>
-            <Field label={editType === 'PERCENT' ? 'Percent' : 'Amount (EUR)'}>
+            <Field label={offerType === 'PERCENT' ? 'Percent' : 'Amount (EUR)'}>
               <input
                 name="value"
                 required
                 inputMode="decimal"
                 min={0.01}
-                max={editType === 'PERCENT' ? 100 : undefined}
+                max={offerType === 'PERCENT' ? 100 : undefined}
                 step="0.01"
-                defaultValue={humanValue(editing.value)}
+                defaultValue={editing ? humanValue(editing.value) : undefined}
                 className={fieldClass}
+                placeholder={offerType === 'PERCENT' ? '10 for 10%' : '10 for €10'}
               />
             </Field>
             <Field label="Max uses">
@@ -316,24 +266,25 @@ export default function AdminCoupons() {
                 name="maxUses"
                 inputMode="numeric"
                 min={1}
-                defaultValue={editing.maxUses ?? ''}
+                defaultValue={editing?.maxUses ?? ''}
                 className={fieldClass}
                 placeholder="Unlimited"
               />
             </Field>
             <Field label="Starts">
-              <input name="startsAt" type="datetime-local" defaultValue={toLocalInput(editing.startsAt)} className={fieldClass} />
+              <input name="startsAt" type="datetime-local" defaultValue={toLocalInput(editing?.startsAt)} className={fieldClass} />
             </Field>
             <Field label="Ends">
-              <input name="endsAt" type="datetime-local" defaultValue={toLocalInput(editing.endsAt)} className={fieldClass} />
+              <input name="endsAt" type="datetime-local" defaultValue={toLocalInput(editing?.endsAt)} className={fieldClass} />
             </Field>
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input name="active" type="checkbox" defaultChecked={editing.active} className="h-4 w-4 accent-ink" />
-              Switched on
-            </label>
+            <Toggle
+              checked={live}
+              onChange={setLive}
+              label={live ? 'Published' : 'Unpublished'}
+            />
             <div className="flex flex-wrap gap-2">
-              <PrimaryButton type="submit">Save</PrimaryButton>
-              <SecondaryButton type="button" onClick={() => setEditing(null)}>
+              <PrimaryButton type="submit">{editing ? 'Save' : 'Create coupon'}</PrimaryButton>
+              <SecondaryButton type="button" onClick={() => setDraft(null)}>
                 Cancel
               </SecondaryButton>
             </div>

@@ -135,12 +135,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <WishlistButton productId={product.id} />
           </div>
         </div>
-        <AddToCart variants={product.variants}>
+        <AddToCart variants={product.variants} categorySlug={product.categorySlug}>
           <p className="mt-4 text-ink/70">{product.description}</p>
         </AddToCart>
-        <p className="mt-3 text-sm">
-          <Link href="/size-guide">Size guide</Link>
-        </p>
         <dl className="mt-8 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs uppercase tracking-wider text-ink/55">Coverage</dt>

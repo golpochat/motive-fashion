@@ -34,7 +34,7 @@ export default function AdminWhatsapp() {
 
   return (
     <div>
-      <PageHeader title="WhatsApp" description="Broadcasts go only to opted-in numbers. Customers can text MENU, CAT:hijabs, ADD:slug, CHECKOUT." />
+      <PageHeader title="WhatsApp" description="Broadcasts go only to opted-in numbers. Customers can write in plain language — hijabs, a colour, or a piece name. Old CAT: and ADD: codes still work." />
       <div className="max-w-lg">
         <Panel title="Broadcast">
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
