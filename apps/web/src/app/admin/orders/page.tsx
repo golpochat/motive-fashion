@@ -9,6 +9,7 @@ import {
   Field,
   FilterTabs,
   IconButton,
+  JobCard,
   PrimaryButton,
   RowActions,
   SecondaryButton,
@@ -59,6 +60,7 @@ export default function AdminOrders() {
   const [shipId, setShipId] = useState('');
   const [refundId, setRefundId] = useState('');
   const [channel, setChannel] = useState('ALL');
+  const [status, setStatus] = useState('ALL');
   const [q, setQ] = useState('');
   const [carrier, setCarrier] = useState('AN_POST');
   const [trackingNo, setTrackingNo] = useState('');
@@ -70,6 +72,7 @@ export default function AdminOrders() {
     const needle = q.trim().toLowerCase();
     return rows.filter((row) => {
       if (channel !== 'ALL' && row.channel !== channel) return false;
+      if (status !== 'ALL' && row.status !== status) return false;
       if (!needle) return true;
       return (
         row.id.toLowerCase().includes(needle) ||
@@ -78,7 +81,7 @@ export default function AdminOrders() {
         row.name.toLowerCase().includes(needle)
       );
     });
-  }, [channel, q, rows]);
+  }, [channel, status, q, rows]);
 
   async function advance(order: AdminOrder, status: string) {
     setFormError('');
@@ -155,6 +158,20 @@ export default function AdminOrders() {
             { id: 'MOBILE', label: 'App' },
           ]}
         />
+        <FilterTabs
+          ariaLabel="Order status"
+          current={status}
+          onChange={setStatus}
+          items={[
+            { id: 'ALL', label: 'All statuses' },
+            { id: 'CONFIRMED', label: 'Confirmed' },
+            { id: 'PACKING', label: 'Packing' },
+            { id: 'SHIPPED', label: 'Shipped' },
+            { id: 'READY_FOR_COLLECTION', label: 'Ready' },
+            { id: 'DELIVERED', label: 'Delivered' },
+            { id: 'COLLECTED', label: 'Collected' },
+          ]}
+        />
         <Field label="Find an order">
           <input
             className={fieldClass}
@@ -170,7 +187,7 @@ export default function AdminOrders() {
         error={rows.length ? '' : error}
         onRetry={reload}
         empty={visible.length === 0}
-        emptyTitle={q.trim() ? 'No matching orders' : channel === 'ALL' ? 'No orders' : 'No orders in this channel'}
+        emptyTitle={q.trim() ? 'No matching orders' : status !== 'ALL' ? 'No orders in this status' : channel === 'ALL' ? 'No orders' : 'No orders in this channel'}
         emptyBody={
           channel === 'POS'
             ? 'Every POS sale from any cashier appears here once it is taken.'
@@ -183,6 +200,19 @@ export default function AdminOrders() {
               ? ['Ticket', 'Staff', 'Customer', 'Pay', 'Status', 'Total', 'Action']
               : ['Order', 'Channel', 'Staff', 'Customer', 'Status', 'Total', 'Action']
           }
+          cards={visible.map((order) => (
+            <JobCard
+              key={order.id}
+              href={`/admin/pack/${order.id}`}
+              title={order.ticket ?? order.id.slice(0, 8)}
+              meta={`${ORDER_STATUS_LABEL[order.status] ?? order.status} · ${formatEur(order.totalCents)}`}
+            >
+              <p className="mt-2 text-sm">{order.name}</p>
+              <p className="text-xs text-ink/55">
+                {CHANNEL_LABEL[order.channel] ?? order.channel} · {order.fulfillment === 'COLLECTION' ? 'Collection' : 'Delivery'}
+              </p>
+            </JobCard>
+          ))}
         >
           {visible.map((order) => {
             const next = nextOrderStatus(order.fulfillment, order.status);

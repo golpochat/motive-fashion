@@ -4,9 +4,11 @@ import { AppModule } from './app.module';
 import { JobsService } from './jobs/jobs.service';
 import { emitLog, JsonLogger } from './common/log';
 import { fireAlert } from './common/alerts';
+import { assertProductionConfig } from './common/security-config';
 
 async function run() {
   process.env.LOG_SERVICE ??= 'worker';
+  assertProductionConfig();
   const app = await NestFactory.createApplicationContext(AppModule, { logger: new JsonLogger() });
   const jobs = app.get(JobsService);
   await jobs.startWorker();

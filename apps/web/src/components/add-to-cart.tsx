@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { addCartItem } from '@/lib/cart-store';
-import { BRAND } from '@motive-fashion/config';
-import { formatEur, uniqueColors, uniqueSizes } from '@motive-fashion/utils';
+import { canShop } from '@/lib/rbac';
+import { useSession } from '@/components/session-provider';
+import { BRAND, priceTaxSuffix } from '@motive-fashion/config';
+import { catalogSizeLabel, formatEur, sizeHintForCategory, uniqueColors, uniqueSizes } from '@motive-fashion/utils';
 import { variantPriceRange } from '@/lib/catalog';
 import { ChoiceChip } from '@/components/dashboard-ui';
 
@@ -18,16 +20,6 @@ type Variant = {
   available: number;
 };
 
-function SizeHint({ categorySlug }: { categorySlug?: string }) {
-  if (categorySlug === 'hijabs') {
-    return 'One size. Chiffon 180 × 70 cm; satin square 90 cm. Instant jersey fits a 54–60 cm head.';
-  }
-  if (categorySlug === 'abayas' || categorySlug === 'jilbabs' || categorySlug === 'dresses') {
-    return 'Cut modest and slightly generous. Between sizes? Take the larger. Full measurements are in the size guide.';
-  }
-  return 'One size. Try on in Dublin if you are unsure; keep tags on for 14-day returns.';
-}
-
 export function AddToCart({
   variants,
   categorySlug,
@@ -37,6 +29,7 @@ export function AddToCart({
   categorySlug?: string;
   children?: React.ReactNode;
 }) {
+  const { me } = useSession();
   const inStock = variants.filter((row) => row.available > 0);
   const initial = inStock[0] ?? variants[0];
   const [size, setSize] = useState(initial?.size ?? '');
@@ -86,7 +79,7 @@ export function AddToCart({
 
   return (
     <>
-      <p className="mt-4 text-xl">{formatEur(selected?.priceCents ?? 0)} inc. VAT</p>
+      <p className="mt-4 text-xl">{formatEur(selected?.priceCents ?? 0)}{priceTaxSuffix()}</p>
       {range.mixed ? <p className="mt-1 text-sm text-ink/55">Price depends on size.</p> : null}
       {children}
       <div className="mt-6 space-y-4">
@@ -101,7 +94,7 @@ export function AddToCart({
                   disabled={!item.available}
                   onClick={() => pickSize(item.value)}
                 >
-                  {item.value}
+                  {catalogSizeLabel(item.value)}
                   {!item.available ? ' · sold out' : ''}
                 </ChoiceChip>
               ))}
@@ -136,17 +129,21 @@ export function AddToCart({
             : `${selected?.available ?? 0} in Dublin · SKU ${selected?.sku ?? '—'}`}
         </p>
         <p className="text-sm text-ink/70">
-          {SizeHint({ categorySlug })}{' '}
+          {sizeHintForCategory(categorySlug, BRAND.returnDays)}{' '}
           <Link href="/size-guide">Full size guide</Link>
         </p>
-        <button
-          type="button"
-          onClick={() => void add()}
-          disabled={busy || soldOut}
-          className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50"
-        >
-          {busy ? 'Adding…' : soldOut ? 'Sold out' : 'Add to cart'}
-        </button>
+        {me && !canShop(me) ? (
+          <p className="text-sm text-ink/70">Only a customer account can add to cart. Take a sale on the till, or sign out to shop as a guest.</p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void add()}
+            disabled={busy || soldOut}
+            className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50"
+          >
+            {busy ? 'Adding…' : soldOut ? 'Sold out' : 'Add to cart'}
+          </button>
+        )}
         {msg ? <p className="text-sm text-ink/70">{msg}</p> : null}
       </div>
     </>

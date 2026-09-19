@@ -553,7 +553,7 @@ async function main() {
   });
 
   for (const row of [
-    { key: '*', name: 'All permissions', group: 'System' },
+    { key: '*', name: 'Access-control wildcard', group: 'System' },
     { key: 'dashboard.super', name: 'Open super-admin console', group: 'Dashboards' },
     { key: 'dashboard.admin', name: 'Open admin console', group: 'Dashboards' },
     { key: 'dashboard.staff', name: 'Open staff console', group: 'Dashboards' },
@@ -587,7 +587,7 @@ async function main() {
   const perms = await prisma.permission.findMany();
   const byKey = Object.fromEntries(perms.map((p) => [p.key, p.id]));
   const roleMap: Record<string, string[]> = {
-    'super-admin': ['*'],
+    'super-admin': ['dashboard.super', 'rbac.roles.write', 'rbac.users.assign', 'audit.read'],
     admin: [
       'dashboard.admin',
       'analytics.read',
@@ -621,14 +621,17 @@ async function main() {
   };
   const roleIds: Record<string, string> = {};
   for (const [slug, keys] of Object.entries(roleMap)) {
-    const name = slug
-      .split('-')
-      .map((p) => p[0]!.toUpperCase() + p.slice(1))
-      .join(' ');
+    const name =
+      slug === 'super-admin'
+        ? 'Super admin'
+        : slug
+            .split('-')
+            .map((p) => p[0]!.toUpperCase() + p.slice(1))
+            .join(' ');
     const role = await prisma.role.upsert({
       where: { slug },
       create: { slug, name, system: true, description: `System ${name} role` },
-      update: { system: true },
+      update: { system: true, name },
     });
     roleIds[slug] = role.id;
     await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
@@ -777,6 +780,10 @@ async function main() {
       name: 'Ramadan',
       season: CampaignSeason.RAMADAN,
       description: 'Quiet luxury for the month.',
+      published: false,
+      inNav: true,
+      sortOrder: 1,
+      bannerPath: '/brand/hero-editorial.jpg',
     },
   });
   const eid = await prisma.collection.create({
@@ -785,10 +792,22 @@ async function main() {
       name: 'Eid',
       season: CampaignSeason.EID,
       description: 'Occasion abayas and sets.',
+      published: false,
+      inNav: true,
+      sortOrder: 2,
+      bannerPath: '/brand/banner-eid.jpg',
     },
   });
   const winter = await prisma.collection.create({
-    data: { slug: 'winter', name: 'Winter', season: CampaignSeason.WINTER },
+    data: {
+      slug: 'winter',
+      name: 'Winter',
+      season: CampaignSeason.WINTER,
+      published: true,
+      inNav: false,
+      sortOrder: 0,
+      bannerPath: '/brand/hero-editorial.jpg',
+    },
   });
 
   const variantByProduct = new Map<string, string[]>();

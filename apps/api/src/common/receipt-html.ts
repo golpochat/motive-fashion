@@ -1,4 +1,4 @@
-import { BRAND, PALETTE, RETURN_POSTAGE_NOTICE } from '@motive-fashion/config';
+import { BRAND, PALETTE, RETURN_POSTAGE_NOTICE, legalDisplayName, pricesIncludeVatCopy, totalIncLabel, vatNumberDisplay } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
 import {
   addressLine,
@@ -40,7 +40,7 @@ export function orderPaidText(order: ReceiptOrder) {
     `Subtotal ${formatEur(order.subtotalCents)}`,
     discount.trimEnd(),
     `${shippingLabel(order)} ${shippingAmount(order)}`,
-    `Total inc. VAT ${formatEur(order.totalCents)}`,
+    `${totalIncLabel()} ${formatEur(order.totalCents)}`,
     '',
     fulfilmentLabel(order),
     address ?? '',
@@ -50,7 +50,7 @@ export function orderPaidText(order: ReceiptOrder) {
     '',
     `Track your order: ${trackUrl(order)}`,
     '',
-    `${BRAND.legalName} · ${BRAND.city}, ${BRAND.country}`,
+    `${legalDisplayName()} · ${BRAND.city}, ${BRAND.country}`,
     support,
   ]
     .filter((line) => line !== '')
@@ -134,11 +134,11 @@ export function orderPaidHtml(order: ReceiptOrder, options?: { inlineLogo?: bool
                   <td style="padding:4px 0;font-size:14px;color:${PALETTE.ink};text-align:right;">${shippingAmount(order)}</td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 0 0;font-size:16px;color:${PALETTE.ink};border-top:1px solid #e7e0d6;">Total inc. VAT</td>
+                  <td style="padding:12px 0 0;font-size:16px;color:${PALETTE.ink};border-top:1px solid #e7e0d6;">${esc(totalIncLabel())}</td>
                   <td style="padding:12px 0 0;font-size:16px;color:${PALETTE.ink};text-align:right;border-top:1px solid #e7e0d6;">${formatEur(order.totalCents)}</td>
                 </tr>
               </table>
-              <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#8a8178;">Prices include VAT at ${(BRAND.vatRate * 100).toFixed(0)}%.</p>
+              <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#8a8178;">${esc(pricesIncludeVatCopy())}${vatNumberDisplay() ? ` VAT ${esc(vatNumberDisplay())}.` : ''}</p>
             </td>
           </tr>
           <tr>
@@ -164,7 +164,7 @@ export function orderPaidHtml(order: ReceiptOrder, options?: { inlineLogo?: bool
           </tr>
           <tr>
             <td style="padding:16px 8px 0;border-top:1px solid #e7e0d6;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#8a8178;">
-              ${esc(BRAND.legalName)} · ${esc(BRAND.city)}, ${esc(BRAND.country)}<br/>
+              ${esc(legalDisplayName())} · ${esc(BRAND.city)}, ${esc(BRAND.country)}<br/>
               ${esc(support)}
             </td>
           </tr>
@@ -215,7 +215,7 @@ export function orderStatusUpdateHtml(
           </tr>
           <tr>
             <td style="padding:16px 8px 0;border-top:1px solid #e7e0d6;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#8a8178;">
-              ${esc(BRAND.legalName)} · ${esc(BRAND.city)}, ${esc(BRAND.country)}<br/>
+              ${esc(legalDisplayName())} · ${esc(BRAND.city)}, ${esc(BRAND.country)}<br/>
               ${esc(support)}
             </td>
           </tr>
@@ -237,7 +237,7 @@ export function orderStatusUpdateText(
     copy.extra ?? '',
     `Order ${order.id}`,
     `Track your order: ${trackUrl(order)}`,
-    `${BRAND.legalName} · ${BRAND.city}, ${BRAND.country}`,
+    `${legalDisplayName()} · ${BRAND.city}, ${BRAND.country}`,
   ]
     .filter(Boolean)
     .join('\n\n');

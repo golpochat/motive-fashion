@@ -1,13 +1,15 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import {
   DataTable,
   Field,
+  FilterTabs,
   IconButton,
+  JobCard,
   Modal,
   PrimaryButton,
   RowActions,
@@ -36,6 +38,7 @@ type Product = AdminProduct & { images?: ProductImage[] };
 export default function AdminProducts() {
   const { me } = useSession();
   const canWrite = hasPerm(me, 'catalog.write');
+  const [filter, setFilter] = useState('all');
   const { data, error, loading, reload, setData } = useConsoleQuery<Product[]>('/admin/products', 'Could not load products');
   const cats = useConsoleQuery<AdminCategory[]>('/catalog/categories', 'Could not load categories');
   const [formError, setFormError] = useState('');
@@ -48,12 +51,20 @@ export default function AdminProducts() {
   const openedHub = useRef(false);
   const rows = data ?? [];
   const categories = cats.data ?? [];
+  const visible = useMemo(() => {
+    if (filter === 'unpublished') return rows.filter((row) => !row.published);
+    if (filter === 'nophoto') return rows.filter((row) => !(row.images ?? []).length);
+    return rows;
+  }, [filter, rows]);
   const photoProduct = photosFor ? (rows.find((row) => row.id === photosFor.id) ?? photosFor) : null;
   const hubProduct = hubFor ? (rows.find((row) => row.id === hubFor.id) ?? hubFor) : null;
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('filter');
+    if (next === 'unpublished' || next === 'nophoto') setFilter(next);
     if (openedHub.current || !rows.length) return;
-    const id = new URLSearchParams(window.location.search).get('hub');
+    const id = params.get('hub');
     if (!id) return;
     const row = rows.find((item) => item.id === id);
     if (row) {
@@ -243,16 +254,46 @@ export default function AdminProducts() {
           {error}
         </p>
       ) : null}
+      <div className="mb-4">
+        <FilterTabs
+          ariaLabel="Product jobs"
+          current={filter}
+          onChange={(id) => {
+            setFilter(id);
+            const url = id === 'all' ? '/admin/products' : `/admin/products?filter=${id}`;
+            window.history.replaceState(null, '', url);
+          }}
+          items={[
+            { id: 'all', label: 'All' },
+            { id: 'unpublished', label: 'Unpublished' },
+            { id: 'nophoto', label: 'No photo' },
+          ]}
+        />
+      </div>
       <ConsoleSection
         loading={loading}
         error={rows.length ? '' : error}
         onRetry={reload}
-        empty={rows.length === 0}
-        emptyTitle="No products"
-        emptyBody="Add a product to put it on the Dublin ledger."
+        empty={visible.length === 0}
+        emptyTitle={filter === 'unpublished' ? 'No unpublished styles' : filter === 'nophoto' ? 'Every style has a photo' : 'No products'}
+        emptyBody={filter === 'all' ? 'Add a product to put it on the Dublin ledger.' : 'Jobs from Overview land on these filters.'}
       >
-        <DataTable headers={['Title', 'Category', 'SKUs', 'Published', 'Action']}>
-          {rows.map((r) => {
+        <DataTable
+          headers={['Title', 'Category', 'SKUs', 'Published', 'Action']}
+          cards={visible.map((r) => (
+            <JobCard
+              key={r.id}
+              title={r.title}
+              meta={`${r.category?.name ?? 'Uncategorised'}${r.published ? '' : ' · unpublished'}`}
+              actions={
+                <RowActions>
+                  <IconButton label="Open style" icon="eye" onClick={() => setHubFor(r)} />
+                </RowActions>
+              }
+            />
+          ))}
+        >
+          {visible.map((r) => {
             const sizes = uniqueSizes(r.variants);
             const colors = uniqueColors(r.variants);
             return (

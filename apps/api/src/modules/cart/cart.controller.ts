@@ -1,11 +1,11 @@
 import { Body, Controller, Delete, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
-import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
+import { CurrentUser, OptionalJwtGuard, ShopperGuard } from '../../common/auth';
 import { CartService } from './cart.service';
 import { cartAddSchema, cartQtySchema } from '@motive-fashion/validation';
 
 @Controller('cart')
-@UseGuards(OptionalJwtGuard)
+@UseGuards(OptionalJwtGuard, ShopperGuard)
 export class CartController {
   constructor(@Inject(CartService) private readonly carts: CartService) {}
 

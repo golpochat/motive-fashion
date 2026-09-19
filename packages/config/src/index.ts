@@ -1,6 +1,8 @@
 export const BRAND = {
   name: 'Motive Fashion',
-  legalName: 'Motive Fashion Limited',
+  /** Public trading name. Override with LEGAL_NAME / NEXT_PUBLIC_LEGAL_NAME for the proprietor’s legal name. */
+  legalName: 'Motive Fashion',
+  entityKind: 'sole_trader',
   city: 'Dublin',
   country: 'Ireland',
   currency: 'EUR',
@@ -13,35 +15,85 @@ export const BRAND = {
   returnDays: 14,
 } as const;
 
+function envValue(name: string) {
+  if (typeof process === 'undefined' || !process.env) return '';
+  return (process.env[`NEXT_PUBLIC_${name}`] || process.env[name] || '').trim();
+}
+
+function envFlag(name: string): boolean | undefined {
+  const raw = envValue(name).toLowerCase();
+  if (raw === 'true' || raw === '1') return true;
+  if (raw === 'false' || raw === '0') return false;
+  return undefined;
+}
+
+/** Proprietor or trading name printed on receipts and legal pages. */
+export function legalDisplayName() {
+  return envValue('LEGAL_NAME') || BRAND.legalName;
+}
+
+/** Irish VAT number when Revenue has issued one. */
+export function vatNumberDisplay() {
+  return envValue('VAT_NUMBER');
+}
+
 /**
- * Ramadan and Eid sit in chrome only during merchandising windows (Europe/Dublin).
- * Collection URLs stay live year-round for campaigns and search.
+ * True only when you opt in (`VAT_REGISTERED=true`) or set a VAT number.
+ * Unregistered sole traders must not advertise prices as VAT-inclusive.
  */
-export const SEASONAL_NAV = [
-  {
-    href: '/collections/ramadan',
-    label: 'Ramadan',
-    cta: 'Ramadan collection',
-    windows: [
-      ['2026-01-07', '2026-03-20'],
-      ['2026-12-28', '2027-03-10'],
-      ['2027-12-17', '2028-02-27'],
-    ],
-  },
-  {
-    href: '/collections/eid',
-    label: 'Eid',
-    cta: 'Eid collection',
-    windows: [
-      ['2026-03-01', '2026-04-03'],
-      ['2026-05-10', '2026-06-10'],
-      ['2027-02-20', '2027-03-24'],
-      ['2027-04-30', '2027-05-30'],
-      ['2028-02-10', '2028-03-12'],
-      ['2028-04-20', '2028-05-19'],
-    ],
-  },
+export function isVatRegistered() {
+  const flag = envFlag('VAT_REGISTERED');
+  if (flag !== undefined) return flag;
+  return Boolean(vatNumberDisplay());
+}
+
+export function priceTaxSuffix() {
+  return isVatRegistered() ? ' inc. VAT' : '';
+}
+
+export function totalIncLabel() {
+  return isVatRegistered() ? 'Total inc. VAT' : 'Total';
+}
+
+export function pricesIncludeVatCopy() {
+  if (!isVatRegistered()) return 'Prices are in euro.';
+  return `Prices include VAT (${Math.round(BRAND.vatRate * 100)}%).`;
+}
+
+export function shopPriceBlurb() {
+  return isVatRegistered()
+    ? 'VAT-inclusive prices. Ireland delivery and Dublin collection.'
+    : 'Prices in euro. Ireland delivery and Dublin collection.';
+}
+
+export function legalControllerLine() {
+  const name = legalDisplayName();
+  return `${name}, sole trader, ${BRAND.city}`;
+}
+
+/** Optional street address for the imprint (shop, studio, or home office). */
+export function traderAddressDisplay() {
+  return envValue('TRADER_ADDRESS');
+}
+
+/** Lines shown on checkout and /legal/business before a distance contract. */
+export function traderIdentityLines() {
+  const lines = [`${legalDisplayName()}, sole trader`, traderAddressDisplay() || `${BRAND.city}, ${BRAND.country}`, BRAND.supportEmail];
+  const vat = vatNumberDisplay();
+  if (isVatRegistered() && vat) lines.push(`VAT ${vat}`);
+  return lines;
+}
+
+export const CAMPAIGN_SEASONS = [
+  { value: 'EVERYDAY', label: 'Everyday' },
+  { value: 'SPRING', label: 'Spring' },
+  { value: 'SUMMER', label: 'Summer' },
+  { value: 'WINTER', label: 'Winter' },
+  { value: 'RAMADAN', label: 'Ramadan' },
+  { value: 'EID', label: 'Eid' },
 ] as const;
+
+export type CampaignSeasonValue = (typeof CAMPAIGN_SEASONS)[number]['value'];
 
 export function dublinDay(at = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -50,21 +102,6 @@ export function dublinDay(at = new Date()) {
     month: '2-digit',
     day: '2-digit',
   }).format(at);
-}
-
-export function isDateInWindows(windows: readonly (readonly [string, string])[], at = new Date()) {
-  const day = dublinDay(at);
-  return windows.some(([from, to]) => day >= from && day <= to);
-}
-
-export function liveSeasonalNav(at = new Date()) {
-  return SEASONAL_NAV.filter((item) => isDateInWindows(item.windows, at));
-}
-
-/** Homepage secondary CTA. Eid wins when both windows overlap. */
-export function liveSeasonalCta(at = new Date()) {
-  const live = liveSeasonalNav(at);
-  return live.find((item) => item.label === 'Eid') ?? live[0] ?? null;
 }
 
 /** NIST-aligned minimum for new accounts. */

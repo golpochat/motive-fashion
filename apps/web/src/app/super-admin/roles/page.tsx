@@ -1,12 +1,25 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Field, Modal, PrimaryButton, SecondaryButton, Td, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
+import {
+  DataTable,
+  Field,
+  JobCard,
+  Modal,
+  PrimaryButton,
+  SecondaryButton,
+  Td,
+  fieldClass,
+  IconButton,
+  RowActions,
+} from '@/components/dashboard-ui';
 
 type Perm = { id: string; key: string; name: string; group: string };
+type Member = { user: { id: string; name: string; email: string } };
 type RoleRow = {
   id: string;
   slug: string;
@@ -15,15 +28,18 @@ type RoleRow = {
   system: boolean;
   _count: { members: number };
   permissions: { permission: { key: string } }[];
+  members?: Member[];
 };
 
 export default function SuperAdminRoles() {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [perms, setPerms] = useState<Perm[]>([]);
+  const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<RoleRow | 'new' | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -55,20 +71,37 @@ export default function SuperAdminRoles() {
     reload();
   }, []);
 
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return roles;
+    return roles.filter(
+      (role) =>
+        role.name.toLowerCase().includes(q) ||
+        role.slug.includes(q) ||
+        role.description.toLowerCase().includes(q),
+    );
+  }, [roles, query]);
+
   function openCreate() {
     setError('');
     setEditing('new');
+    setMembers([]);
     setName('');
     setDescription('');
     setSelected(new Set());
   }
 
-  function openEdit(role: RoleRow) {
+  async function openEdit(role: RoleRow) {
     setError('');
     setEditing(role);
     setName(role.name);
     setDescription(role.description);
     setSelected(new Set(role.permissions.map((g) => g.permission.key)));
+    setMembers([]);
+    const res = await fetch(`${API}/rbac/roles/${role.id}`, { credentials: 'include' });
+    if (!res.ok) return;
+    const detail = (await res.json()) as RoleRow;
+    setMembers(Array.isArray(detail.members) ? detail.members : []);
   }
 
   async function save(e: FormEvent) {
@@ -100,6 +133,17 @@ export default function SuperAdminRoles() {
     reload();
   }
 
+  async function clone(role: RoleRow) {
+    setError('');
+    const res = await fetch(`${API}/rbac/roles/${role.id}/clone`, { method: 'POST', credentials: 'include' });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(apiErrorMessage(payload, 'Could not clone this role.'));
+      return;
+    }
+    reload();
+  }
+
   async function remove() {
     if (!confirmDelete) return;
     const res = await fetch(`${API}/rbac/roles/${confirmDelete.id}`, { method: 'DELETE', credentials: 'include' });
@@ -111,6 +155,17 @@ export default function SuperAdminRoles() {
     }
     setConfirmDelete(null);
     reload();
+  }
+
+  function toggleGroup(group: string) {
+    const keys = perms.filter((p) => p.group === group).map((p) => p.key);
+    const next = new Set(selected);
+    const allOn = keys.every((key) => next.has(key));
+    for (const key of keys) {
+      if (allOn) next.delete(key);
+      else next.add(key);
+    }
+    setSelected(next);
   }
 
   const groups = [...new Set(perms.map((p) => p.group))];
@@ -128,34 +183,68 @@ export default function SuperAdminRoles() {
       />
       <AccessTabs current="/super-admin/roles" />
       {error && !editing ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
+      <div className="mb-4 max-w-sm">
+        <Field label="Find a role">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name or slug"
+            className={fieldClass}
+            autoComplete="off"
+          />
+        </Field>
+      </div>
       <ConsoleSection
         loading={loading}
         error={loadError}
         onRetry={reload}
-        empty={roles.length === 0}
-        emptyTitle="No roles"
-        emptyBody="Create a role to grant permissions."
+        empty={visible.length === 0}
+        emptyTitle={query.trim() ? 'No matching roles' : 'No roles'}
+        emptyBody={query.trim() ? 'Try another name.' : 'Create a role to grant permissions.'}
       >
-      <DataTable headers={['Role', 'People', 'Permissions', 'Action']}>
-        {roles.map((r) => (
-          <tr key={r.id} className="hover:bg-ink/[0.02]">
-            <Td>
-              <span className="block font-medium">{r.name}</span>
-              {r.system ? <span className="text-xs text-ink/45">System</span> : null}
-            </Td>
-            <Td>{r._count.members}</Td>
-            <Td>{r.permissions.length}</Td>
-            <Td nowrap>
-              <RowActions>
-                <IconButton label="Edit role" icon="edit" onClick={() => openEdit(r)} />
-                {r.system ? null : (
-                  <IconButton label="Delete role" icon="trash" tone="danger" onClick={() => setConfirmDelete(r)} />
-                )}
-              </RowActions>
-            </Td>
-          </tr>
-        ))}
-      </DataTable>
+        <DataTable
+          headers={['Role', 'People', 'Permissions', 'Action']}
+          cards={visible.map((r) => (
+            <JobCard
+              key={r.id}
+              title={r.name}
+              meta={`${r.system ? 'System · ' : ''}${r._count.members} people · ${r.permissions.length} keys`}
+              actions={
+                <RowActions>
+                  <IconButton label="Clone role" icon="copy" onClick={() => void clone(r)} />
+                  <IconButton label="Edit role" icon="edit" onClick={() => void openEdit(r)} />
+                  {r.system ? null : (
+                    <IconButton label="Delete role" icon="trash" tone="danger" onClick={() => setConfirmDelete(r)} />
+                  )}
+                </RowActions>
+              }
+            />
+          ))}
+        >
+          {visible.map((r) => (
+            <tr key={r.id} className="hover:bg-ink/[0.02]">
+              <Td>
+                <span className="block font-medium">{r.name}</span>
+                {r.system ? <span className="text-xs text-ink/45">System</span> : <span className="text-xs text-ink/45">{r.slug}</span>}
+              </Td>
+              <Td>
+                <Link href={`/super-admin/users?role=${encodeURIComponent(r.slug)}`} className="no-underline hover:text-accent">
+                  {r._count.members}
+                </Link>
+              </Td>
+              <Td>{r.permissions.length}</Td>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="Clone role" icon="copy" onClick={() => void clone(r)} />
+                  <IconButton label="Edit role" icon="edit" onClick={() => void openEdit(r)} />
+                  {r.system ? null : (
+                    <IconButton label="Delete role" icon="trash" tone="danger" onClick={() => setConfirmDelete(r)} />
+                  )}
+                </RowActions>
+              </Td>
+            </tr>
+          ))}
+        </DataTable>
       </ConsoleSection>
 
       {editing ? (
@@ -175,7 +264,12 @@ export default function SuperAdminRoles() {
             <div className="max-h-72 space-y-4 overflow-y-auto">
               {groups.map((group) => (
                 <div key={group}>
-                  <p className="text-xs uppercase tracking-wider text-ink/50">{group}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-wider text-ink/50">{group}</p>
+                    <button type="button" className="text-xs text-ink/55 hover:text-ink" onClick={() => toggleGroup(group)}>
+                      {perms.filter((p) => p.group === group).every((p) => selected.has(p.key)) ? 'Clear' : 'Select all'}
+                    </button>
+                  </div>
                   <ul className="mt-2 space-y-1.5 text-sm">
                     {perms
                       .filter((p) => p.group === group)
@@ -204,6 +298,21 @@ export default function SuperAdminRoles() {
                 </div>
               ))}
             </div>
+            {editing !== 'new' && members.length ? (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-ink/50">People</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {members.map((m) => (
+                    <li key={m.user.id}>
+                      <Link href={`/super-admin/users?role=${encodeURIComponent(editing.slug)}`} className="no-underline hover:text-accent">
+                        {m.user.name}
+                        <span className="text-ink/45"> · {m.user.email}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <PrimaryButton type="submit" disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}

@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Inject, NotFoundException, Param, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrderStatus, Prisma, ReturnStatus, ReviewStatus, UserRole } from '../../../generated/prisma';
-import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
+import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions, RequireWorkspace } from '../../common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { CommerceService } from '../commerce/commerce.service';
@@ -21,14 +21,18 @@ import {
   paymentPatchSchema,
   locationCreateSchema,
   locationPatchSchema,
+  collectionCreateSchema,
+  collectionPatchSchema,
   reviewModerateSchema,
 } from '@motive-fashion/validation';
 import { slugify, styleComboKey, styleDefaultsForCategory } from '@motive-fashion/utils';
 import { customerPublicSelect } from '../../common/user-select';
-import { writeAudit } from '../../common/audit';
+import { writeAudit, listAuditLogs, exportAuditCsv } from '../../common/audit';
 import { saveProductImage, uploadDir } from '../../common/media';
 import { unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
+import type { Response } from 'express';
+import { paidCreatedAt, fillDailySeries, seriesRange } from './analytics-where';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -39,19 +43,47 @@ export class AdminController {
     @Inject(CommerceService) private readonly commerce: CommerceService,
   ) {}
 
+  @Get('analytics/export')
+  @RequirePermissions('analytics.read')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="analytics.csv"')
+  async exportAnalytics(@Query('from') from: string | undefined, @Query('to') to: string | undefined, @Res() res: Response) {
+    const data = await this.analytics(from, to);
+    const lines = [
+      ['section', 'key', 'value'].join(','),
+      ['summary', 'revenueCents', String(data.revenueCents)].join(','),
+      ['summary', 'orders', String(data.orderCount)].join(','),
+      ['summary', 'aovCents', String(data.aovCents)].join(','),
+      ...data.byChannel.map((row) => ['channel', csvCell(row.channel), String(row._sum.totalCents ?? 0)].join(',')),
+      ...data.byFulfilment.map((row) => ['fulfilment', csvCell(row.fulfillment), String(row._sum.totalCents ?? 0)].join(',')),
+      ...data.topSkus.map((row) => ['sku', csvCell(row.sku), String(row._sum.quantity ?? 0)].join(',')),
+      ...data.series.map((row) => ['day', row.date, `${row.orders}|${row.revenueCents}`].join(',')),
+    ];
+    res.send(lines.join('\n'));
+  }
+
   @Get('analytics')
   @RequirePermissions('analytics.read')
-  async analytics() {
-    const [orderAgg, orders, low, toPack, unpublished, noPhoto, openReturns] = await Promise.all([
+  async analytics(@Query('from') from?: string, @Query('to') to?: string) {
+    const paidWhere = paidCreatedAt(from, to);
+    const seriesWindow = seriesRange(from, to);
+    const [orderAgg, orders, fulfilment, low, toPack, unpublished, noPhoto, openReturns, seriesRows] = await Promise.all([
       this.prisma.order.aggregate({
         _sum: { totalCents: true },
         _count: true,
-        where: { status: { notIn: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED] } },
+        where: paidWhere,
       }),
       this.prisma.order.groupBy({
         by: ['channel'],
         _sum: { totalCents: true },
         _count: true,
+        where: paidWhere,
+      }),
+      this.prisma.order.groupBy({
+        by: ['fulfillment'],
+        _sum: { totalCents: true },
+        _count: true,
+        where: paidWhere,
       }),
       this.prisma.inventoryLevel.count({
         where: { onHand: { lte: 5 } },
@@ -64,19 +96,31 @@ export class AdminController {
       this.prisma.return.count({
         where: { status: { in: [ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.RECEIVED] } },
       }),
+      this.prisma.order.findMany({
+        where: paidCreatedAt(seriesWindow.from, seriesWindow.to),
+        select: { createdAt: true, totalCents: true },
+      }),
     ]);
     const top = await this.prisma.orderItem.groupBy({
       by: ['sku', 'title'],
       _sum: { quantity: true },
+      where: { order: paidWhere },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 8,
     });
+    const orderCount = orderAgg._count;
+    const revenueCents = orderAgg._sum.totalCents ?? 0;
     return {
-      revenueCents: orderAgg._sum.totalCents ?? 0,
-      orderCount: orderAgg._count,
+      revenueCents,
+      orderCount,
+      aovCents: orderCount ? Math.round(revenueCents / orderCount) : 0,
       stockouts: low,
       byChannel: orders,
+      byFulfilment: fulfilment,
+      series: fillDailySeries(seriesWindow.from, seriesWindow.to, seriesRows),
       topSkus: top,
+      from: from ?? null,
+      to: to ?? null,
       next: {
         pack: toPack,
         unpublished,
@@ -98,14 +142,14 @@ export class AdminController {
 
   @Get('search')
   @RequirePermissions('orders.read')
+  @RequireWorkspace('admin')
   async search(@Query('q') q: string, @CurrentUser() user: { permissions?: string[] }) {
     const needle = (q ?? '').trim();
     if (needle.length < 2) return { products: [], orders: [], customers: [], coupons: [] };
     const keys = user.permissions ?? [];
-    const all = keys.includes('*');
     const term = { contains: needle, mode: 'insensitive' as const };
     const [products, orders, customers, coupons] = await Promise.all([
-      all || keys.includes('catalog.read')
+      keys.includes('catalog.read')
         ? this.prisma.product.findMany({
             where: {
               OR: [
@@ -121,21 +165,21 @@ export class AdminController {
         : Promise.resolve([]),
       this.prisma.order.findMany({
         where: {
-          OR: [{ ticket: term }, { email: term }, { name: term }, { id: { startsWith: needle } }],
+          OR: [{ email: term }, { name: term }, { id: { startsWith: needle } }],
         },
         take: 8,
         orderBy: { createdAt: 'desc' },
-        select: { id: true, ticket: true, email: true, name: true, status: true, totalCents: true },
+        select: { id: true, email: true, name: true, status: true, totalCents: true },
       }),
-      all || keys.includes('customers.read')
+      keys.includes('customers.read')
         ? this.prisma.user.findMany({
-            where: { deletedAt: null, OR: [{ email: term }, { name: term }, { phone: term }] },
+            where: { role: UserRole.CUSTOMER, deletedAt: null, OR: [{ email: term }, { name: term }, { phone: term }] },
             take: 8,
             orderBy: { name: 'asc' },
             select: { id: true, name: true, email: true },
           })
         : Promise.resolve([]),
-      all || keys.includes('marketing.write')
+      keys.includes('marketing.write')
         ? this.prisma.promoCode.findMany({
             where: { code: term },
             take: 5,
@@ -144,7 +188,15 @@ export class AdminController {
           })
         : Promise.resolve([]),
     ]);
-    return { products, orders, customers, coupons };
+    return {
+      products,
+      orders: orders.map((order) => ({
+        ...order,
+        ticket: order.id.replace(/-/g, '').slice(0, 8).toUpperCase(),
+      })),
+      customers,
+      coupons,
+    };
   }
 
   @Post('products')
@@ -411,6 +463,39 @@ export class AdminController {
     });
   }
 
+  @Get('customers/:id')
+  @RequirePermissions('customers.read')
+  async customer(@Param('id') id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, role: UserRole.CUSTOMER, deletedAt: null },
+      select: {
+        ...customerPublicSelect,
+        addresses: true,
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            status: true,
+            channel: true,
+            fulfillment: true,
+            totalCents: true,
+            createdAt: true,
+          },
+        },
+        _count: { select: { orders: true } },
+      },
+    });
+    if (!user) throw new NotFoundException('Customer not found');
+    return {
+      ...user,
+      orders: user.orders.map((order) => ({
+        ...order,
+        ticket: order.id.replace(/-/g, '').slice(0, 8).toUpperCase(),
+      })),
+    };
+  }
+
   @Get('locations')
   @RequirePermissions('locations.read')
   locations() {
@@ -444,7 +529,7 @@ export class AdminController {
   @RequirePermissions('dashboard.admin')
   async updateLocation(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
     const dto = locationPatchSchema.parse(body);
-    const location = await this.prisma.location.update({ where: { id }, data: dto });
+      const location = await this.prisma.location.update({ where: { id }, data: dto });
     await writeAudit(this.prisma, {
       actorId: user.sub,
       action: 'location.update',
@@ -453,6 +538,90 @@ export class AdminController {
       meta: dto,
     });
     return location;
+  }
+
+  @Get('collections')
+  @RequirePermissions('catalog.read')
+  adminCollections() {
+    return this.prisma.collection.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: { _count: { select: { products: true } } },
+    });
+  }
+
+  @Post('collections')
+  @RequirePermissions('catalog.write')
+  async createCollection(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = collectionCreateSchema.parse(body);
+    const slug = slugify(dto.slug?.trim() || dto.name);
+    try {
+      const collection = await this.prisma.collection.create({
+        data: {
+          name: dto.name,
+          slug,
+          description: dto.description || null,
+          season: dto.season ?? 'EVERYDAY',
+          published: dto.published ?? false,
+          inNav: dto.inNav ?? false,
+          sortOrder: dto.sortOrder ?? 0,
+          bannerPath: dto.bannerPath || null,
+        },
+      });
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'collection.create',
+        entity: 'Collection',
+        entityId: collection.id,
+      });
+      return collection;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That collection slug is already in use');
+      }
+      throw err;
+    }
+  }
+
+  @Patch('collections/:id')
+  @RequirePermissions('catalog.write')
+  async updateCollection(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    const dto = collectionPatchSchema.parse(body);
+    const data = {
+      ...dto,
+      slug: undefined,
+      ...(dto.slug ? { slug: slugify(dto.slug) } : {}),
+      ...(dto.description !== undefined ? { description: dto.description || null } : {}),
+      ...(dto.bannerPath !== undefined ? { bannerPath: dto.bannerPath || null } : {}),
+    };
+    try {
+      const collection = await this.prisma.collection.update({ where: { id }, data });
+      await writeAudit(this.prisma, {
+        actorId: user.sub,
+        action: 'collection.update',
+        entity: 'Collection',
+        entityId: id,
+        meta: dto,
+      });
+      return collection;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('That collection slug is already in use');
+      }
+      throw err;
+    }
+  }
+
+  @Delete('collections/:id')
+  @RequirePermissions('catalog.write')
+  async deleteCollection(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    await this.prisma.collection.delete({ where: { id } });
+    await writeAudit(this.prisma, {
+      actorId: user.sub,
+      action: 'collection.delete',
+      entity: 'Collection',
+      entityId: id,
+    });
+    return { ok: true };
   }
 
   @Get('returns')
@@ -498,16 +667,18 @@ export class AdminController {
 
   @Get('audit')
   @RequirePermissions('audit.read')
+  @RequireWorkspace('admin')
   audit(@Query('entity') entity?: string, @Query('action') action?: string, @Query('cursor') cursor?: string) {
-    return this.prisma.auditLog.findMany({
-      where: {
-        ...(entity ? { entity } : {}),
-        ...(action ? { action: { contains: action, mode: 'insensitive' } } : {}),
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    return listAuditLogs(this.prisma, { entity, action, cursor, scope: 'commerce' });
+  }
+
+  @Get('audit/export')
+  @RequirePermissions('audit.read')
+  @RequireWorkspace('admin')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="audit.csv"')
+  async exportAudit(@Res() res: Response) {
+    res.send(await exportAuditCsv(this.prisma, { scope: 'commerce' }));
   }
 
   @Get('promo-codes')
@@ -618,4 +789,9 @@ export class AdminController {
     });
     return row;
   }
+}
+
+function csvCell(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
 }

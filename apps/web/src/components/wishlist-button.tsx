@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { API } from '@/lib/api';
-import { authHref } from '@/lib/rbac';
+import { authHref, canShop } from '@/lib/rbac';
 import { Icon } from '@/components/icons';
 import { useSession } from '@/components/session-provider';
 
@@ -66,7 +66,7 @@ export function WishlistButton({
 
   useEffect(() => {
     if (loading) return;
-    if (!me) {
+    if (!me || !canShop(me)) {
       pendingApplied = false;
       setSnapshot({ ids: new Set(), loaded: true, userId: null });
       return;
@@ -75,7 +75,7 @@ export function WishlistButton({
   }, [me, loading]);
 
   useEffect(() => {
-    if (!me || loading) return;
+    if (!me || loading || !canShop(me)) return;
     const pending = sessionStorage.getItem(PENDING_KEY);
     if (!pending || pendingApplied) return;
     pendingApplied = true;
@@ -88,6 +88,7 @@ export function WishlistButton({
   }, [me, loading]);
 
   const toggle = useCallback(async () => {
+    if (!canShop(me) && me) return;
     if (!me) {
       sessionStorage.setItem(PENDING_KEY, productId);
       router.push(authHref('/auth/login', pathname || '/shop'));
@@ -105,6 +106,8 @@ export function WishlistButton({
       await fetchWishlist(me.id);
     }
   }, [me, pathname, productId, router, saved, state.ids]);
+
+  if (me && !canShop(me)) return null;
 
   return (
     <button

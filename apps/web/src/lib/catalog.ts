@@ -6,7 +6,14 @@ export type CatalogErr = { ok: false };
 export type CatalogResult<T> = CatalogOk<T> | CatalogErr;
 
 export type Category = { slug: string; name: string };
-export type Collection = { slug: string; name: string; description?: string | null };
+export type Collection = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  inNav?: boolean;
+  bannerPath?: string | null;
+  sortOrder?: number;
+};
 
 export async function loadCatalog<T>(path: string): Promise<CatalogResult<T>> {
   try {
@@ -43,6 +50,14 @@ export function groupVariantsBySize<T extends { size: string }>(variants: T[]) {
     groups.set(variant.size, list);
   }
   return [...groups.entries()];
+}
+
+export function collectionHero(row: Collection) {
+  return row.bannerPath ? { src: row.bannerPath, alt: row.name } : null;
+}
+
+export function featuredCollection(rows: Collection[]) {
+  return rows.find((row) => row.inNav) ?? rows[0] ?? null;
 }
 
 export function featuredProducts(products: ProductCard[], slugs: string[], take = 6) {

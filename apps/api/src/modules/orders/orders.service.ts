@@ -261,6 +261,30 @@ export class OrdersService {
     return safe;
   }
 
+  async lookup(email: string, ticket: string) {
+    const needle = ticket.trim();
+    const compact = needle.replace(/-/g, '').toUpperCase();
+    const candidates = await this.prisma.order.findMany({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
+      select: { id: true, trackingToken: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    const order = candidates.find((row) => {
+      const id = row.id.toLowerCase();
+      const ref = row.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+      return (
+        row.id === needle ||
+        id === needle.toLowerCase() ||
+        id.startsWith(needle.toLowerCase()) ||
+        ref === compact ||
+        ref.startsWith(compact)
+      );
+    });
+    if (!order) throw new NotFoundException('No order matched that email and ticket.');
+    return { id: order.id, trackingToken: order.trackingToken };
+  }
+
   async listMine(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },

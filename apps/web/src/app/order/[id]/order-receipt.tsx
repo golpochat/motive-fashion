@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatEur } from '@motive-fashion/utils';
-import { BRAND, countyLabel, ORDER_STATUS_LABEL, RETURN_POSTAGE_NOTICE, formatIrelandAddress, fulfilmentSteps, carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
+import { BRAND, countyLabel, ORDER_STATUS_LABEL, RETURN_POSTAGE_NOTICE, formatIrelandAddress, fulfilmentSteps, carrierLabel, carrierTrackUrl, pricesIncludeVatCopy, totalIncLabel } from '@motive-fashion/config';
 import { API } from '@/lib/api';
 import { releasePaidCart } from '@/lib/cart-store';
 import { useSession } from '@/components/session-provider';
@@ -290,11 +290,11 @@ export function OrderReceipt({
             <dd>{order.shippingCents === 0 ? 'Free' : formatEur(order.shippingCents)}</dd>
           </div>
           <div className="flex justify-between pt-2 text-base">
-            <dt>Total inc. VAT</dt>
+            <dt>{totalIncLabel()}</dt>
             <dd>{formatEur(order.totalCents)}</dd>
           </div>
         </dl>
-        <p className="mt-2 text-xs text-ink/45">Prices include VAT at {(BRAND.vatRate * 100).toFixed(0)}%.</p>
+        <p className="mt-2 text-xs text-ink/45">{pricesIncludeVatCopy()}</p>
       </section>
 
       <section className="mt-3 rounded-2xl border border-ink/10 bg-white p-5 text-sm">

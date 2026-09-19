@@ -1,4 +1,4 @@
-import { BRAND, RETURN_POSTAGE_NOTICE } from '@motive-fashion/config';
+import { BRAND, RETURN_POSTAGE_NOTICE, legalDisplayName } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 
 export const metadata = pageMeta(
@@ -36,6 +36,25 @@ export default function ReturnsPage() {
         <a href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a> with your order reference.
       </p>
       <p className="text-ink/70">Refunds go back to the original payment method after we receive and inspect the return.</p>
+      <section id="withdrawal" className="space-y-3 rounded-2xl border border-ink/10 bg-white p-5">
+        <h2 className="font-serif text-2xl">Model withdrawal form</h2>
+        <p className="text-ink/70">
+          Complete and send this only if you want to withdraw from the contract. Email it to {BRAND.supportEmail} or post
+          it to the address on <a href="/legal/business">Business details</a>.
+        </p>
+        <p className="text-ink/70">To {legalDisplayName()}, trading as {BRAND.name}, Dublin, Ireland.</p>
+        <p className="text-ink/70">
+          I/We hereby give notice that I/We withdraw from my/our contract of sale of the following goods:
+        </p>
+        <ul className="list-disc space-y-1 pl-5 text-ink/70">
+          <li>Ordered on (date) / received on (date): ________</li>
+          <li>Order reference: ________</li>
+          <li>Name of consumer: ________</li>
+          <li>Address of consumer: ________</li>
+          <li>Signature of consumer (only if this form is notified on paper): ________</li>
+          <li>Date: ________</li>
+        </ul>
+      </section>
     </article>
   );
 }

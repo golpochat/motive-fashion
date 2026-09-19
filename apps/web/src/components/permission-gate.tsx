@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { authHref, hasAnyPerm, homePath } from '@/lib/rbac';
+import { canAccessWorkspace, type WorkspaceId } from '@/lib/workspaces';
 import { useSession } from '@/components/session-provider';
 
 function GateMessage({ label }: { label: string }) {
@@ -39,6 +40,33 @@ export function PermissionGate({
   const { me, loading } = useSession();
   const needed = allowAny ?? (allow ? [allow] : []);
   const allowed = Boolean(me && (needed.length === 0 || hasAnyPerm(me, needed)));
+
+  useEffect(() => {
+    if (loading) return;
+    if (!me) {
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.replace(authHref('/auth/login', next));
+      return;
+    }
+    if (!allowed) {
+      window.location.replace(homePath(me));
+    }
+  }, [allowed, loading, me]);
+
+  if (loading) return <GateMessage label="Checking access…" />;
+  if (!me || !allowed) return <GateMessage label="Redirecting…" />;
+  return children;
+}
+
+export function WorkspaceGate({
+  workspace,
+  children,
+}: {
+  workspace: WorkspaceId;
+  children: React.ReactNode;
+}) {
+  const { me, loading } = useSession();
+  const allowed = Boolean(me && canAccessWorkspace(me, workspace));
 
   useEffect(() => {
     if (loading) return;

@@ -12,6 +12,8 @@ export type CartLine = {
   unitPriceCents: number;
   imageUrl?: string | null;
   imageAlt?: string | null;
+  reserved?: boolean;
+  available?: number;
 };
 
 export type Cart = {
@@ -151,6 +153,16 @@ export async function releasePaidCart(orderCartId?: string | null) {
 
 export function cartCount(cart: Cart | null) {
   return cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+}
+
+export function cartHoldExpired(cart: Cart | null) {
+  if (!cart?.expiresAt) return false;
+  return new Date(cart.expiresAt).getTime() < Date.now();
+}
+
+export function cartNeedsRecovery(cart: Cart | null) {
+  if (!cart) return false;
+  return cartHoldExpired(cart) || cart.items.some((item) => item.reserved === false || (item.available != null && item.available < 1));
 }
 
 export function useCart() {

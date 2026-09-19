@@ -5,34 +5,33 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BrandLockup } from '@/components/brand-logo';
 import { ProfileMenu } from '@/components/profile-menu';
-import { workspaceFromPath } from '@/lib/workspaces';
 import { Icon } from '@/components/icons';
-import { BRAND, liveSeasonalNav } from '@motive-fashion/config';
+import { BRAND } from '@motive-fashion/config';
+import { HeaderCartButton } from '@/components/mini-cart';
 import { ShopSearch } from '@/components/shop-search';
 
 const coreNav = [
   { href: '/shop', label: 'Shop' },
+  { href: '/collections', label: 'Collections' },
   { href: '/size-guide', label: 'Size guide' },
   { href: '/about', label: 'About' },
 ];
 
 const footerShopCore = [
   { href: '/shop', label: 'Shop' },
+  { href: '/collections', label: 'Collections' },
   { href: '/size-guide', label: 'Size guide' },
 ];
-
-function withSeasonalNav<T extends { href: string; label: string }>(items: T[]) {
-  const seasonal = liveSeasonalNav().map(({ href, label }) => ({ href, label }));
-  return [items[0], ...seasonal, ...items.slice(1)];
-}
 
 const footerCompany = [
   { href: '/about', label: 'About' },
   { href: '/contact', label: 'Contact' },
+  { href: '/order/find', label: 'Find my order' },
   { href: '/legal/returns', label: '14-day returns' },
 ];
 
 const footerLegal = [
+  { href: '/legal/business', label: 'Business details' },
   { href: '/legal/terms', label: 'Terms' },
   { href: '/legal/privacy', label: 'Privacy' },
   { href: '/legal/cookies', label: 'Cookies' },
@@ -50,7 +49,7 @@ function pathActive(pathname: string, href: string) {
 export function Header() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const nav = withSeasonalNav(coreNav);
+  const nav = coreNav;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -91,7 +90,8 @@ export function Header() {
           <div className="hidden lg:block">
             <ShopSearch compact id="header-q" />
           </div>
-          <ProfileMenu variant="storefront" currentWorkspace={workspaceFromPath(pathname)?.id} />
+          <ProfileMenu variant="storefront" />
+          <HeaderCartButton />
           <button
             type="button"
             className="flex h-11 w-11 items-center justify-center rounded-lg lg:hidden"
@@ -132,7 +132,6 @@ function footerLinkClass() {
 }
 
 export function Footer() {
-  const footerShop = withSeasonalNav(footerShopCore);
   return (
     <footer className="mt-auto bg-primary text-cream">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
@@ -148,7 +147,7 @@ export function Footer() {
         <div>
           <p className="text-sm font-semibold">Shop</p>
           <ul className="mt-3 list-none space-y-0.5 p-0">
-            {footerShop.map((item) => (
+            {footerShopCore.map((item) => (
               <li key={item.href}>
                 <Link href={item.href} className={footerLinkClass()}>
                   {item.label}

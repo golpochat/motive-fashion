@@ -9,11 +9,13 @@ export function CartLineRow({
   compact,
   onQty,
   onRemove,
+  onRecover,
 }: {
   item: CartLine;
   compact?: boolean;
   onQty: (id: string, quantity: number) => void;
   onRemove: (id: string) => void;
+  onRecover?: (item: CartLine) => void;
 }) {
   const thumb = item.imageUrl
     ? {
@@ -21,6 +23,9 @@ export function CartLineRow({
         alt: item.imageAlt || item.title,
       }
     : null;
+  const soldOut = item.available != null && item.available < 1;
+  const holdGone = item.reserved === false;
+  const overSold = item.available != null && item.available > 0 && item.quantity > item.available;
 
   return (
     <li className={compact ? 'py-3' : 'py-5'}>
@@ -45,33 +50,64 @@ export function CartLineRow({
               {formatEur(item.unitPriceCents * item.quantity)}
             </p>
           </div>
+          {soldOut ? (
+            <p className="mt-2 text-xs text-red-700">This size and colour is gone. Remove it or pick another on the product page.</p>
+          ) : holdGone ? (
+            <p className="mt-2 text-xs text-ink/70">The hold expired. Reserve again to keep it in your bag.</p>
+          ) : overSold ? (
+            <p className="mt-2 text-xs text-ink/70">Only {item.available} left. Reduce the quantity to continue.</p>
+          ) : null}
           <div className="mt-3 flex items-center justify-between gap-3">
-            <div className="flex items-center rounded-lg border border-ink/15">
+            {soldOut ? (
               <button
                 type="button"
-                className="flex h-11 w-11 items-center justify-center text-sm"
-                aria-label="Decrease quantity"
-                onClick={() => onQty(item.id, item.quantity - 1)}
+                className="min-h-11 text-sm text-ink/70 underline-offset-4 hover:text-ink hover:underline"
+                onClick={() => onRemove(item.id)}
               >
-                −
+                Remove
               </button>
-              <span className="min-w-[1.5rem] text-center text-sm tabular-nums">{item.quantity}</span>
-              <button
-                type="button"
-                className="flex h-11 w-11 items-center justify-center text-sm"
-                aria-label="Increase quantity"
-                onClick={() => onQty(item.id, item.quantity + 1)}
-              >
-                +
-              </button>
+            ) : (
+              <div className="flex items-center rounded-lg border border-ink/15">
+                <button
+                  type="button"
+                  className="flex h-11 w-11 items-center justify-center text-sm"
+                  aria-label="Decrease quantity"
+                  onClick={() => onQty(item.id, item.quantity - 1)}
+                >
+                  −
+                </button>
+                <span className="min-w-[1.5rem] text-center text-sm tabular-nums">{item.quantity}</span>
+                <button
+                  type="button"
+                  className="flex h-11 w-11 items-center justify-center text-sm"
+                  aria-label="Increase quantity"
+                  disabled={item.available != null && item.quantity >= item.available}
+                  onClick={() => onQty(item.id, item.quantity + 1)}
+                >
+                  +
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              {holdGone && !soldOut && onRecover ? (
+                <button
+                  type="button"
+                  className="min-h-11 text-sm text-accent underline-offset-4 hover:underline"
+                  onClick={() => onRecover(item)}
+                >
+                  Reserve again
+                </button>
+              ) : null}
+              {!soldOut ? (
+                <button
+                  type="button"
+                  className="min-h-11 text-sm text-ink/70 underline-offset-4 hover:text-ink hover:underline"
+                  onClick={() => onRemove(item.id)}
+                >
+                  Remove
+                </button>
+              ) : null}
             </div>
-            <button
-              type="button"
-              className="min-h-11 text-sm text-ink/70 underline-offset-4 hover:text-ink hover:underline"
-              onClick={() => onRemove(item.id)}
-            >
-              Remove
-            </button>
           </div>
         </div>
       </div>

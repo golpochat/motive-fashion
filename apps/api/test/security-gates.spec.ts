@@ -1,6 +1,6 @@
 import { createHmac } from 'crypto';
 import { describe, expect, it } from 'vitest';
-import { configuredStripeSecret, mockPaymentsAllowed } from '../src/common/security-config';
+import { configuredStripeSecret, mockPaymentsAllowed, assertProductionConfig } from '../src/common/security-config';
 import { metaSignatureValid, squareSignatureValid } from '../src/common/webhook-signature';
 
 describe('mock payments gate', () => {
@@ -15,6 +15,37 @@ describe('mock payments gate', () => {
 
   it('ignores placeholder Stripe keys', () => {
     expect(configuredStripeSecret({ STRIPE_SECRET_KEY: 'sk_test_...' })).toBeNull();
+    expect(configuredStripeSecret({ STRIPE_SECRET_KEY: 'not-a-key' })).toBeNull();
+    expect(configuredStripeSecret({ STRIPE_SECRET_KEY: 'sk_live_abc' })).toBe('sk_live_abc');
+  });
+});
+
+const productionEnv = {
+  NODE_ENV: 'production',
+  DATABASE_URL: 'postgresql://motive:motive@127.0.0.1:5432/motive',
+  REDIS_URL: 'redis://127.0.0.1:6379',
+  JWT_SECRET: 'a'.repeat(32),
+  STRIPE_SECRET_KEY: 'sk_test_liveenough',
+  STRIPE_WEBHOOK_SECRET: 'whsec_liveenough',
+  RESEND_API_KEY: 're_liveenough',
+  WEB_ORIGIN: 'https://motivefashion.com',
+} as NodeJS.ProcessEnv;
+
+describe('production boot gate', () => {
+  it('allows a complete production env', () => {
+    expect(() => assertProductionConfig(productionEnv)).not.toThrow();
+  });
+
+  it('refuses mock pay, placeholders, and missing Stripe or Resend', () => {
+    expect(() => assertProductionConfig({ ...productionEnv, ALLOW_MOCK_PAYMENTS: 'true' })).toThrow(/ALLOW_MOCK_PAYMENTS/);
+    expect(() => assertProductionConfig({ ...productionEnv, JWT_SECRET: 'change-me' })).toThrow(/JWT_SECRET/);
+    expect(() => assertProductionConfig({ ...productionEnv, STRIPE_SECRET_KEY: 'sk_test_...' })).toThrow(/STRIPE_SECRET_KEY/);
+    expect(() => assertProductionConfig({ ...productionEnv, RESEND_API_KEY: '' })).toThrow(/RESEND_API_KEY/);
+    expect(() => assertProductionConfig({ ...productionEnv, WEB_ORIGIN: 'http://localhost:3000' })).toThrow(/https/);
+  });
+
+  it('does not run outside production', () => {
+    expect(() => assertProductionConfig({ NODE_ENV: 'development' })).not.toThrow();
   });
 });
 

@@ -13,8 +13,7 @@ const staticPaths = [
   '/legal/privacy',
   '/legal/returns',
   '/legal/cookies',
-  '/collections/eid',
-  '/collections/ramadan',
+  '/collections',
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

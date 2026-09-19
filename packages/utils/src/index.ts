@@ -120,11 +120,44 @@ export {
   type StyleDefaults,
 } from './style-catalog';
 export {
+  ABAYA_JILBAB_CHART,
+  DRESS_CHART,
+  GARMENT_LETTER_SIZES,
+  HIJAB_SPECS,
+  ONE_SIZE_COPY,
+  SIZE_GUIDE_INTRO,
+  SIZE_GUIDE_MEASURE_STEPS,
+  catalogSizeLabel,
+  cm,
+  sizeGuideReturnsCopy,
+  sizeHintForCategory,
+  type DressSizeRow,
+  type OverlaySizeRow,
+} from './size-guide';
+export {
   decodeWhatsappPicks,
+  decodeWhatsappVariants,
   encodeWhatsappPicks,
+  encodeWhatsappVariants,
   whatsappIntent,
   type WhatsappIntent,
 } from './whatsapp-intent';
+
+export {
+  ACCESS_CONTROL_KEYS,
+  canAccessWorkspaceKeys,
+  effectivePermissionKeys,
+  hasAllKeys,
+  hasKey,
+  isCustomerPrincipal,
+  isMfaSetupPath,
+  mfaSetupPath,
+  mixedConsoleMessage,
+  principalWorkspace,
+  SHOPPER_ONLY_MESSAGE,
+  workspaceHome,
+  type PrincipalWorkspace,
+} from './workspace';
 
 export function quoteShippingCents(input: {
   fulfillment: 'DELIVERY' | 'COLLECTION';

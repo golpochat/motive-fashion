@@ -1,14 +1,14 @@
 import { Controller, Headers, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { PaymentsService } from './payments.service';
-import { CurrentUser, OptionalJwtGuard } from '../../common/auth';
+import { CurrentUser, OptionalJwtGuard, ShopperGuard } from '../../common/auth';
 
 @Controller()
 export class PaymentsController {
   constructor(@Inject(PaymentsService) private readonly payments: PaymentsService) {}
 
   @Post('checkout/:orderId/pay')
-  @UseGuards(OptionalJwtGuard)
+  @UseGuards(OptionalJwtGuard, ShopperGuard)
   pay(
     @Param('orderId') orderId: string,
     @Query('token') token?: string,
@@ -18,7 +18,7 @@ export class PaymentsController {
   }
 
   @Post('checkout/:orderId/sync')
-  @UseGuards(OptionalJwtGuard)
+  @UseGuards(OptionalJwtGuard, ShopperGuard)
   sync(
     @Param('orderId') orderId: string,
     @Query('token') token?: string,

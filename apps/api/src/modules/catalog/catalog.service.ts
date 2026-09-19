@@ -30,7 +30,18 @@ export class CatalogService {
   }
 
   collections() {
-    return this.prisma.collection.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.collection.findMany({
+      where: { published: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: {
+        slug: true,
+        name: true,
+        description: true,
+        inNav: true,
+        bannerPath: true,
+        sortOrder: true,
+      },
+    });
   }
 
   async list(filters: {
@@ -39,11 +50,38 @@ export class CatalogService {
     q?: string;
     occasion?: string;
     sku?: string;
+    size?: string;
+    color?: string;
+    inStock?: boolean;
     cursor?: string;
     limit?: number;
   }) {
     const limit = Math.min(MAX_LIMIT, Math.max(1, filters.limit ?? DEFAULT_LIMIT));
     const cursor = decodeCursor(filters.cursor);
+    const variantSome: Prisma.ProductVariantWhereInput = {
+      active: true,
+      ...(filters.size ? { size: { equals: filters.size, mode: 'insensitive' as const } } : {}),
+      ...(filters.color ? { color: { equals: filters.color, mode: 'insensitive' as const } } : {}),
+      ...(filters.inStock ? { inventory: { some: { onHand: { gt: 0 } } } } : {}),
+    };
+    const variantFilter =
+      filters.size || filters.color || filters.inStock || filters.sku
+        ? {
+            variants: {
+              some: {
+                ...variantSome,
+                ...(filters.sku
+                  ? {
+                      OR: [
+                        { sku: { equals: filters.sku, mode: 'insensitive' as const } },
+                        { barcode: { equals: filters.sku, mode: 'insensitive' as const } },
+                      ],
+                    }
+                  : {}),
+              },
+            },
+          }
+        : {};
     const where: Prisma.ProductWhereInput = {
       published: true,
       ...(filters.category ? { category: { slug: filters.category } } : {}),
@@ -59,20 +97,9 @@ export class CatalogService {
           }
         : {}),
       ...(filters.collection
-        ? { collections: { some: { collection: { slug: filters.collection } } } }
+        ? { collections: { some: { collection: { slug: filters.collection, published: true } } } }
         : {}),
-      ...(filters.sku
-        ? {
-            variants: {
-              some: {
-                OR: [
-                  { sku: { equals: filters.sku, mode: 'insensitive' } },
-                  { barcode: { equals: filters.sku, mode: 'insensitive' } },
-                ],
-              },
-            },
-          }
-        : {}),
+      ...variantFilter,
       ...(cursor
         ? {
             OR: [{ title: { gt: cursor.t } }, { title: cursor.t, id: { gt: cursor.i } }],

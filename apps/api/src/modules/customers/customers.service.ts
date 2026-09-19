@@ -6,7 +6,7 @@ import { CommerceService } from '../commerce/commerce.service';
 import { addressLabelCode, isValidEircode, normalizeEircode } from '@motive-fashion/config';
 import { OrderStatus, PaymentStatus, ReturnStatus, ReviewStatus } from '../../../generated/prisma';
 import { isStaffWorkspace, staffMfaRequired } from '../../common/security-config';
-import type { AddressCreateInput, AddressPatchInput } from '@motive-fashion/validation';
+import type { AccountPatchInput, AddressCreateInput, AddressPatchInput } from '@motive-fashion/validation';
 import { buildReviewEligibility, hasKeptPurchase } from './review-eligibility';
 
 @Injectable()
@@ -52,6 +52,19 @@ export class CustomersService {
       mfaRequired: staffMfaRequired() && isStaffWorkspace(permissions) && !user.mfaEnabled,
       mfaLocked: staffMfaRequired() && isStaffWorkspace(permissions),
     };
+  }
+
+  async patchMe(userId: string, dto: AccountPatchInput) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+        ...(dto.marketingOptIn !== undefined ? { marketingOptIn: dto.marketingOptIn } : {}),
+        ...(dto.whatsappOptIn !== undefined ? { whatsappOptIn: dto.whatsappOptIn } : {}),
+      },
+    });
+    return this.me(userId);
   }
 
   orders(userId: string) {
@@ -168,7 +181,14 @@ export class CustomersService {
   wishlist(userId: string) {
     return this.prisma.wishlistItem.findMany({
       where: { userId },
-      include: { product: { include: { images: { take: 1 } } } },
+      include: {
+        product: {
+          include: {
+            images: { take: 1, orderBy: { sortOrder: 'asc' } },
+            variants: { where: { active: true }, include: { inventory: true } },
+          },
+        },
+      },
     });
   }
 

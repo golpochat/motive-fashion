@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser, JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/auth';
 import { ProcurementService } from './procurement.service';
 
@@ -62,6 +63,13 @@ export class ProcurementController {
     return this.procurement.listPOs();
   }
 
+  @Get('purchase-orders/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="purchase-orders.csv"')
+  async exportPos(@Res() res: Response) {
+    res.send(await this.procurement.exportPOsCsv());
+  }
+
   @Post('purchase-orders')
   createPo(@Body() body: unknown, @CurrentUser() user: { sub: string }) {
     return this.procurement.createPurchaseOrder(body, user.sub);
@@ -96,8 +104,8 @@ export class ProcurementController {
   }
 
   @Post('shipments/:id/receive')
-  receive(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
-    return this.procurement.receiveShipment(id, user.sub);
+  receive(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: { sub: string }) {
+    return this.procurement.receiveShipment(id, user.sub, body);
   }
 
   @Get('calendar')

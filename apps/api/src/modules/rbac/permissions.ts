@@ -1,5 +1,7 @@
+import { ACCESS_CONTROL_KEYS, hasAllKeys, principalWorkspace } from '@motive-fashion/utils';
+
 export const PERMISSION_CATALOG = [
-  { key: '*', name: 'All permissions', group: 'System' },
+  { key: '*', name: 'Access-control wildcard', group: 'System' },
   { key: 'dashboard.super', name: 'Open super-admin console', group: 'Dashboards' },
   { key: 'dashboard.admin', name: 'Open admin console', group: 'Dashboards' },
   { key: 'dashboard.staff', name: 'Open staff console', group: 'Dashboards' },
@@ -30,8 +32,7 @@ export type PermissionKey = (typeof PERMISSION_CATALOG)[number]['key'];
 export const CATALOG_KEYS = new Set<string>(PERMISSION_CATALOG.map((p) => p.key));
 
 export function hasAll(keys: string[], needed: string[]) {
-  if (keys.includes('*')) return true;
-  return needed.every((k) => keys.includes(k));
+  return hasAllKeys(keys, needed);
 }
 
 export const SYSTEM_ROLE_SLUGS = ['super-admin', 'admin', 'staff', 'customer'] as const;
@@ -44,6 +45,22 @@ export function isLockedPermission(key: string) {
   return (LOCKED_PERMISSION_KEYS as readonly string[]).includes(key);
 }
 
+export function isCommerceAdminKeys(keys: string[]) {
+  return principalWorkspace(keys) === 'admin';
+}
+
+/** True when this assignment would leave the shop with no visible commerce admin. */
+export function lastCommerceAdminBlocked(currentlyAdmin: boolean, nextIsAdmin: boolean, otherAdmins: number) {
+  return currentlyAdmin && !nextIsAdmin && otherAdmins < 1;
+}
+
+export function systemRoleRequiredKeys(slug: string): string[] {
+  if (slug === 'admin') return ['dashboard.admin'];
+  if (slug === 'staff') return ['dashboard.staff'];
+  if (slug === 'customer') return ['dashboard.customer'];
+  return [];
+}
+
 export function slugifyRole(name: string) {
   return name
     .toLowerCase()
@@ -54,7 +71,7 @@ export function slugifyRole(name: string) {
 }
 
 export const ROLE_PERMISSIONS: Record<(typeof SYSTEM_ROLE_SLUGS)[number], PermissionKey[]> = {
-  'super-admin': ['*'],
+  'super-admin': [...ACCESS_CONTROL_KEYS],
   admin: [
     'dashboard.admin',
     'analytics.read',

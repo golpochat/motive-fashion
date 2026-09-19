@@ -1,4 +1,4 @@
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, legalControllerLine } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 
 export const metadata = pageMeta(
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <article className="max-w-2xl space-y-4">
       <h1 className="font-serif text-4xl">Privacy</h1>
       <p className="text-ink/70">
-        Controller: {BRAND.legalName}, {BRAND.city}. Contact: {BRAND.supportEmail}. We process account, cart, order, and
+        Controller: {legalControllerLine()}. Contact: {BRAND.supportEmail}. We process account, cart, order, and
         delivery data to fulfil contracts (GDPR Art. 6(1)(b)). Staff access is limited to fulfilling and supporting
         orders.
       </p>

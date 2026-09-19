@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { API, apiErrorMessage } from '@/lib/api';
-import { authHref } from '@/lib/rbac';
+import { authHref, canShop } from '@/lib/rbac';
 import { useSession } from '@/components/session-provider';
 import { fieldClass, PrimaryButton } from '@/components/dashboard-ui';
 import { RatingInput, RatingStars } from '@/components/rating-stars';
@@ -58,7 +58,7 @@ export function ProductReviews({
 
   useEffect(() => {
     if (sessionLoading) return;
-    if (!me) {
+    if (!me || !canShop(me)) {
       setEligibility(null);
       setEligibilityError('');
       setEligibilityLoading(false);
@@ -114,17 +114,19 @@ export function ProductReviews({
           ))}
         </ul>
       )}
-      <ReviewComposer
-        eligibility={eligibility}
-        eligibilityError={eligibilityError}
-        loading={sessionLoading || Boolean(me && eligibilityLoading)}
-        signedIn={Boolean(me)}
-        signInHref={authHref('/auth/login', pathname)}
-        error={error}
-        notice={notice}
-        busy={busy}
-        onSubmit={(event) => void submit(event)}
-      />
+      {me && !canShop(me) ? null : (
+        <ReviewComposer
+          eligibility={eligibility}
+          eligibilityError={eligibilityError}
+          loading={sessionLoading || Boolean(me && eligibilityLoading)}
+          signedIn={Boolean(me)}
+          signInHref={authHref('/auth/login', pathname)}
+          error={error}
+          notice={notice}
+          busy={busy}
+          onSubmit={(event) => void submit(event)}
+        />
+      )}
     </section>
   );
 }

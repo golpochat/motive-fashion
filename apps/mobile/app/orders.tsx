@@ -1,22 +1,36 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Link } from 'expo-router';
-import { api } from '../src/api';
+import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
+import { api, formatEur } from '../src/api';
+
+type OrderRow = {
+  id: string;
+  status: string;
+  trackingToken: string;
+  fulfillment?: string;
+  totalCents?: number;
+};
 
 export default function Orders() {
-  const [rows, setRows] = useState<{ id: string; status: string; trackingToken: string }[]>([]);
+  const [rows, setRows] = useState<OrderRow[]>([]);
   useEffect(() => {
-    api<{ id: string; status: string; trackingToken: string }[]>('/account/orders')
+    api<OrderRow[]>('/account/orders')
       .then(setRows)
       .catch(() => setRows([]));
   }, []);
   return (
-    <View style={{ padding: 24 }}>
+    <View style={{ padding: 24, gap: 12 }}>
       <Text style={{ fontSize: 24 }}>Orders</Text>
-      {rows.map((o) => (
-        <Link key={o.id} href={`/order/${o.id}?token=${encodeURIComponent(o.trackingToken)}`}>
+      <Link href="/find-order">
+        <Text>Find an order with email and ticket</Text>
+      </Link>
+      {rows.map((order) => (
+        <Link key={order.id} href={`/order/${order.id}?token=${encodeURIComponent(order.trackingToken)}`}>
           <Text>
-            {o.id.slice(0, 8)} {o.status}
+            {order.id.slice(0, 8)} · {ORDER_STATUS_LABEL[order.status] ?? order.status}
+            {order.fulfillment ? ` · ${order.fulfillment === 'COLLECTION' ? 'Collection' : 'Delivery'}` : ''}
+            {order.totalCents != null ? ` · ${formatEur(order.totalCents)}` : ''}
           </Text>
         </Link>
       ))}

@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { formatEur, scanMatchesVariant, unwrapCatalogList } from '@motive-fashion/utils';
-import { isValidEircode, normalizeEircode } from '@motive-fashion/config';
+import { isValidEircode, normalizeEircode, totalIncLabel } from '@motive-fashion/config';
 import { API, apiErrorMessage, type ProductCard } from '@/lib/api';
 import { catalogPriceLabel, groupVariantsBySize, variantPriceRange } from '@/lib/catalog';
 import { Field, FilterTabs, Modal, PrimaryButton, QtyStepper, SecondaryButton, Select, fieldClass } from '@/components/dashboard-ui';
@@ -536,7 +536,7 @@ export function PosTill() {
                     </div>
                   ) : null}
                   <div className="flex justify-between font-medium">
-                    <dt>Total inc. VAT</dt>
+                    <dt>{totalIncLabel()}</dt>
                     <dd>{formatEur(totalCents)}</dd>
                   </div>
                 </dl>

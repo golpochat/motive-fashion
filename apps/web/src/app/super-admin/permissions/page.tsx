@@ -1,16 +1,31 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
 import { AccessTabs } from '@/components/access-tabs';
-import { DataTable, Field, FilterTabs, Modal, PrimaryButton, SecondaryButton, Td, fieldClass, IconButton, RowActions } from '@/components/dashboard-ui';
+import {
+  DataTable,
+  Field,
+  FilterTabs,
+  JobCard,
+  Modal,
+  PrimaryButton,
+  SecondaryButton,
+  Td,
+  fieldClass,
+  IconButton,
+  RowActions,
+} from '@/components/dashboard-ui';
 
-type Perm = { id: string; key: string; name: string; group: string; builtin?: boolean };
+type RoleGrant = { id: string; slug: string; name: string };
+type Perm = { id: string; key: string; name: string; group: string; builtin?: boolean; roles?: RoleGrant[] };
 
 export default function SuperAdminPermissions() {
   const [perms, setPerms] = useState<Perm[]>([]);
   const [group, setGroup] = useState('All');
+  const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -40,10 +55,17 @@ export default function SuperAdminPermissions() {
   }, []);
 
   const groups = ['All', ...[...new Set(perms.map((p) => p.group))].sort((a, b) => a.localeCompare(b, 'en-IE'))];
-  const rows = useMemo(
-    () => (group === 'All' ? perms : perms.filter((p) => p.group === group)),
-    [perms, group],
-  );
+  const rows = useMemo(() => {
+    const base = group === 'All' ? perms : perms.filter((p) => p.group === group);
+    const q = query.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.key.includes(q) ||
+        (p.roles ?? []).some((role) => role.name.toLowerCase().includes(q) || role.slug.includes(q)),
+    );
+  }, [perms, group, query]);
 
   function openCreate() {
     setError('');
@@ -111,6 +133,17 @@ export default function SuperAdminPermissions() {
       />
       <AccessTabs current="/super-admin/permissions" />
       {error && !editing ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
+      <div className="mb-4 max-w-sm">
+        <Field label="Find a permission">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, key, or role"
+            className={fieldClass}
+            autoComplete="off"
+          />
+        </Field>
+      </div>
       <div className="mb-4">
         <FilterTabs
           ariaLabel="Permission groups"
@@ -127,25 +160,57 @@ export default function SuperAdminPermissions() {
         emptyTitle="No permissions"
         emptyBody="Keys in this group will appear here."
       >
-      <DataTable headers={['Permission', 'Key', 'Group', 'Action']}>
-        {rows.map((p) => (
-          <tr key={p.id} className="hover:bg-ink/[0.02]">
-            <Td>{p.name}</Td>
-            <Td muted>
-              <code>{p.key}</code>
-            </Td>
-            <Td>{p.group}</Td>
-            <Td nowrap>
-              <RowActions>
-                <IconButton label="Edit permission" icon="edit" onClick={() => openEdit(p)} />
-                {p.builtin ? null : (
-                  <IconButton label="Delete permission" icon="trash" tone="danger" onClick={() => setConfirmDelete(p)} />
-                )}
-              </RowActions>
-            </Td>
-          </tr>
-        ))}
-      </DataTable>
+        <DataTable
+          headers={['Permission', 'Key', 'Granted by', 'Action']}
+          cards={rows.map((p) => (
+            <JobCard
+              key={p.id}
+              title={p.name}
+              meta={`${p.key} · ${p.group} · ${(p.roles ?? []).length} roles`}
+              actions={
+                <RowActions>
+                  <IconButton label="Edit permission" icon="edit" onClick={() => openEdit(p)} />
+                  {p.builtin ? null : (
+                    <IconButton label="Delete permission" icon="trash" tone="danger" onClick={() => setConfirmDelete(p)} />
+                  )}
+                </RowActions>
+              }
+            >
+              <p className="mt-2 text-xs text-ink/55">
+                {(p.roles ?? []).map((role) => role.name).join(', ') || 'No roles grant this yet'}
+              </p>
+            </JobCard>
+          ))}
+        >
+          {rows.map((p) => (
+            <tr key={p.id} className="hover:bg-ink/[0.02]">
+              <Td>{p.name}</Td>
+              <Td muted>
+                <code>{p.key}</code>
+              </Td>
+              <Td>
+                {(p.roles ?? []).length
+                  ? (p.roles ?? []).map((role, i) => (
+                      <span key={role.id}>
+                        {i ? ', ' : ''}
+                        <Link href={`/super-admin/users?role=${encodeURIComponent(role.slug)}`} className="no-underline hover:text-accent">
+                          {role.name}
+                        </Link>
+                      </span>
+                    ))
+                  : '—'}
+              </Td>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="Edit permission" icon="edit" onClick={() => openEdit(p)} />
+                  {p.builtin ? null : (
+                    <IconButton label="Delete permission" icon="trash" tone="danger" onClick={() => setConfirmDelete(p)} />
+                  )}
+                </RowActions>
+              </Td>
+            </tr>
+          ))}
+        </DataTable>
       </ConsoleSection>
 
       {editing ? (
@@ -182,6 +247,9 @@ export default function SuperAdminPermissions() {
                 className={fieldClass}
               />
             </Field>
+            {editing !== 'new' && editing.roles?.length ? (
+              <p className="text-xs text-ink/50">Granted by {editing.roles.map((role) => role.name).join(', ')}.</p>
+            ) : null}
             {editing === 'new' ? (
               <p className="text-xs text-ink/50">
                 Keys only unlock a screen when the product checks them. Use a dotted name like team.reports.

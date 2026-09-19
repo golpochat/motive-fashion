@@ -351,6 +351,27 @@ export const locationPatchSchema = z
   })
   .strict();
 
+const campaignSeason = z.enum(['EVERYDAY', 'SPRING', 'SUMMER', 'WINTER', 'RAMADAN', 'EID']);
+
+const bannerPath = z
+  .string()
+  .trim()
+  .max(200)
+  .refine((value) => !value || value.startsWith('/') || value.startsWith('https://'), 'Use a site path or https URL.');
+
+export const collectionCreateSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  slug: z.string().trim().max(80).optional(),
+  description: z.string().trim().max(300).optional().nullable(),
+  season: campaignSeason.optional(),
+  published: z.boolean().optional(),
+  inNav: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(999).optional(),
+  bannerPath: bannerPath.optional().nullable(),
+});
+
+export const collectionPatchSchema = collectionCreateSchema.partial().strict();
+
 const supplierCountry = z
   .string()
   .min(2)
@@ -413,12 +434,32 @@ export const purchaseOrderCreateSchema = z.object({
 
 export const purchaseOrderPatchSchema = purchaseOrderCreateSchema.omit({ supplierId: true, monthBucket: true });
 
+export const receiveShipmentSchema = z
+  .object({
+    lines: z
+      .array(
+        z.object({
+          lineId: z.string().uuid(),
+          quantity: z.number().int().min(1).max(100_000),
+        }),
+      )
+      .min(1)
+      .max(200)
+      .optional(),
+  })
+  .strict();
+
 export const campaignCreateSchema = z.object({
   name: z.string().min(2).max(80),
-  season: z.enum(['RAMADAN', 'EID', 'WINTER', 'SUMMER', 'EVERYDAY']),
+  season: z.enum(['RAMADAN', 'EID', 'WINTER', 'SUMMER', 'SPRING', 'EVERYDAY']),
   audience: z.string().max(80).optional(),
   landingSlug: z.string().max(80).optional(),
+  promoCodeId: z.string().uuid().optional().nullable(),
+  startsAt: z.string().min(8).optional().nullable(),
+  endsAt: z.string().min(8).optional().nullable(),
 });
+
+export const campaignPatchSchema = campaignCreateSchema.partial().strict();
 
 export const calendarItemSchema = z.object({
   campaignId: z.string().uuid().optional(),
@@ -426,6 +467,23 @@ export const calendarItemSchema = z.object({
   caption: z.string().min(1).max(500),
   assetUrl: z.string().url().optional(),
   publishOn: z.string().min(8),
+  published: z.boolean().optional(),
+});
+
+export const calendarItemPatchSchema = calendarItemSchema.partial().strict();
+
+export const accountPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    phone: z.string().trim().max(40).optional().nullable(),
+    marketingOptIn: z.boolean().optional(),
+    whatsappOptIn: z.boolean().optional(),
+  })
+  .strict();
+
+export const orderLookupSchema = z.object({
+  email: z.string().email(),
+  ticket: z.string().trim().min(4).max(40),
 });
 
 export const whatsappBroadcastSchema = z.object({
@@ -553,3 +611,5 @@ export type CheckoutInput = z.infer<typeof checkoutSchema>;
 export type CheckoutQuoteInput = z.infer<typeof checkoutQuoteSchema>;
 export type AddressCreateInput = z.infer<typeof addressCreateSchema>;
 export type AddressPatchInput = z.infer<typeof addressPatchSchema>;
+export type AccountPatchInput = z.infer<typeof accountPatchSchema>;
+export type OrderLookupInput = z.infer<typeof orderLookupSchema>;

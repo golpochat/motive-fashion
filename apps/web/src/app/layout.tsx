@@ -3,7 +3,7 @@ import { Cormorant_Garamond, Source_Sans_3 } from 'next/font/google';
 import './globals.css';
 import { AppChrome } from '@/components/app-chrome';
 import { SessionProvider } from '@/components/session-provider';
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, shopPriceBlurb } from '@motive-fashion/config';
 
 const serif = Cormorant_Garamond({ subsets: ['latin'], weight: ['500', '600'], variable: '--font-serif' });
 const sans = Source_Sans_3({ subsets: ['latin'], variable: '--font-sans' });
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     default: `${BRAND.name} — modest wear, Dublin`,
     template: `%s · ${BRAND.name}`,
   },
-  description: 'Premium modest wear from Dublin. Hijabs, abayas, jilbabs, and prayer sets. VAT-inclusive prices. Collection and Ireland delivery.',
+  description: `Premium modest wear from Dublin. Hijabs, abayas, jilbabs, and prayer sets. ${shopPriceBlurb()}`,
   openGraph: { locale: 'en_IE', type: 'website', images: [{ url: '/brand/hero-home.jpg' }] },
 };
 

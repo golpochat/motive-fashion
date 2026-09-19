@@ -46,4 +46,18 @@ export class WhatsappController {
     });
     return result;
   }
+
+  @Get('admin/whatsapp/sessions')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('whatsapp.broadcast')
+  sessions() {
+    return Promise.all([
+      this.prisma.user.count({ where: { whatsappOptIn: true, phone: { not: null }, deletedAt: null } }),
+      this.prisma.whatsappSession.findMany({
+        include: { messages: { orderBy: { createdAt: 'desc' }, take: 8 } },
+        orderBy: { updatedAt: 'desc' },
+        take: 40,
+      }),
+    ]).then(([optedIn, sessions]) => ({ optedIn, sessions }));
+  }
 }

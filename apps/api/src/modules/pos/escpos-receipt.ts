@@ -1,6 +1,6 @@
 /** ESC/POS ticket for Epson TM-T20III (80mm, Font A = 48 cols). */
 
-import { BRAND, countyLabel } from '@motive-fashion/config';
+import { BRAND, countyLabel, isVatRegistered, legalDisplayName, totalIncLabel, vatNumberDisplay } from '@motive-fashion/config';
 import { brandMarkPng } from '../../common/brand-assets';
 import { pngToEscPosRaster, wordmarkToEscPosRaster } from './escpos-logo';
 
@@ -162,7 +162,8 @@ export function buildEscPosReceipt(order: EscPosOrder) {
   const subtotal = order.subtotalCents ?? order.items.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0);
   const discount = order.discountCents ?? 0;
   const shipping = order.shippingCents ?? 0;
-  const vatNumber = order.vatNumber?.trim();
+  const legalName = legalDisplayName();
+  const vatNumber = order.vatNumber?.trim() || vatNumberDisplay();
   const site = process.env.WEB_ORIGIN ?? 'https://motivefashion.com';
   const track = order.trackingToken
     ? `${site.replace(/\/$/, '')}/order/${order.id}?token=${order.trackingToken}`
@@ -173,7 +174,7 @@ export function buildEscPosReceipt(order: EscPosOrder) {
   const header = [
     '[logo]',
     ...padCenter('MOTIVE FASHION'),
-    ...padCenter(BRAND.legalName),
+    ...padCenter(legalName),
     ...padCenter(`${BRAND.city}, ${BRAND.country}`),
     ...padCenter(BRAND.supportEmail),
     ...(vatNumber ? padCenter(`VAT ${vatNumber}`) : []),
@@ -206,9 +207,11 @@ export function buildEscPosReceipt(order: EscPosOrder) {
   if (order.fulfillment === 'DELIVERY') {
     totals.push(pair('Delivery', shipping === 0 ? 'Free' : eur(shipping)));
   }
-  totals.push(pair('Goods ex VAT', eur(netCents)));
-  totals.push(pair(`VAT ${vatPct}%`, eur(taxCents)));
-  totals.push(pair('Total inc. VAT', eur(order.totalCents)));
+  if (isVatRegistered()) {
+    totals.push(pair('Goods ex VAT', eur(netCents)));
+    totals.push(pair(`VAT ${vatPct}%`, eur(taxCents)));
+  }
+  totals.push(pair(totalIncLabel(), eur(order.totalCents)));
   if (order.tenderedCents != null) {
     totals.push(pair('Cash tendered', eur(order.tenderedCents)));
     totals.push(pair('Change', eur(order.changeCents ?? Math.max(0, order.tenderedCents - order.totalCents))));
@@ -245,7 +248,7 @@ export function buildEscPosReceipt(order: EscPosOrder) {
   if (wordmark) chunks.push(wordmark);
   else chunks.push(textLine('MOTIVE FASHION'));
   chunks.push(
-    textLine(BRAND.legalName),
+    textLine(legalName),
     textLine(`${BRAND.city}, ${BRAND.country}`),
     textLine(BRAND.supportEmail),
   );

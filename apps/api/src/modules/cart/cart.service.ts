@@ -3,6 +3,7 @@ import { SalesChannel } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
 import { BRAND } from '@motive-fashion/config';
+import { availableStock } from '@motive-fashion/utils';
 
 type CartAccess = { userId?: string; sessionKey?: string; internal?: boolean; channel?: SalesChannel };
 
@@ -11,6 +12,7 @@ const CART_INCLUDE = {
     include: {
       variant: {
         include: {
+          inventory: true,
           product: { include: { images: { orderBy: { sortOrder: 'asc' as const }, take: 1 } } },
         },
       },
@@ -111,12 +113,21 @@ export class CartService {
     if (!item) throw new NotFoundException();
     if (quantity < 1) return this.remove(cartId, itemId, channel, access);
     const delta = quantity - item.quantity;
-    if (delta > 0) {
+    if (!item.reserved) {
+      await this.stock.reserve({ variantId: item.variantId, quantity, channel, refId: cartId });
+    } else if (delta > 0) {
       await this.stock.reserve({ variantId: item.variantId, quantity: delta, channel, refId: cartId });
     } else if (delta < 0) {
       await this.stock.release({ variantId: item.variantId, quantity: -delta, channel, refId: cartId });
     }
-    await this.prisma.cartItem.update({ where: { id: item.id }, data: { quantity } });
+    await this.prisma.cartItem.update({
+      where: { id: item.id },
+      data: { quantity, reserved: true },
+    });
+    await this.prisma.cart.update({
+      where: { id: cartId },
+      data: { expiresAt: new Date(Date.now() + BRAND.reservationMinutes * 60 * 1000) },
+    });
     return this.getOrCreate({ cartId, ...access, internal: true });
   }
 
@@ -183,17 +194,22 @@ export class CartService {
       id: string;
       quantity: number;
       variantId: string;
+      reserved: boolean;
       variant: {
         sku: string;
         size: string;
         color: string;
         priceCents: number;
+        inventory: { onHand: number; reserved: number }[];
         product: { title: string; images: { url: string; alt: string }[] };
       };
     }[];
   }) {
     const items = cart.items.map((i) => {
       const image = i.variant.product.images[0];
+      const onHand = i.variant.inventory.reduce((sum, row) => sum + row.onHand, 0);
+      const reservedStock = i.variant.inventory.reduce((sum, row) => sum + row.reserved, 0);
+      const free = availableStock(onHand, reservedStock);
       return {
         id: i.id,
         variantId: i.variantId,
@@ -205,6 +221,8 @@ export class CartService {
         unitPriceCents: i.variant.priceCents,
         imageUrl: image?.url ?? null,
         imageAlt: image?.alt ?? i.variant.product.title,
+        reserved: i.reserved,
+        available: free + (i.reserved ? i.quantity : 0),
       };
     });
     return {

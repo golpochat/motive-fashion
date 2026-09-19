@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { InboundShipmentStatus, OrderStatus, PurchaseOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockService } from '../inventory/stock.service';
-import { purchaseOrderCreateSchema, purchaseOrderPatchSchema, supplierCreateSchema, supplierPatchSchema, supplierProductLinkSchema, supplierProductPatchSchema } from '@motive-fashion/validation';
+import { purchaseOrderCreateSchema, purchaseOrderPatchSchema, receiveShipmentSchema, supplierCreateSchema, supplierPatchSchema, supplierProductLinkSchema, supplierProductPatchSchema } from '@motive-fashion/validation';
 import { addPoLineUnits, mergePoLines, monthBucketNow, sellPace, suggestedBuyQty } from './procurement-board';
 
 @Injectable()
@@ -226,6 +226,49 @@ export class ProcurementService {
       include: { supplier: true, lines: { include: { variant: true } }, shipments: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async exportPOsCsv() {
+    const pos = await this.listPOs();
+    const header = ['id', 'createdAt', 'monthBucket', 'status', 'supplier', 'country', 'sku', 'quantity', 'receivedQty', 'tracking'];
+    const rows = [header.join(',')];
+    for (const po of pos) {
+      const tracking = po.shipments.map((row) => row.tracking).filter(Boolean).join(' ');
+      if (!po.lines.length) {
+        rows.push(
+          [
+            csvCell(po.id),
+            po.createdAt.toISOString(),
+            csvCell(po.monthBucket),
+            csvCell(po.status),
+            csvCell(po.supplier.name),
+            csvCell(po.supplier.country),
+            '',
+            '0',
+            '0',
+            csvCell(tracking),
+          ].join(','),
+        );
+        continue;
+      }
+      for (const line of po.lines) {
+        rows.push(
+          [
+            csvCell(po.id),
+            po.createdAt.toISOString(),
+            csvCell(po.monthBucket),
+            csvCell(po.status),
+            csvCell(po.supplier.name),
+            csvCell(po.supplier.country),
+            csvCell(line.variant.sku),
+            String(line.quantity),
+            String(line.receivedQty),
+            csvCell(tracking),
+          ].join(','),
+        );
+      }
+    }
+    return rows.join('\n');
   }
 
   calendar() {
@@ -529,37 +572,60 @@ export class ProcurementService {
     return shipment;
   }
 
-  async receiveShipment(id: string, actorId: string) {
+  async receiveShipment(id: string, actorId: string, body?: unknown) {
+    const parsed = receiveShipmentSchema.parse(body && typeof body === 'object' && !Array.isArray(body) ? body : {});
     const shipment = await this.prisma.inboundShipment.findUnique({
       where: { id },
       include: { purchaseOrder: { include: { lines: true } } },
     });
     if (!shipment) throw new NotFoundException();
+    const requested = parsed.lines ? new Map(parsed.lines.map((row) => [row.lineId, row.quantity])) : null;
+    if (requested) {
+      for (const lineId of requested.keys()) {
+        if (!shipment.purchaseOrder.lines.some((line) => line.id === lineId)) {
+          throw new BadRequestException('Receive quantities must match lines on this purchase order.');
+        }
+      }
+    }
+    let remainingOpen = 0;
     for (const line of shipment.purchaseOrder.lines) {
       const remaining = line.quantity - line.receivedQty;
-      if (remaining <= 0) continue;
+      const qty = requested ? (requested.get(line.id) ?? 0) : remaining;
+      if (qty > remaining) {
+        throw new BadRequestException(`Cannot receive more than the open quantity for ${line.id}.`);
+      }
+      remainingOpen += remaining - qty;
+      if (qty <= 0) continue;
       await this.stock.receive({
         variantId: line.variantId,
-        quantity: remaining,
+        quantity: qty,
         refId: shipment.id,
         note: `PO ${shipment.purchaseOrderId}`,
       });
       await this.prisma.purchaseOrderLine.update({
         where: { id: line.id },
-        data: { receivedQty: line.quantity },
+        data: { receivedQty: line.receivedQty + qty },
       });
     }
+    const complete = remainingOpen <= 0;
     await this.prisma.inboundShipment.update({
       where: { id },
-      data: { status: InboundShipmentStatus.RECEIVED, receivedAt: new Date() },
+      data: complete
+        ? { status: InboundShipmentStatus.RECEIVED, receivedAt: new Date() }
+        : { status: InboundShipmentStatus.IN_TRANSIT },
     });
     await this.prisma.purchaseOrder.update({
       where: { id: shipment.purchaseOrderId },
-      data: { status: PurchaseOrderStatus.RECEIVED },
+      data: { status: complete ? PurchaseOrderStatus.RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED },
     });
     await this.prisma.auditLog.create({
       data: { actorId, action: 'po.receive', entity: 'InboundShipment', entityId: id },
     });
-    return { ok: true };
+    return { ok: true, complete };
   }
+}
+
+function csvCell(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
 }

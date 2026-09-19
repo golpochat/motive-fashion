@@ -22,6 +22,30 @@ function euroInput(cents: number) {
   return (cents / 100).toFixed(2);
 }
 
+function optimisticSnapshot(current: Snapshot, path: string, body: object) {
+  const patch = body as { published?: boolean; isDefault?: boolean };
+  const next: Snapshot = {
+    fulfilment: current.fulfilment.map((row) => ({ ...row })),
+    payments: current.payments.map((row) => ({ ...row })),
+    counties: current.counties.map((row) => ({ ...row })),
+  };
+  const apply = (rows: Method[]) => {
+    for (const row of rows) {
+      if (!path.endsWith(row.id)) continue;
+      if (patch.published !== undefined) row.published = patch.published;
+      if (patch.isDefault) {
+        rows.forEach((item) => {
+          item.isDefault = item.id === row.id;
+        });
+      }
+    }
+  };
+  if (path.includes('/fulfilment/')) apply(next.fulfilment);
+  if (path.includes('/payments/')) apply(next.payments);
+  if (path.includes('/counties/')) apply(next.counties);
+  return next;
+}
+
 export default function AdminCheckout() {
   const [data, setData] = useState<Snapshot | null>(null);
   const [error, setError] = useState('');
@@ -43,6 +67,10 @@ export default function AdminCheckout() {
 
   async function patch(path: string, body: object) {
     setError('');
+    const previous = data;
+    if (previous) {
+      setData(optimisticSnapshot(previous, path, body));
+    }
     const res = await fetch(`${API}${path}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -52,6 +80,7 @@ export default function AdminCheckout() {
     const payload = (await res.json()) as { message?: string };
     if (!res.ok) {
       setError(payload.message ?? 'Update failed');
+      if (previous) setData(previous);
       return;
     }
     await load();

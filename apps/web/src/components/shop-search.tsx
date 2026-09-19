@@ -5,12 +5,16 @@ export function ShopSearch({
   defaultQuery = '',
   compact = false,
   id = 'shop-q',
+  hidden,
 }: {
   action?: string;
   defaultQuery?: string;
   compact?: boolean;
   id?: string;
+  hidden?: Record<string, string>;
 }) {
+  const extras = Object.entries(hidden ?? {}).filter(([, value]) => value);
+
   if (compact) {
     return (
       <form action={action} method="get" role="search" className="relative">
@@ -25,6 +29,9 @@ export function ShopSearch({
           placeholder="Search"
           className="h-11 w-full rounded-full border border-ink/15 bg-white pl-9 pr-3 text-sm outline-none focus:border-accent lg:w-48"
         />
+        {extras.map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
       </form>
     );
   }
@@ -41,6 +48,9 @@ export function ShopSearch({
         placeholder="Search hijabs, abayas, jilbabs…"
         className="min-h-11 w-full rounded-full border border-ink/15 bg-white px-4 py-2.5 text-sm outline-none focus:border-accent"
       />
+      {extras.map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <button type="submit" className="min-h-11 shrink-0 rounded-full bg-primary px-6 py-2.5 text-sm text-cream">
         Search
       </button>

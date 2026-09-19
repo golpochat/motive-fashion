@@ -60,7 +60,7 @@ See [`docs/README.md`](docs/README.md).
 
 ## Payments
 
-Mock checkout is on until you put a real `sk_test_...` in `apps/api/.env` and set `ALLOW_MOCK_PAYMENTS=false`. Then:
+Mock checkout is on in development until you put a real `sk_test_...` in `apps/api/.env` and set `ALLOW_MOCK_PAYMENTS=false`. Production (`NODE_ENV=production`) refuses to start without Stripe, Resend, a 32-character `JWT_SECRET`, and HTTPS `WEB_ORIGIN`. Then:
 
 ```bash
 stripe listen --forward-to localhost:4000/api/v1/webhooks/stripe

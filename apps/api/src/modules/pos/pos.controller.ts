@@ -9,7 +9,7 @@ import { requestRawBody, squareSignatureValid } from '../../common/webhook-signa
 
 function canSeeAllTills(user: { permissions?: string[]; role?: string }) {
   const keys = user.permissions ?? [];
-  return keys.includes('*') || keys.includes('dashboard.admin') || user.role === 'ADMIN';
+  return keys.includes('dashboard.admin');
 }
 
 @Controller()

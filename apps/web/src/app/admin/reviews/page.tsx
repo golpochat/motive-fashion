@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, IconButton, RowActions, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, IconButton, JobCard, Modal, RowActions, Td } from '@/components/dashboard-ui';
 
 type ReviewRow = {
   id: string;
@@ -20,8 +21,9 @@ export default function AdminReviews() {
   const [tab, setTab] = useState('PENDING');
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [open, setOpen] = useState<ReviewRow | null>(null);
   const query = tab === 'ALL' ? '' : `?status=${tab}`;
-  const { data, loading, error: loadError, reload } = useConsoleQuery<ReviewRow[]>(
+  const { data, loading, error: loadError, reload, setData } = useConsoleQuery<ReviewRow[]>(
     `/admin/reviews${query}`,
     'Could not load reviews',
   );
@@ -29,6 +31,10 @@ export default function AdminReviews() {
 
   async function setStatus(id: string, status: 'APPROVED' | 'REJECTED') {
     setError('');
+    const previous = rows;
+    if (tab === 'PENDING') {
+      setData(rows.filter((row) => row.id !== id));
+    }
     setBusyId(id);
     const res = await fetch(`${API}/admin/reviews/${id}`, {
       method: 'POST',
@@ -39,10 +45,12 @@ export default function AdminReviews() {
     const payload = await res.json().catch(() => null);
     setBusyId('');
     if (!res.ok) {
+      setData(previous);
       setError(apiErrorMessage(payload, 'Could not update this review.'));
       return;
     }
-    reload();
+    setOpen(null);
+    if (tab !== 'PENDING') reload();
   }
 
   return (
@@ -77,16 +85,44 @@ export default function AdminReviews() {
         emptyTitle="No reviews"
         emptyBody="Verified buyers can submit a review after delivery. Refunded pieces keep 4–5 star reviews only."
       >
-        <DataTable headers={['Product', 'Customer', 'Rating', 'Review', 'Action']}>
+        <DataTable
+          headers={['Product', 'Customer', 'Rating', 'Review', 'Action']}
+          cards={rows.map((row) => (
+            <JobCard
+              key={row.id}
+              title={row.product.title}
+              meta={`${row.user.name} · ${row.rating} / 5`}
+              actions={
+                row.status === 'PENDING' ? (
+                  <RowActions>
+                    <IconButton label="Approve review" icon="check" tone="success" disabled={busyId === row.id} onClick={() => void setStatus(row.id, 'APPROVED')} />
+                    <IconButton label="Reject review" icon="x" tone="danger" disabled={busyId === row.id} onClick={() => void setStatus(row.id, 'REJECTED')} />
+                  </RowActions>
+                ) : undefined
+              }
+            >
+              <p className="mt-2 line-clamp-3 text-sm text-ink/70">{row.body}</p>
+              <button type="button" className="mt-2 text-xs text-ink/55 underline-offset-4 hover:underline" onClick={() => setOpen(row)}>
+                Read
+              </button>
+            </JobCard>
+          ))}
+        >
           {rows.map((row) => (
             <tr key={row.id} className="hover:bg-ink/5">
-              <Td>{row.product.title}</Td>
+              <Td>
+                <Link href={`/product/${row.product.slug}`}>{row.product.title}</Link>
+              </Td>
               <Td muted>
                 {row.user.name}
                 <span className="mt-1 block text-xs">{row.user.email}</span>
               </Td>
               <Td>{row.rating} / 5</Td>
-              <Td muted>{row.body}</Td>
+              <Td muted>
+                <button type="button" className="text-left" onClick={() => setOpen(row)}>
+                  {row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body}
+                </button>
+              </Td>
               <Td nowrap>
                 {row.status === 'PENDING' ? (
                   <RowActions>
@@ -113,6 +149,23 @@ export default function AdminReviews() {
           ))}
         </DataTable>
       </ConsoleSection>
+      {open ? (
+        <Modal title={open.product.title} onClose={() => setOpen(null)}>
+          <p className="text-sm">
+            {open.user.name} · {open.rating} / 5
+          </p>
+          <p className="mt-3 text-sm text-ink/80">{open.body}</p>
+          <Link href={`/product/${open.product.slug}`} className="mt-4 inline-block text-sm">
+            Open product
+          </Link>
+          {open.status === 'PENDING' ? (
+            <div className="mt-4 flex gap-2">
+              <IconButton label="Approve review" icon="check" tone="success" disabled={busyId === open.id} onClick={() => void setStatus(open.id, 'APPROVED')} />
+              <IconButton label="Reject review" icon="x" tone="danger" disabled={busyId === open.id} onClick={() => void setStatus(open.id, 'REJECTED')} />
+            </div>
+          ) : null}
+        </Modal>
+      ) : null}
     </div>
   );
 }

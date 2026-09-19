@@ -1,4 +1,4 @@
-import { BRAND } from '@motive-fashion/config';
+import { legalControllerLine } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 
 export const metadata = pageMeta(
@@ -22,7 +22,7 @@ export default function CookiesPage() {
       <p className="text-ink/70">
         See <a href="/legal/privacy">Privacy</a> for what we store on the server.
       </p>
-      <p className="text-xs text-ink/55">Controller: {BRAND.legalName}, {BRAND.city}.</p>
+      <p className="text-xs text-ink/55">Controller: {legalControllerLine()}.</p>
     </article>
   );
 }

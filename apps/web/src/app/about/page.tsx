@@ -1,4 +1,4 @@
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, isVatRegistered } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 
 export const metadata = pageMeta(
@@ -15,8 +15,8 @@ export default function AboutPage() {
         the small pieces that make a scarf stay put.
       </p>
       <p className="text-ink/70">
-        We buy from specialist workshops in Turkey, the Gulf, Pakistan, Indonesia, and China, then sell in Ireland with
-        VAT-inclusive prices. Web, WhatsApp, the till, and the app share one stock ledger, so a piece reserved online is
+        We buy from specialist workshops in Turkey, the Gulf, Pakistan, Indonesia, and China, then sell in Ireland
+        {isVatRegistered() ? ' with VAT-inclusive prices' : ' with prices in euro'}. Web, WhatsApp, the till, and the app share one stock ledger, so a piece reserved online is
         not sold twice at the counter.
       </p>
       <p className="text-ink/70">

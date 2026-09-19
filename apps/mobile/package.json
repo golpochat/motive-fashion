@@ -11,6 +11,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@motive-fashion/config": "workspace:*",
+    "@motive-fashion/utils": "workspace:*",
     "expo": "~52.0.28",
     "expo-constants": "~17.0.5",
     "expo-linking": "~7.0.5",

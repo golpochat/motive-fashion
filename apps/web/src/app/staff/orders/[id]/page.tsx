@@ -7,7 +7,7 @@ import { API } from '@/lib/api';
 import { ErrorState, LoadingState, PageHeader } from '@/components/page-header';
 import { DataTable, Panel, Td } from '@/components/dashboard-ui';
 import { StaffOrderActions } from '@/components/staff-order-actions';
-import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
+import { ORDER_STATUS_LABEL, isVatRegistered } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
 
 type StaffSaleDetail = {
@@ -108,7 +108,7 @@ export default function StaffOrderDetail() {
         </Panel>
         <Panel title="Total">
           <p className="font-serif text-2xl">{formatEur(order.totalCents)}</p>
-          <p className="mt-1 text-sm text-ink/55">inc. VAT</p>
+          {isVatRegistered() ? <p className="mt-1 text-sm text-ink/55">inc. VAT</p> : null}
         </Panel>
       </div>
       <DataTable headers={['Item', 'SKU', 'Qty', 'Each', 'Line']}>

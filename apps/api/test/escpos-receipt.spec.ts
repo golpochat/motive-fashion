@@ -30,7 +30,8 @@ describe('ESC/POS till ticket', () => {
     const { payload, preview } = buildEscPosReceipt(base);
     expect(preview).toContain('[logo]');
     expect(preview).toContain('MOTIVE FASHION');
-    expect(preview).toContain('Motive Fashion Limited');
+    expect(preview).toContain('Motive Fashion');
+    expect(preview).not.toContain('Limited');
     expect(preview).toContain('Dublin, Ireland');
     expect(preview).toContain('hello@motivefashion.com');
     expect(preview).toContain('Ticket');
@@ -38,9 +39,9 @@ describe('ESC/POS till ticket', () => {
     expect(preview).toContain('Collect in Dublin');
     expect(preview).toContain('Everyday nida abaya');
     expect(preview).toContain('SKU ABY-NDA-M-BLK');
-    expect(preview).toContain('Goods ex VAT');
-    expect(preview).toContain('VAT 23%');
-    expect(preview).toContain('Total inc. VAT');
+    expect(preview).toContain('Total');
+    expect(preview).not.toContain('Goods ex VAT');
+    expect(preview).not.toContain('Total inc. VAT');
     expect(preview).toContain('14-day returns');
     expect(preview.split('\n').find((line) => line.startsWith('Ticket'))?.length).toBe(48);
     const title = preview.split('\n').find((line) => line.includes('Everyday nida abaya'));
@@ -99,5 +100,19 @@ describe('ESC/POS till ticket', () => {
     expect(preview).not.toContain('Cash tendered');
     expect(payload.includes(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 49, 67, 7]))).toBe(true);
     expect(payload.includes(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 49, 69, 49]))).toBe(true);
+  });
+
+  it('prints a VAT breakdown when the trader is registered', () => {
+    const prev = process.env.VAT_REGISTERED;
+    process.env.VAT_REGISTERED = 'true';
+    try {
+      const { preview } = buildEscPosReceipt(base);
+      expect(preview).toContain('Goods ex VAT');
+      expect(preview).toContain('VAT 23%');
+      expect(preview).toContain('Total inc. VAT');
+    } finally {
+      if (prev === undefined) delete process.env.VAT_REGISTERED;
+      else process.env.VAT_REGISTERED = prev;
+    }
   });
 });

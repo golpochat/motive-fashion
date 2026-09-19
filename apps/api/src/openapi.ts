@@ -73,7 +73,7 @@ export const openapiSpec = {
     '/health/metrics': {
       get: {
         tags: ['Health'],
-        summary: 'Process uptime and memory (JSON)',
+        summary: 'Uptime, memory, in-process HTTP counts and p95 (JSON)',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -109,7 +109,7 @@ export const openapiSpec = {
       get: { tags: ['Catalog'], summary: 'List categories', responses: { '200': { description: 'OK' } } },
     },
     '/catalog/collections': {
-      get: { tags: ['Catalog'], summary: 'List collections', responses: { '200': { description: 'OK' } } },
+      get: { tags: ['Catalog'], summary: 'Published collections', responses: { '200': { description: 'OK' } } },
     },
     '/catalog/products': {
       get: {
@@ -388,7 +388,8 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' }, '400': { description: 'Invalid' } },
       },
     },
-    '/admin/audit': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Audit log', responses: { '200': { description: 'OK' } } } },
+    '/admin/audit': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Commerce audit log', responses: { '200': { description: 'OK' } } } },
+    '/admin/audit/export': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Commerce audit CSV', responses: { '200': { description: 'CSV' } } } },
     '/stock/suggestions': {
       get: {
         tags: ['Stock'],
@@ -470,6 +471,14 @@ export const openapiSpec = {
         responses: { '201': { description: 'Created' }, '400': { description: 'Invalid lines or below MOQ' } },
       },
     },
+    '/admin/procurement/purchase-orders/export': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Purchase orders as CSV',
+        responses: { '200': { description: 'CSV' } },
+      },
+    },
     '/admin/procurement/purchase-orders/{id}': {
       get: {
         tags: ['Admin'],
@@ -500,6 +509,14 @@ export const openapiSpec = {
         tags: ['Admin'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
         summary: 'Warehouse restock suggestions grouped for raising a PO',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/admin/procurement/calendar': {
+      get: {
+        tags: ['Admin'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Purchase orders grouped by month and status',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -565,10 +582,20 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' }, '400': { description: 'Not refundable' } },
       },
     },
-    '/admin/analytics': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Dashboard stats', responses: { '200': { description: 'OK' } } } },
+    '/admin/analytics': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Dashboard stats, daily series, fulfilment split, AOV', responses: { '200': { description: 'OK' } } } },
+    '/admin/analytics/export': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Analytics CSV for the selected date range', responses: { '200': { description: 'CSV' } } } },
+    '/admin/marketing/calendar/export': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Marketing calendar CSV', responses: { '200': { description: 'CSV' } } } },
     '/admin/products': {
       get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List products', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Create product', responses: { '200': { description: 'OK' } } },
+    },
+    '/admin/collections': {
+      get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List merchandising collections', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Create a collection', responses: { '200': { description: 'OK' }, '400': { description: 'Invalid' } } },
+    },
+    '/admin/collections/{id}': {
+      patch: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Update or publish a collection', responses: { '200': { description: 'OK' } } },
+      delete: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'Delete a collection', responses: { '200': { description: 'OK' } } },
     },
     '/admin/orders': { get: { tags: ['Admin'], security: [{ bearer: [] }, { cookieAuth: [] }], summary: 'List all-channel orders including till sales', responses: { '200': { description: 'OK' } } } },
     '/admin/orders/{id}/pack': {
@@ -612,6 +639,30 @@ export const openapiSpec = {
         security: [{ bearer: [] }, { cookieAuth: [] }],
         summary: 'Opt-in WhatsApp broadcast (ADMIN). Only this route; marketing duplicate removed.',
         responses: { '200': { description: 'OK' }, '403': { description: 'Admin only' } },
+      },
+    },
+    '/rbac/audit': {
+      get: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Access-control audit log for Super admin',
+        responses: { '200': { description: 'OK' }, '403': { description: 'Forbidden' } },
+      },
+    },
+    '/rbac/audit/export': {
+      get: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'Access-control audit CSV for Super admin',
+        responses: { '200': { description: 'CSV' }, '403': { description: 'Forbidden' } },
+      },
+    },
+    '/rbac/export': {
+      get: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        summary: 'CSV of roles, people, and permission grants',
+        responses: { '200': { description: 'CSV' } },
       },
     },
     '/rbac/permissions': {
@@ -681,6 +732,15 @@ export const openapiSpec = {
         responses: { '200': { description: 'OK' } },
       },
     },
+    '/rbac/roles/{id}/clone': {
+      post: {
+        tags: ['Access'],
+        security: [{ bearer: [] }, { cookieAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Clone a visible role (new non-system copy)',
+        responses: { '200': { description: 'Created' } },
+      },
+    },
     '/rbac/users': {
       get: {
         tags: ['Access'],
@@ -694,7 +754,7 @@ export const openapiSpec = {
         tags: ['Access'],
         security: [{ bearer: [] }, { cookieAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        summary: 'Replace a user’s roles (cannot assign or edit super-admin)',
+        summary: 'Replace a user’s roles (cannot assign super-admin or strip the last commerce admin)',
         responses: { '200': { description: 'OK' } },
       },
     },

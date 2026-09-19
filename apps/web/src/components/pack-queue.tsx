@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, IconButton, RowActions, Td } from '@/components/dashboard-ui';
+import { DataTable, IconButton, JobCard, RowActions, Td } from '@/components/dashboard-ui';
 import { CHANNEL_LABEL, ORDER_STATUS_LABEL, type SalesChannel } from '@motive-fashion/config';
 
 type PackOrder = {
@@ -47,7 +47,22 @@ export function PackQueue({
         emptyTitle="Nothing to pack"
         emptyBody="Paid orders appear here at Confirmed or Packing."
       >
-        <DataTable headers={['Order', 'Customer', 'Channel', 'Status', 'Action']}>
+        <DataTable
+          headers={['Order', 'Customer', 'Channel', 'Status', 'Action']}
+          cards={rows.map((order) => (
+            <JobCard
+              key={order.id}
+              href={stationHref(order.id)}
+              title={order.ticket ?? order.id.replace(/-/g, '').slice(0, 8).toUpperCase()}
+              meta={`${ORDER_STATUS_LABEL[order.status] ?? order.status} · ${order.name}`}
+            >
+              <p className="mt-2 text-xs text-ink/55">
+                {CHANNEL_LABEL[order.channel as SalesChannel] ?? order.channel} ·{' '}
+                {order.fulfillment === 'COLLECTION' ? 'Collection' : 'Delivery'}
+              </p>
+            </JobCard>
+          ))}
+        >
           {rows.map((order) => (
             <tr key={order.id} className="hover:bg-ink/5">
               <Td>

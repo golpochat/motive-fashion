@@ -49,8 +49,12 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://motive:motive@postgres:5432/motive_fashion?schema=public
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-compose}
+      JWT_SECRET: ${JWT_SECRET:-}
       ALLOW_MOCK_PAYMENTS: "false"
+      ALLOW_HTTP_ORIGIN: "true"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       API_PORT: "4000"
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
@@ -86,7 +90,12 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://motive:motive@postgres:5432/motive_fashion?schema=public
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-compose}
+      JWT_SECRET: ${JWT_SECRET:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      ALLOW_HTTP_ORIGIN: "true"
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     command: ["node", "dist/worker.js"]
     volumes:

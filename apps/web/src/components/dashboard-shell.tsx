@@ -10,6 +10,7 @@ import { useSession } from '@/components/session-provider';
 import { ConsoleFooter } from '@/components/dashboard-ui';
 import { ConsoleSearch } from '@/components/console-search';
 import { Icon } from '@/components/icons';
+import { SkipLink } from '@/components/skip-link';
 import { BrandMark } from '@/components/brand-logo';
 import { BRAND } from '@motive-fashion/config';
 
@@ -82,6 +83,7 @@ export function DashboardShell({
 
   return (
     <div data-theme={workspace} className="flex h-dvh overflow-hidden bg-surface print:h-auto print:overflow-visible">
+      <SkipLink />
       {mobileOpen ? (
         <button
           type="button"
@@ -194,12 +196,13 @@ export function DashboardShell({
             </div>
           </div>
           <div className="flex min-w-0 items-center justify-end gap-3">
-            {workspace === 'customer' || till ? null : <ConsoleSearch />}
-            <ProfileMenu variant="console" currentWorkspace={workspace} />
+            {workspace === 'admin' && !till ? <ConsoleSearch /> : null}
+            <ProfileMenu variant="console" />
           </div>
         </header>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden print:h-auto print:overflow-visible">
           <div
+            id="main-content"
             className={
               till
                 ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-3 md:p-4'

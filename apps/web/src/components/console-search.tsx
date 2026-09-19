@@ -106,7 +106,7 @@ export function ConsoleSearch() {
               {hits.customers.map((row) => (
                 <li key={row.id}>
                   <Link
-                    href="/admin/customers"
+                    href={`/admin/customers/${row.id}`}
                     className="block px-3 py-2 no-underline hover:bg-ink/5"
                     onClick={() => setOpen(false)}
                   >

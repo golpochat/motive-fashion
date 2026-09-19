@@ -53,3 +53,15 @@ describe('supplier board helpers', () => {
     expect(suggestedBuyQty(40, 10, 20)).toBe(0);
   });
 });
+
+describe('receive shipment body', () => {
+  it('allows omitting lines to receive remaining units', async () => {
+    const { receiveShipmentSchema } = await import('@motive-fashion/validation');
+    expect(receiveShipmentSchema.parse({})).toEqual({});
+  });
+
+  it('rejects an empty lines array', async () => {
+    const { receiveShipmentSchema } = await import('@motive-fashion/validation');
+    expect(() => receiveShipmentSchema.parse({ lines: [] })).toThrow();
+  });
+});

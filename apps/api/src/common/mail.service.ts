@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SalesChannel } from '@prisma/client';
-import { BRAND, carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
+import { BRAND, PALETTE, carrierLabel, carrierTrackUrl } from '@motive-fashion/config';
 import { brandMarkPng } from './brand-assets';
 import { orderPaidHtml, orderPaidText, orderStatusUpdateHtml, orderStatusUpdateText } from './receipt-html';
 import { buildReceiptPdf } from './receipt-pdf';
@@ -94,7 +94,13 @@ export class MailService {
   }
 
   async sendPasswordReset(to: string, url: string) {
-    const html = `<p>Assalamu alaikum.</p><p>Use this link to choose a new Motive Fashion password. It expires in one hour.</p><p><a href="${url.replace(/&/g, '&amp;')}">Choose a new password</a></p><p>If you did not ask for this, you can ignore the email.</p>`;
+    const safe = url.replace(/&/g, '&amp;');
+    const html = brandedNoticeHtml(
+      'Reset your password',
+      'Use this link to choose a new Motive Fashion password. It expires in one hour. If you did not ask for this, ignore the email.',
+      safe,
+      'Choose a new password',
+    );
     const text = `Assalamu alaikum.\n\nChoose a new Motive Fashion password (expires in one hour):\n${url}\n\nIf you did not ask for this, ignore this email.`;
     const result = await this.send(to, 'Reset your password · Motive Fashion', html, { text });
     if (result && 'skipped' in result && result.skipped) {
@@ -104,7 +110,13 @@ export class MailService {
   }
 
   async sendEmailVerification(to: string, url: string) {
-    const html = `<p>Assalamu alaikum.</p><p>Confirm this email for your Motive Fashion account. The link expires in 24 hours.</p><p><a href="${url.replace(/&/g, '&amp;')}">Verify email</a></p><p>If you did not create an account, you can ignore this email.</p>`;
+    const safe = url.replace(/&/g, '&amp;');
+    const html = brandedNoticeHtml(
+      'Verify your email',
+      'Confirm this email for your Motive Fashion account. The link expires in 24 hours. If you did not create an account, ignore this email.',
+      safe,
+      'Verify email',
+    );
     const text = `Assalamu alaikum.\n\nConfirm this email for your Motive Fashion account (expires in 24 hours):\n${url}\n\nIf you did not create an account, ignore this email.`;
     const result = await this.send(to, 'Verify your email · Motive Fashion', html, { text });
     if (result && 'skipped' in result && result.skipped) {
@@ -171,6 +183,17 @@ export class MailService {
     }
     return { ok: true };
   }
+}
+
+function brandedNoticeHtml(heading: string, body: string, href: string, cta: string) {
+  return `<!doctype html><html><body style="margin:0;background:${PALETTE.cream};padding:24px">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px;font-family:Georgia,serif;color:${PALETTE.ink}">
+    <p style="letter-spacing:.18em;font-size:11px;text-transform:uppercase;color:${PALETTE.clay}">Motive Fashion · Dublin</p>
+    <h1 style="font-size:28px;font-weight:normal">${heading}</h1>
+    <p style="line-height:1.5">${body}</p>
+    <p><a href="${href}" style="color:${PALETTE.clay}">${cta}</a></p>
+    <p style="font-size:12px;color:${PALETTE.clay}">${BRAND.supportEmail}</p>
+  </div></body></html>`;
 }
 
 function escapeHtml(value: string) {

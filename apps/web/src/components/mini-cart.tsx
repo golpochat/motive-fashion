@@ -4,22 +4,26 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { formatEur } from '@motive-fashion/utils';
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, priceTaxSuffix } from '@motive-fashion/config';
 import { BagDeliveryNote } from '@/components/bag-delivery';
 import { CartLineRow } from '@/components/cart-line';
 import { Icon } from '@/components/icons';
 import { refreshCart, useCart } from '@/lib/cart-store';
 import { refreshDelivery } from '@/lib/delivery';
-import { isAuthPath } from '@/lib/rbac';
+import { isAuthPath, canShop } from '@/lib/rbac';
+import { useSession } from '@/components/session-provider';
 
 const PANEL_MS = 320;
 
 export function CartBoot() {
   const pathname = usePathname();
+  const { me, loading } = useSession();
   useEffect(() => {
     if (pathname.startsWith('/order/')) return;
+    if (loading) return;
+    if (!canShop(me)) return;
     void refreshCart();
-  }, [pathname]);
+  }, [pathname, me, loading]);
   useEffect(() => {
     void refreshDelivery();
   }, []);
@@ -39,14 +43,37 @@ function itemLabel(count: number) {
   return `${count} ${count === 1 ? 'item' : 'items'}`;
 }
 
+export function HeaderCartButton() {
+  const pathname = usePathname();
+  const { me } = useSession();
+  const { count, open } = useCart();
+  if (!canShop(me) || hideDock(pathname)) return null;
+  return (
+    <button
+      type="button"
+      className="relative flex h-11 w-11 items-center justify-center rounded-lg md:hidden"
+      aria-label={`Cart, ${itemLabel(count)}`}
+      onClick={open}
+    >
+      <Icon name="cart" className="h-5 w-5" />
+      {count ? (
+        <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium text-primary">
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 export function MiniCart() {
   const pathname = usePathname();
+  const { me } = useSession();
   const { cart, isOpen, loading, count, open, close, setQty, removeItem } = useCart();
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotalCents ?? 0;
   const [mounted, setMounted] = useState(isOpen);
   const [shown, setShown] = useState(false);
-  const showDock = !hideDock(pathname) && !mounted;
+  const showDock = canShop(me) && !hideDock(pathname) && !mounted;
 
   useEffect(() => {
     if (isOpen) {
@@ -83,7 +110,7 @@ export function MiniCart() {
       {showDock ? (
         <button
           type="button"
-          className="fixed right-0 top-1/2 z-50 flex w-12 -translate-y-1/2 flex-col overflow-hidden rounded-l-2xl bg-primary text-cream shadow-lg md:w-[5.75rem]"
+          className="fixed right-0 top-1/2 z-50 hidden w-12 -translate-y-1/2 flex-col overflow-hidden rounded-l-2xl bg-primary text-cream shadow-lg md:flex md:w-[5.75rem]"
           aria-label={`Cart, ${itemLabel(count)}, ${formatEur(subtotal)}`}
           aria-haspopup="dialog"
           onClick={open}
@@ -160,6 +187,7 @@ export function MiniCart() {
                       compact
                       onQty={(id, qty) => void setQty(id, qty)}
                       onRemove={(id) => void removeItem(id)}
+                      onRecover={(row) => void setQty(row.id, row.quantity)}
                     />
                   ))}
                 </ul>
@@ -170,7 +198,7 @@ export function MiniCart() {
               {items.length ? (
                 <>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink/70">Subtotal inc. VAT</span>
+                    <span className="text-ink/70">Subtotal{priceTaxSuffix()}</span>
                     <span className="font-medium tabular-nums">{formatEur(subtotal)}</span>
                   </div>
                   <div className="mt-3">

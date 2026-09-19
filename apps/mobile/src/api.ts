@@ -25,3 +25,14 @@ export function catalogItems<T>(payload: unknown): T[] {
   }
   return [];
 }
+
+export function mediaUrl(src?: string | null) {
+  if (!src) return undefined;
+  if (/^https?:\/\//i.test(src)) return src;
+  const origin = API.replace(/\/api\/v1\/?$/, '');
+  return `${origin}${src.startsWith('/') ? src : `/${src}`}`;
+}
+
+export function formatEur(cents: number) {
+  return `€${(cents / 100).toFixed(2)}`;
+}

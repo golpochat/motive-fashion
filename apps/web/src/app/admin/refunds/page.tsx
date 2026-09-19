@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, JobCard, Td } from '@/components/dashboard-ui';
 import { formatEur } from '@motive-fashion/utils';
 import { CHANNEL_LABEL } from '@motive-fashion/config';
 import { useState } from 'react';
@@ -70,12 +70,25 @@ export default function AdminRefunds() {
         emptyTitle={tab === 'CASH' ? 'No cash refunds yet' : tab === 'CARD' ? 'No card refunds yet' : 'No refunds yet'}
         emptyBody="Refund from Orders, or from a till ticket. Card refunds then show here and in the Stripe sandbox log."
       >
-        <DataTable headers={['When', 'Order', 'Method', 'Amount', 'Reason', 'Reference']}>
+        <DataTable
+          headers={['When', 'Order', 'Method', 'Amount', 'Reason', 'Reference']}
+          cards={visible.map((row) => (
+            <JobCard
+              key={row.id}
+              href={`/admin/pack/${row.order.id}`}
+              title={formatEur(row.amountCents)}
+              meta={`${row.method === 'CASH' ? 'Cash' : 'Card'} · ${row.order.name}`}
+            >
+              <p className="mt-2 text-sm">{row.reason}</p>
+              <p className="mt-1 text-xs text-ink/55">{refLabel(row)}</p>
+            </JobCard>
+          ))}
+        >
           {visible.map((row) => (
             <tr key={row.id} className="hover:bg-ink/5">
               <Td muted>{new Date(row.createdAt).toLocaleString('en-IE', { hour12: false })}</Td>
               <Td>
-                <Link href="/admin/orders" className="font-mono text-xs">
+                <Link href={`/admin/pack/${row.order.id}`} className="font-mono text-xs">
                   {row.order.id.slice(0, 8)}
                 </Link>
                 <span className="mt-1 block text-xs text-ink/45">

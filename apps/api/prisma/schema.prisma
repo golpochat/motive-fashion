@@ -107,6 +107,7 @@ enum CampaignSeason {
   EID
   WINTER
   SUMMER
+  SPRING
   EVERYDAY
 }
 
@@ -273,6 +274,10 @@ model Collection {
   name        String
   description String?
   season      CampaignSeason       @default(EVERYDAY)
+  published   Boolean              @default(false)
+  inNav       Boolean              @default(false)
+  sortOrder   Int                  @default(0)
+  bannerPath  String?
   products    ProductCollection[]
 }
 

@@ -3,9 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { configureApp } from './common/configure-app';
 import { emitLog, JsonLogger } from './common/log';
+import { assertProductionConfig } from './common/security-config';
 
 async function bootstrap() {
   process.env.LOG_SERVICE ??= 'api';
+  assertProductionConfig();
   const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true, logger: new JsonLogger() });
   configureApp(app);
   const port = Number(process.env.API_PORT ?? 4000);

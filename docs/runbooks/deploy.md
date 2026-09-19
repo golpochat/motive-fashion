@@ -33,13 +33,19 @@ docker build -f infra/docker/Dockerfile.api -t motive-fashion-api .
 
 - `NODE_ENV=production`
 - `DATABASE_URL`, `REDIS_URL`
-- `JWT_SECRET` (long random, not the example)
+- `JWT_SECRET` (32+ random characters, not the example)
 - `WEB_ORIGIN` (https storefront)
-- `STRIPE_SECRET_KEY` live, `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_SECRET_KEY` (`sk_test_` on staging, `sk_live_` in production), `STRIPE_WEBHOOK_SECRET`
 - `ALLOW_MOCK_PAYMENTS` unset or `false`
 - `RESEND_API_KEY`, `EMAIL_FROM`
+- Optional: `LEGAL_NAME`, `TRADER_ADDRESS`, `VAT_REGISTERED`, `VAT_NUMBER`
+- `ALERT_WEBHOOK_URL` for Slack-compatible 5xx and job-failure posts
 - WhatsApp + Square secrets if those channels are on
 - `WHATSAPP_VERIFY_TOKEN` not `change-me`
+
+The API and worker **exit on boot** if production secrets are placeholders or Stripe/Resend are missing. That is intentional.
+
+Local `docker compose --profile stack` needs the same secrets (or it will not start). For HTTP on localhost only, set `ALLOW_HTTP_ORIGIN=true`.
 
 ## After deploy
 

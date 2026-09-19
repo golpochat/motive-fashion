@@ -1,12 +1,12 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Field, IconButton, Modal, PrimaryButton, RowActions, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, FilterTabs, IconButton, JobCard, Modal, PrimaryButton, RowActions, SecondaryButton, Select, Td, fieldClass } from '@/components/dashboard-ui';
 import { formatUnits } from '@/lib/supply';
 import {
   DEFAULT_SUPPLIER_COUNTRY,
@@ -47,7 +47,14 @@ export default function AdminSuppliers() {
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState('LIVE');
   const rows = data ?? [];
+  const exampleCount = rows.filter((row) => row.example).length;
+  const visible = useMemo(() => {
+    if (tab === 'EXAMPLES') return rows.filter((row) => row.example);
+    if (tab === 'LIVE') return rows.filter((row) => !row.example);
+    return rows;
+  }, [rows, tab]);
 
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -121,16 +128,60 @@ export default function AdminSuppliers() {
           </PrimaryButton>
         }
       />
+      {exampleCount ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {exampleCount} example contact{exampleCount === 1 ? '' : 's'} in seed data. Do not outreach until you verify the mill.
+        </p>
+      ) : null}
+      <div className="mb-6">
+        <FilterTabs
+          ariaLabel="Supplier type"
+          current={tab}
+          onChange={setTab}
+          items={[
+            { id: 'LIVE', label: 'Live' },
+            { id: 'EXAMPLES', label: 'Examples' },
+            { id: 'ALL', label: 'All' },
+          ]}
+        />
+      </div>
       <ConsoleSection
         loading={loading}
         error={error}
         onRetry={reload}
-        empty={rows.length === 0}
-        emptyTitle="No suppliers"
+        empty={visible.length === 0}
+        emptyTitle={tab === 'EXAMPLES' ? 'No example suppliers' : tab === 'LIVE' ? 'No live suppliers' : 'No suppliers'}
         emptyBody="Add a mill or wholesaler to raise purchase orders."
       >
-        <DataTable headers={['Supplier', 'Ordered', 'On the way', 'Sold (30d)', 'SKUs', 'Action']}>
-          {rows.map((s) => (
+        <DataTable
+          headers={['Supplier', 'Ordered', 'On the way', 'Sold (30d)', 'SKUs', 'Action']}
+          cards={visible.map((s) => (
+            <JobCard
+              key={s.id}
+              href={`/admin/suppliers/${s.id}`}
+              title={s.name}
+              meta={`${supplierCountryLabel(s.country)}${s.example ? ' · Example' : ''}`}
+              actions={
+                <RowActions>
+                  <IconButton label="Open supplier" icon="open" href={`/admin/suppliers/${s.id}`} />
+                  <IconButton
+                    label="Edit supplier"
+                    icon="edit"
+                    onClick={() => {
+                      setFormError('');
+                      setEditing(s);
+                    }}
+                  />
+                </RowActions>
+              }
+            >
+              <p className="mt-2 text-xs text-ink/55">
+                Ordered {formatUnits(s.orderedUnits)} · on the way {formatUnits(s.inTransitUnits)} · sold 30d {formatUnits(s.sold30d)}
+              </p>
+            </JobCard>
+          ))}
+        >
+          {visible.map((s) => (
             <tr key={s.id} className="hover:bg-ink/5">
               <Td>
                 <Link href={`/admin/suppliers/${s.id}`} className="font-medium no-underline hover:text-accent">

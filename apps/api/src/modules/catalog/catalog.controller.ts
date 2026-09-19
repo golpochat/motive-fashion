@@ -22,6 +22,9 @@ export class CatalogController {
     @Query('q') q?: string,
     @Query('occasion') occasion?: string,
     @Query('sku') sku?: string,
+    @Query('size') size?: string,
+    @Query('color') color?: string,
+    @Query('inStock') inStock?: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
@@ -32,6 +35,9 @@ export class CatalogController {
       q,
       occasion,
       sku,
+      size,
+      color,
+      inStock: inStock === '1' || inStock === 'true',
       cursor,
       limit: Number.isFinite(parsed) ? parsed : undefined,
     });

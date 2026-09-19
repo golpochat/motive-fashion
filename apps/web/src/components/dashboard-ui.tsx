@@ -114,28 +114,62 @@ export function QtyStepper({
 export function DataTable({
   headers,
   children,
+  cards,
 }: {
   headers: string[];
   children: React.ReactNode;
+  cards?: React.ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-ink/10 bg-white">
-      <table className="w-full min-w-[36rem] text-left text-sm">
-        <thead className="bg-accent/10 text-xs uppercase tracking-wider text-ink/55">
-          <tr>
-            {headers.map((header, i) => (
-              <th
-                key={`${header}-${i}`}
-                className={`whitespace-nowrap px-4 py-3 font-medium ${header === 'Action' ? 'text-right' : ''}`}
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-ink/10">{children}</tbody>
-      </table>
-    </div>
+    <>
+      {cards ? <div className="grid gap-3 md:hidden">{cards}</div> : null}
+      <div className={`${cards ? 'hidden md:block' : ''} overflow-x-auto rounded-2xl border border-ink/10 bg-white`}>
+        <table className="w-full min-w-[36rem] text-left text-sm">
+          <thead className="bg-accent/10 text-xs uppercase tracking-wider text-ink/55">
+            <tr>
+              {headers.map((header, i) => (
+                <th
+                  key={`${header}-${i}`}
+                  className={`whitespace-nowrap px-4 py-3 font-medium ${header === 'Action' ? 'text-right' : ''}`}
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ink/10">{children}</tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+export function JobCard({
+  title,
+  meta,
+  href,
+  children,
+  actions,
+}: {
+  title: React.ReactNode;
+  meta?: React.ReactNode;
+  href?: string;
+  children?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <article className="rounded-2xl border border-ink/10 bg-white p-4">
+      {href ? (
+        <Link href={href} className="block font-medium no-underline">
+          {title}
+        </Link>
+      ) : (
+        <p className="font-medium">{title}</p>
+      )}
+      {meta ? <p className="mt-1 text-xs text-ink/55">{meta}</p> : null}
+      {children}
+      {actions ? <div className="mt-3">{actions}</div> : null}
+    </article>
   );
 }
 
@@ -186,6 +220,13 @@ export function IconButton({
     </>
   );
   if (href) {
+    if (/^(mailto:|https?:)/i.test(href)) {
+      return (
+        <a href={href} aria-label={label} className={`${className} no-underline`}>
+          {body}
+        </a>
+      );
+    }
     return (
       <Link href={href} aria-label={label} className={`${className} no-underline`}>
         {body}

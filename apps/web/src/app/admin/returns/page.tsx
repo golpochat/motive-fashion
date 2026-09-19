@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, FilterTabs, IconButton, RowActions, Td } from '@/components/dashboard-ui';
+import { DataTable, FilterTabs, IconButton, JobCard, RowActions, Td } from '@/components/dashboard-ui';
 import { formatEur } from '@motive-fashion/utils';
 import { hasPerm } from '@/lib/rbac';
 import { useSession } from '@/components/session-provider';
@@ -97,11 +98,28 @@ export default function AdminReturns() {
         emptyTitle="No returns"
         emptyBody="Customer return requests appear here after delivery or collection."
       >
-        <DataTable headers={['Order', 'Reason', 'Items', 'Status', 'Action']}>
+        <DataTable
+          headers={['Order', 'Reason', 'Items', 'Status', 'Action']}
+          cards={visible.map((row) => (
+            <JobCard
+              key={row.id}
+              href={`/admin/pack/${row.order.id}`}
+              title={row.order.name}
+              meta={`${row.status} · ${formatEur(row.order.totalCents)}`}
+            >
+              <p className="mt-2 text-sm">{row.reason}</p>
+              <p className="mt-1 text-xs text-ink/55">
+                {row.items.map((item) => `${item.orderItem?.title ?? 'Item'} × ${item.quantity}`).join(' · ')}
+              </p>
+            </JobCard>
+          ))}
+        >
           {visible.map((row) => (
             <tr key={row.id} className="hover:bg-ink/5">
               <Td>
-                <span className="font-mono text-xs">{row.order.id.slice(0, 8)}</span>
+                <Link href={`/admin/pack/${row.order.id}`} className="font-mono text-xs">
+                  {row.order.id.slice(0, 8)}
+                </Link>
                 <span className="mt-1 block text-xs text-ink/45">
                   {row.order.name} · {row.order.email} · {formatEur(row.order.totalCents)}
                 </span>
@@ -136,6 +154,7 @@ export default function AdminReturns() {
                         onClick={() => void setStatus(row.id, 'REFUNDED')}
                       />
                     ) : null}
+                    <IconButton label="Open order ticket" icon="pack" href={`/admin/pack/${row.order.id}`} />
                   </RowActions>
                 ) : null}
               </Td>

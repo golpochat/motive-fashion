@@ -1,27 +1,10 @@
 import { notFound } from 'next/navigation';
 import { CatalogEmpty, CatalogError, ProductGrid } from '@/components/catalog-state';
 import { HERO_IMAGE_SIZES, StorefrontImage } from '@/components/storefront-image';
-import { loadCatalog, loadCatalogPage, type Collection } from '@/lib/catalog';
+import { collectionHero, loadCatalog, loadCatalogPage, type Collection } from '@/lib/catalog';
+import { shopPriceBlurb } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 import { ShareButton } from '@/components/share-button';
-
-const BANNERS: Record<string, { src: string; alt: string; blurb: string }> = {
-  eid: {
-    src: '/brand/banner-eid.jpg',
-    alt: 'Eid collection — champagne hijabs and emerald abaya',
-    blurb: 'Eid pieces in champagne, sage, and emerald. VAT included.',
-  },
-  ramadan: {
-    src: '/brand/hero-editorial.jpg',
-    alt: 'Ramadan collection — abaya and hijab still life',
-    blurb: 'Ramadan layers for prayer and evenings at home.',
-  },
-  winter: {
-    src: '/brand/hero-editorial.jpg',
-    alt: 'Winter collection — modest layers',
-    blurb: 'Heavier weaves for Irish weather.',
-  },
-};
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -33,8 +16,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const name = collection?.name ?? slug.replace(/-/g, ' ');
   return pageMeta(
     name,
-    collection?.description || `The ${name} collection from Motive Fashion, Dublin. VAT included.`,
-    BANNERS[slug]?.src,
+    collection?.description || `The ${name} collection from Motive Fashion, Dublin. ${shopPriceBlurb()}`,
+    collectionHero(collection ?? { slug, name })?.src,
   );
 }
 
@@ -50,9 +33,9 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
   }
 
   const collection = collectionsResult.ok ? collectionsResult.data.find((row) => row.slug === slug) : undefined;
-  const banner = BANNERS[slug];
   const title = collection?.name ?? slug.replace(/-/g, ' ');
-  const blurb = collection?.description || banner?.blurb;
+  const blurb = collection?.description || `The ${title} collection from Motive Fashion, Dublin.`;
+  const banner = collection ? collectionHero(collection) : null;
 
   return (
     <div>
@@ -71,7 +54,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
           </div>
         </section>
       ) : (
-        <div className="mb-8 flex items-start justify-between gap-4">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="font-serif text-4xl">{title}</h1>
             {blurb ? <p className="mt-2 max-w-lg text-sm text-ink/70">{blurb}</p> : null}

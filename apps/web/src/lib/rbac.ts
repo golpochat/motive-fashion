@@ -1,3 +1,5 @@
+import { hasKey, principalWorkspace, workspaceHome } from '@motive-fashion/utils';
+
 export type Me = {
   id: string;
   name: string;
@@ -5,6 +7,8 @@ export type Me = {
   phone?: string | null;
   role?: string;
   emailVerified?: boolean;
+  marketingOptIn?: boolean;
+  whatsappOptIn?: boolean;
   mfaEnabled?: boolean;
   mfaRequired?: boolean;
   mfaLocked?: boolean;
@@ -23,8 +27,7 @@ export type Me = {
 };
 
 export function hasPerm(me: Me | null | undefined, key: string) {
-  const keys = me?.permissions ?? [];
-  return keys.includes('*') || keys.includes(key);
+  return hasKey(me?.permissions, key);
 }
 
 export function hasAnyPerm(me: Me | null | undefined, keys: string[]) {
@@ -32,11 +35,11 @@ export function hasAnyPerm(me: Me | null | undefined, keys: string[]) {
 }
 
 export function isCommerceAdmin(me: Me | null | undefined) {
-  return hasPerm(me, 'dashboard.admin') && !hasPerm(me, 'dashboard.super');
+  return principalWorkspace(me?.permissions) === 'admin';
 }
 
 export function seesAllStaffSales(me: Me | null | undefined) {
-  return hasPerm(me, 'dashboard.admin') || me?.role === 'ADMIN';
+  return hasPerm(me, 'dashboard.admin');
 }
 
 /** Map a shop-floor URL to the Admin equivalent. Query strings stay on the request. */
@@ -54,6 +57,7 @@ export function adminPathForStaffRoute(pathname: string) {
 
 export function roleLabel(me: Me | null | undefined) {
   if (!me) return 'Guest';
+  if (principalWorkspace(me.permissions) === 'super-admin') return 'Super admin';
   if (me.roles?.length) return me.roles.map((r) => r.name).join(', ');
   if (me.role === 'ADMIN') return 'Admin';
   if (me.role === 'STAFF') return 'Staff';
@@ -68,10 +72,13 @@ export function initials(me: Me | null | undefined) {
 }
 
 export function homePath(me: Me) {
-  if (hasAnyPerm(me, ['rbac.roles.write', 'dashboard.super'])) return '/super-admin';
-  if (hasPerm(me, 'dashboard.admin')) return '/admin';
-  if (hasPerm(me, 'dashboard.staff') || hasPerm(me, 'pos.sale')) return '/staff';
-  return '/user';
+  return workspaceHome(principalWorkspace(me.permissions));
+}
+
+/** Guests and customer accounts may shop. Work consoles may not. */
+export function canShop(me: Me | null | undefined) {
+  if (!me) return true;
+  return principalWorkspace(me.permissions) === 'customer';
 }
 
 export function safeNext(next: string | null) {

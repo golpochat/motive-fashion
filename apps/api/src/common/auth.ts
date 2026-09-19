@@ -14,11 +14,14 @@ import { UserRole } from '@prisma/client';
 import { RbacService } from '../modules/rbac/rbac.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isStaffWorkspace, staffMfaRequired } from './security-config';
+import { isCustomerPrincipal, principalWorkspace, SHOPPER_ONLY_MESSAGE, type PrincipalWorkspace } from '@motive-fashion/utils';
 
 export const ROLES_KEY = 'roles';
 export const PERMS_KEY = 'permissions';
+export const WORKSPACE_KEY = 'workspace';
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 export const RequirePermissions = (...perms: string[]) => SetMetadata(PERMS_KEY, perms);
+export const RequireWorkspace = (...ids: PrincipalWorkspace[]) => SetMetadata(WORKSPACE_KEY, ids);
 
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
   const req = ctx.switchToHttp().getRequest();
@@ -59,12 +62,19 @@ export class PermissionsGuard implements CanActivate {
     const handlerPerms = this.reflector.get<string[]>(PERMS_KEY, ctx.getHandler()) ?? [];
     const classPerms = this.reflector.get<string[]>(PERMS_KEY, ctx.getClass()) ?? [];
     const needed = [...new Set([...classPerms, ...handlerPerms])];
-    if (!needed.length) return true;
+    const workspaces = this.reflector.getAllAndOverride<PrincipalWorkspace[]>(WORKSPACE_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+    if (!needed.length && !workspaces?.length) return true;
     const req = ctx.switchToHttp().getRequest();
     if (!req.user?.sub) throw new UnauthorizedException();
     const keys = await this.rbac.permissionsFor(req.user.sub);
     req.user.permissions = keys;
-    if (!this.rbac.has(keys, needed)) throw new ForbiddenException();
+    if (workspaces?.length && !workspaces.includes(principalWorkspace(keys))) {
+      throw new ForbiddenException();
+    }
+    if (needed.length && !this.rbac.has(keys, needed)) throw new ForbiddenException();
     if (staffMfaRequired() && isStaffWorkspace(keys)) {
       const user = await this.prisma.user.findUnique({
         where: { id: req.user.sub },
@@ -91,6 +101,23 @@ export class RolesGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
     if (!req.user) throw new UnauthorizedException();
     if (!roles.includes(req.user.role)) throw new ForbiddenException();
+    return true;
+  }
+}
+
+@Injectable()
+export class ShopperGuard implements CanActivate {
+  constructor(@Inject(RbacService) private readonly rbac: RbacService) {}
+
+  async canActivate(ctx: ExecutionContext) {
+    const req = ctx.switchToHttp().getRequest();
+    const userId = req.user?.sub as string | undefined;
+    if (!userId) return true;
+    const keys = await this.rbac.permissionsFor(userId);
+    req.user.permissions = keys;
+    if (!isCustomerPrincipal(keys)) {
+      throw new ForbiddenException(SHOPPER_ONLY_MESSAGE);
+    }
     return true;
   }
 }

@@ -1,9 +1,9 @@
-import { BRAND } from '@motive-fashion/config';
+import { BRAND, isVatRegistered } from '@motive-fashion/config';
 import { pageMeta } from '@/lib/page-meta';
 
 export const metadata = pageMeta(
   'Terms',
-  `Purchase terms for ${BRAND.name}, Dublin. Irish and EU consumer law. VAT-inclusive euro prices.`,
+  `Purchase terms for ${BRAND.name}, Dublin. Irish and EU consumer law. Euro prices.`,
 );
 
 export default function TermsPage() {
@@ -12,7 +12,8 @@ export default function TermsPage() {
       <h1 className="font-serif text-4xl">Terms</h1>
       <p className="text-ink/70">
         These terms apply to purchases from Motive Fashion, Dublin, Ireland, on the website, app, WhatsApp, and in-shop
-        till. Distance contracts follow Irish and EU consumer law. Prices are in euro and include VAT.
+        till. Distance contracts follow Irish and EU consumer law. Prices are in euro
+        {isVatRegistered() ? ' and include VAT.' : '.'}
       </p>
       <p className="text-ink/70">
         A contract forms when payment succeeds (or when a till sale is posted). Stock is reserved at add-to-cart for{' '}

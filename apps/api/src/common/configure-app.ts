@@ -5,8 +5,13 @@ import { ZodExceptionFilter } from './zod-exception.filter';
 import { rateLimit, requestIdMiddleware, securityHeaders } from './http';
 import { HttpLogInterceptor } from './http-log.interceptor';
 import { JsonLogger } from './log';
+import { isProduction } from './security-config';
 
 export function configureApp(app: INestApplication, options?: { jsonLogs?: boolean }) {
+  if (isProduction()) {
+    const http = app.getHttpAdapter().getInstance() as { set?: (key: string, value: unknown) => void };
+    http.set?.('trust proxy', 1);
+  }
   if (options?.jsonLogs !== false) {
     app.useLogger(new JsonLogger());
   }

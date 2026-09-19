@@ -1,8 +1,16 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { writeAudit } from '../../common/audit';
-import { CATALOG_KEYS, hasAll, HIDDEN_ROLE_SLUG, isLockedPermission, LOCKED_PERMISSION_KEYS, PERMISSION_CATALOG, ROLE_PERMISSIONS, slugifyRole, SYSTEM_ROLE_SLUGS } from './permissions';
+import { writeAudit, listAuditLogs, exportAuditCsv } from '../../common/audit';
+import { CATALOG_KEYS, hasAll, HIDDEN_ROLE_SLUG, isCommerceAdminKeys, isLockedPermission, lastCommerceAdminBlocked, LOCKED_PERMISSION_KEYS, PERMISSION_CATALOG, ROLE_PERMISSIONS, slugifyRole, SYSTEM_ROLE_SLUGS, systemRoleRequiredKeys } from './permissions';
+import { mixedConsoleMessage } from '@motive-fashion/utils';
+
+const SYSTEM_ROLE_NAMES: Record<(typeof SYSTEM_ROLE_SLUGS)[number], string> = {
+  'super-admin': 'Super admin',
+  admin: 'Admin',
+  staff: 'Staff',
+  customer: 'Customer',
+};
 
 @Injectable()
 export class RbacService implements OnModuleInit {
@@ -23,14 +31,11 @@ export class RbacService implements OnModuleInit {
     const permissions = await this.prisma.permission.findMany();
     const byKey = new Map(permissions.map((p) => [p.key, p]));
     for (const slug of SYSTEM_ROLE_SLUGS) {
-      const name = slug
-        .split('-')
-        .map((p) => p[0]?.toUpperCase() + p.slice(1))
-        .join(' ');
+      const name = SYSTEM_ROLE_NAMES[slug];
       const role = await this.prisma.role.upsert({
         where: { slug },
         create: { slug, name, system: true, description: `System ${name} role` },
-        update: { system: true },
+        update: { system: true, name },
       });
       const keys = ROLE_PERMISSIONS[slug];
       const grantCount = await this.prisma.rolePermission.count({ where: { roleId: role.id } });
@@ -83,6 +88,7 @@ export class RbacService implements OnModuleInit {
       where: { id },
       include: {
         permissions: { include: { permission: true } },
+        members: { include: { user: { select: { id: true, name: true, email: true } } } },
         _count: { select: { members: true } },
       },
     });
@@ -90,6 +96,7 @@ export class RbacService implements OnModuleInit {
     return role;
   }
 
+  /** Prisma has no SUPER_ADMIN enum. Access-control principals still store ADMIN. Commerce checks use keys. */
   enumFromPermissions(keys: string[]): UserRole {
     if (keys.includes('*') || keys.includes('dashboard.admin') || keys.includes('rbac.roles.write')) {
       return UserRole.ADMIN;
@@ -121,9 +128,17 @@ export class RbacService implements OnModuleInit {
   async listPermissions() {
     const rows = await this.prisma.permission.findMany({
       where: { key: { notIn: [...LOCKED_PERMISSION_KEYS] } },
+      include: { grants: { include: { role: { select: { id: true, slug: true, name: true } } } } },
       orderBy: [{ group: 'asc' }, { key: 'asc' }],
     });
-    return rows.map((row) => ({ ...row, builtin: CATALOG_KEYS.has(row.key) }));
+    return rows.map((row) => ({
+      id: row.id,
+      key: row.key,
+      name: row.name,
+      group: row.group,
+      builtin: CATALOG_KEYS.has(row.key),
+      roles: row.grants.map((g) => g.role).filter((role) => role.slug !== HIDDEN_ROLE_SLUG),
+    }));
   }
 
   listRoles() {
@@ -181,7 +196,14 @@ export class RbacService implements OnModuleInit {
       });
     }
     if (input.permissionKeys && role.slug !== HIDDEN_ROLE_SLUG) {
-      await this.replacePermissions(id, await this.assignableKeys(input.permissionKeys));
+      const keys = await this.assignableKeys(input.permissionKeys);
+      const required = systemRoleRequiredKeys(role.slug);
+      const missing = required.filter((key) => !keys.includes(key));
+      if (missing.length) {
+        throw new BadRequestException(`The ${role.name} role must keep ${missing.join(', ')}.`);
+      }
+      await this.assertKeepsCommerceAdmin(id, keys);
+      await this.replacePermissions(id, keys);
     }
     await writeAudit(this.prisma, { actorId, action: 'rbac.role.update', entity: 'Role', entityId: id });
     const members = await this.prisma.userMembership.findMany({ where: { roleId: id } });
@@ -192,10 +214,29 @@ export class RbacService implements OnModuleInit {
     });
   }
 
+  async cloneRole(id: string, actorId: string) {
+    const role = await this.getRole(id);
+    const permissionKeys = role.permissions.map((g) => g.permission.key).filter((key) => !isLockedPermission(key));
+    for (let n = 1; n <= 20; n += 1) {
+      const suffix = n === 1 ? ' copy' : ` copy ${n}`;
+      try {
+        return await this.createRole(
+          { name: `${role.name}${suffix}`, description: role.description, permissionKeys },
+          actorId,
+        );
+      } catch (err) {
+        if (err instanceof BadRequestException && String(err.message).includes('already exists')) continue;
+        throw err;
+      }
+    }
+    throw new BadRequestException('Could not clone this role.');
+  }
+
   async deleteRole(id: string, actorId: string) {
     const role = await this.prisma.role.findUnique({ where: { id } });
     if (!role || role.slug === HIDDEN_ROLE_SLUG) throw new NotFoundException();
     if (role.system) throw new ForbiddenException('System roles cannot be deleted');
+    await this.assertKeepsCommerceAdmin(id, []);
     const members = await this.prisma.userMembership.findMany({ where: { roleId: id } });
     await this.prisma.role.delete({ where: { id } });
     for (const m of members) await this.syncUserEnum(m.userId);
@@ -214,6 +255,8 @@ export class RbacService implements OnModuleInit {
         email: true,
         name: true,
         role: true,
+        mfaEnabled: true,
+        emailVerified: true,
         memberships: { include: { role: { select: { id: true, slug: true, name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -228,13 +271,35 @@ export class RbacService implements OnModuleInit {
       where: { userId, role: { slug: HIDDEN_ROLE_SLUG } },
     });
     if (isPlatformAdmin) throw new ForbiddenException('The platform super-admin cannot be changed from here.');
-    const roles = await this.prisma.role.findMany({ where: { id: { in: roleIds } } });
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
+      include: { permissions: { include: { permission: true } } },
+    });
     if (roleIds.length && roles.length !== roleIds.length) throw new BadRequestException('Unknown role');
     if (roles.some((role) => role.slug === HIDDEN_ROLE_SLUG)) {
       throw new ForbiddenException('The super-admin role cannot be assigned.');
     }
+    const nextIds = roleIds.length
+      ? roleIds
+      : [(await this.prisma.role.findUniqueOrThrow({ where: { slug: 'customer' } })).id];
+    const nextRoles = roleIds.length
+      ? roles
+      : await this.prisma.role.findMany({
+          where: { id: { in: nextIds } },
+          include: { permissions: { include: { permission: true } } },
+        });
+    const currentlyAdmin = isCommerceAdminKeys(await this.permissionsFor(userId));
+    const nextKeys = new Set<string>();
+    for (const role of nextRoles) {
+      for (const grant of role.permissions) nextKeys.add(grant.permission.key);
+    }
+    const mix = mixedConsoleMessage([...nextKeys]);
+    if (mix) throw new BadRequestException(mix);
+    const otherAdmins = await this.countVisibleCommerceAdmins(userId);
+    if (lastCommerceAdminBlocked(currentlyAdmin, isCommerceAdminKeys([...nextKeys]), otherAdmins)) {
+      throw new BadRequestException('Assign Admin to someone else first. The shop cannot lose its last commerce admin.');
+    }
     await this.prisma.userMembership.deleteMany({ where: { userId } });
-    const nextIds = roleIds.length ? roleIds : [(await this.prisma.role.findUniqueOrThrow({ where: { slug: 'customer' } })).id];
     await this.prisma.userMembership.createMany({ data: nextIds.map((roleId) => ({ userId, roleId })) });
     await this.syncUserEnum(userId);
     await writeAudit(this.prisma, {
@@ -251,9 +316,46 @@ export class RbacService implements OnModuleInit {
         email: true,
         name: true,
         role: true,
+        mfaEnabled: true,
+        emailVerified: true,
         memberships: { include: { role: { select: { id: true, slug: true, name: true } } } },
       },
     });
+  }
+
+  async exportAccessCsv() {
+    const [roles, people, perms] = await Promise.all([this.listRoles(), this.listUsers(), this.listPermissions()]);
+    const lines = [['section', 'key', 'value']];
+    for (const role of roles) {
+      lines.push([
+        'role',
+        csvCell(role.slug),
+        `${csvCell(role.name)}|${role.system ? 'system' : 'custom'}|${role._count.members}|${role.permissions.map((g) => g.permission.key).join(' ')}`,
+      ]);
+    }
+    for (const person of people) {
+      lines.push([
+        'person',
+        csvCell(person.email),
+        `${csvCell(person.name)}|${person.memberships.map((m) => m.role.slug).join(' ')}|${person.mfaEnabled ? 'mfa' : 'no-mfa'}`,
+      ]);
+    }
+    for (const perm of perms) {
+      lines.push([
+        'permission',
+        csvCell(perm.key),
+        `${csvCell(perm.name)}|${csvCell(perm.group)}|${perm.roles.map((role) => role.slug).join(' ')}`,
+      ]);
+    }
+    return `${lines.map((row) => row.join(',')).join('\n')}\n`;
+  }
+
+  listAudit(query: { entity?: string; action?: string; cursor?: string }) {
+    return listAuditLogs(this.prisma, { ...query, scope: 'access' });
+  }
+
+  exportAudit() {
+    return exportAuditCsv(this.prisma, { scope: 'access' });
   }
 
   async createPermission(input: { key: string; name: string; group: string }, actorId: string) {
@@ -301,7 +403,10 @@ export class RbacService implements OnModuleInit {
   private async assignableKeys(keys: string[]) {
     const wanted = [...new Set(keys.filter((key) => !isLockedPermission(key)))];
     const rows = await this.prisma.permission.findMany({ where: { key: { in: wanted } } });
-    return rows.map((row) => row.key);
+    const next = rows.map((row) => row.key);
+    const mix = mixedConsoleMessage(next);
+    if (mix) throw new BadRequestException(mix);
+    return next;
   }
 
   private async replacePermissions(roleId: string, keys: string[]) {
@@ -312,4 +417,55 @@ export class RbacService implements OnModuleInit {
       data: permissions.map((p) => ({ roleId, permissionId: p.id })),
     });
   }
+
+  private async countVisibleCommerceAdmins(exceptUserId?: string) {
+    return (await this.visibleUsersWithKeys(exceptUserId)).filter((row) => isCommerceAdminKeys(row.keys)).length;
+  }
+
+  private async assertKeepsCommerceAdmin(roleId: string, nextKeys: string[]) {
+    const current = await this.countVisibleCommerceAdmins();
+    if (current < 1) return;
+    const remaining = (await this.visibleUsersWithKeys()).filter((row) => {
+      const keys = new Set<string>();
+      for (const membership of row.memberships) {
+        if (membership.roleId === roleId) {
+          for (const key of nextKeys) keys.add(key);
+        } else {
+          for (const grant of membership.role.permissions) keys.add(grant.permission.key);
+        }
+      }
+      return isCommerceAdminKeys([...keys]);
+    }).length;
+    if (remaining < 1) {
+      throw new BadRequestException('Assign Admin to someone else first. The shop cannot lose its last commerce admin.');
+    }
+  }
+
+  private async visibleUsersWithKeys(exceptUserId?: string) {
+    const users = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+        memberships: { none: { role: { slug: HIDDEN_ROLE_SLUG } } },
+      },
+      select: {
+        id: true,
+        memberships: {
+          include: { role: { include: { permissions: { include: { permission: true } } } } },
+        },
+      },
+    });
+    return users.map((user) => {
+      const keys = new Set<string>();
+      for (const membership of user.memberships) {
+        for (const grant of membership.role.permissions) keys.add(grant.permission.key);
+      }
+      return { ...user, keys: [...keys] };
+    });
+  }
+}
+
+function csvCell(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
 }

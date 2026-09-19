@@ -3,17 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { homePath, initials, roleLabel } from '@/lib/rbac';
-import { accessibleWorkspaces, workspaceFromPath, type WorkspaceId } from '@/lib/workspaces';
+import { initials, roleLabel } from '@/lib/rbac';
+import { accessibleWorkspaces } from '@/lib/workspaces';
+import { mfaSetupPath } from '@motive-fashion/utils';
 import { useSession } from '@/components/session-provider';
 
-export function ProfileMenu({
-  variant = 'storefront',
-  currentWorkspace,
-}: {
-  variant?: 'storefront' | 'console';
-  currentWorkspace?: WorkspaceId;
-}) {
+const menuLinkClass = 'block px-3 py-2 text-sm no-underline hover:bg-ink/5';
+
+export function ProfileMenu({ variant = 'storefront' }: { variant?: 'storefront' | 'console' }) {
   const { me, loading, logout } = useSession();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -54,9 +51,9 @@ export function ProfileMenu({
     );
   }
 
-  const workspaces = accessibleWorkspaces(me);
-  const current = currentWorkspace ?? workspaceFromPath(pathname ?? '')?.id;
-  const shopper = homePath(me) === '/user';
+  const home = accessibleWorkspaces(me)[0];
+  const onConsole = variant === 'console';
+  const dashboardLabel = home?.id === 'customer' ? 'My account' : home?.label;
 
   return (
     <div className="relative" ref={root}>
@@ -86,41 +83,28 @@ export function ProfileMenu({
             <p className="truncate text-xs text-ink/55">{me.email}</p>
             <p className="mt-1 text-xs text-ink/45">{roleLabel(me)}</p>
           </div>
-          {workspaces.length > 1 ? (
-            <div className="border-b border-ink/10 py-1">
-              <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-ink/40">Workspaces</p>
-              {workspaces.map((w) => {
-                const active = current === w.id;
-                return (
-                  <Link
-                    key={w.id}
-                    href={w.href}
-                    role="menuitem"
-                    className="flex items-center justify-between px-3 py-2 text-sm no-underline hover:bg-ink/5"
-                    onClick={() => setOpen(false)}
-                  >
-                    <span>
-                      <span className="block">{w.label}</span>
-                      <span className="block text-xs text-ink/45">{w.eyebrow}</span>
-                    </span>
-                    {active ? (
-                      <span className="text-[11px] font-medium text-accent">Current</span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : null}
           <div className="border-b border-ink/10 py-1">
             <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-ink/40">Links</p>
-            {shopper ? (
-              <Link href="/user" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-                My account
+            {home && !onConsole ? (
+              <Link href={home.href} role="menuitem" className={menuLinkClass} onClick={() => setOpen(false)}>
+                {dashboardLabel}
               </Link>
             ) : null}
-            <Link href="/" role="menuitem" className="block px-3 py-2 text-sm no-underline hover:bg-ink/5" onClick={() => setOpen(false)}>
-              Storefront
-            </Link>
+            {home && home.id !== 'customer' && !onConsole ? (
+              <Link
+                href={mfaSetupPath(me.permissions)}
+                role="menuitem"
+                className={menuLinkClass}
+                onClick={() => setOpen(false)}
+              >
+                Security
+              </Link>
+            ) : null}
+            {onConsole ? (
+              <Link href="/" role="menuitem" className={menuLinkClass} onClick={() => setOpen(false)}>
+                Storefront
+              </Link>
+            ) : null}
           </div>
           <div className="p-2">
             <button

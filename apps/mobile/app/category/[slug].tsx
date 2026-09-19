@@ -1,16 +1,16 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, Text } from 'react-native';
-import { Link } from 'expo-router';
+import { FlatList, Text } from 'react-native';
 import { api, catalogItems } from '../../src/api';
+import { ProductRow, type ProductCard } from '../../src/product-row';
 
 export default function Category() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
-  const [items, setItems] = useState<{ id: string; slug: string; title: string }[]>([]);
+  const [items, setItems] = useState<ProductCard[]>([]);
   useEffect(() => {
     if (slug) {
       api<unknown>(`/catalog/products?category=${slug}`)
-        .then((payload) => setItems(catalogItems<{ id: string; slug: string; title: string }>(payload)))
+        .then((payload) => setItems(catalogItems<ProductCard>(payload)))
         .catch(() => setItems([]));
     }
   }, [slug]);
@@ -19,13 +19,7 @@ export default function Category() {
       data={items}
       keyExtractor={(i) => i.id}
       ListHeaderComponent={<Text style={{ padding: 16, fontSize: 22 }}>{slug}</Text>}
-      renderItem={({ item }) => (
-        <Link href={`/product/${item.slug}`} asChild>
-          <Pressable style={{ padding: 16 }}>
-            <Text>{item.title}</Text>
-          </Pressable>
-        </Link>
-      )}
+      renderItem={({ item }) => <ProductRow item={item} />}
     />
   );
 }

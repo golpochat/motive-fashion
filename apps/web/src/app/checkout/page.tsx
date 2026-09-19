@@ -2,12 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { addressLabelName, formatIrelandAddress, isValidEircode, normalizeEircode, BRAND } from '@motive-fashion/config';
+import { addressLabelName, formatIrelandAddress, isValidEircode, normalizeEircode, BRAND, legalDisplayName, pricesIncludeVatCopy, traderIdentityLines, totalIncLabel } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
 import { API, apiErrorMessage, cartSessionKey } from '@/lib/api';
 import { useCart } from '@/lib/cart-store';
 import { useSession } from '@/components/session-provider';
-import { authHref } from '@/lib/rbac';
+import { authHref, canShop, homePath } from '@/lib/rbac';
 import { Field, fieldClass, Select } from '@/components/dashboard-ui';
 import { IrelandAddressFields, validateIrelandAddress, type AddressFieldErrors } from '@/components/ireland-address-fields';
 
@@ -223,6 +223,18 @@ export default function CheckoutPage() {
     setError(pay.message ?? 'Payment could not start');
   }
 
+  if (me && !canShop(me)) {
+    return (
+      <div>
+        <h1 className="font-serif text-4xl">Checkout</h1>
+        <p className="mt-4 text-ink/70">Only a customer account can place a shop order. Take a sale on the till, or sign out to shop as a guest.</p>
+        <Link href={homePath(me)} className="mt-6 inline-block rounded-full bg-primary px-6 py-3 text-cream no-underline">
+          Open your workspace
+        </Link>
+      </div>
+    );
+  }
+
   if (loading && !cart) {
     return (
       <div>
@@ -249,7 +261,7 @@ export default function CheckoutPage() {
       <div className="lg:col-span-2">
         <h1 className="font-serif text-4xl">Checkout</h1>
         <p className="mt-2 text-sm text-ink/70">
-          Prices include VAT ({(BRAND.vatRate * 100).toFixed(0)}%). Ireland only. See <Link href="/legal/returns">returns</Link>.
+          {pricesIncludeVatCopy()} Ireland only. See <Link href="/legal/returns">returns</Link>.
         </p>
       </div>
       <div className="space-y-6 max-lg:order-last lg:col-start-1 lg:row-start-2">
@@ -431,13 +443,29 @@ export default function CheckoutPage() {
           </label>
         ) : null}
 
+        <section className="space-y-2 rounded-2xl border border-ink/10 bg-white p-4 text-sm">
+          <h2 className="font-serif text-2xl">Before you pay</h2>
+          <p className="text-ink/70">
+            You are buying from {legalDisplayName()}, a sole trader. {traderIdentityLines().join(' · ')}
+          </p>
+          <p className="text-ink/70">
+            {totalIncLabel()} {quote ? formatEur(quote.totalCents) : formatEur(cart.subtotalCents)}. Ireland delivery and
+            Dublin collection only.
+          </p>
+          <p className="text-ink/70">
+            You have {BRAND.returnDays} days from delivery or collection to withdraw. Model cancellation form:{' '}
+            <Link href="/legal/returns#withdrawal">Returns</Link>. Trader identity:{' '}
+            <Link href="/legal/business">Business details</Link>.
+          </p>
+        </section>
+
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         {quoteError ? <p className="text-sm text-red-700">{quoteError}</p> : null}
 
         <div className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-ink/70">
-              Total inc. VAT {quote ? formatEur(quote.totalCents) : formatEur(cart.subtotalCents)}
+              {totalIncLabel()} {quote ? formatEur(quote.totalCents) : formatEur(cart.subtotalCents)}
             </p>
             <button
               className="rounded-full bg-primary px-6 py-3 text-cream disabled:opacity-50"
@@ -495,7 +523,7 @@ export default function CheckoutPage() {
               </dd>
             </div>
             <div className="flex justify-between pt-2 text-base">
-              <dt>Total inc. VAT</dt>
+              <dt>{totalIncLabel()}</dt>
               <dd>{formatEur(quote.totalCents)}</dd>
             </div>
           </dl>

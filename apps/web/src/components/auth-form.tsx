@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { API } from '@/lib/api';
 import { authHref, homePath, loginContext, safeNext, type Me } from '@/lib/rbac';
 import { canAccessWorkspace } from '@/lib/workspaces';
+import { isMfaSetupPath, mfaSetupPath } from '@motive-fashion/utils';
 import { PASSWORD_MIN_LENGTH } from '@motive-fashion/config';
 import { fieldClass } from '@/components/dashboard-ui';
 import { PasswordField } from '@/components/password-field';
@@ -17,10 +18,21 @@ const labelClass = 'mb-1.5 block text-sm text-ink/70';
 
 function destFor(me: Me) {
   const next = safeNext(new URLSearchParams(window.location.search).get('next'));
+  if (me.mfaRequired) {
+    const setup = mfaSetupPath(me.permissions);
+    if (next) {
+      const path = next.split('?')[0] ?? next;
+      if (isMfaSetupPath(path, me.permissions)) return next;
+    }
+    return setup;
+  }
   if (!next) return homePath(me);
   if (next.startsWith('/super-admin')) return canAccessWorkspace(me, 'super-admin') ? next : homePath(me);
   if (next.startsWith('/admin')) return canAccessWorkspace(me, 'admin') ? next : homePath(me);
   if (next.startsWith('/staff')) return canAccessWorkspace(me, 'staff') ? next : homePath(me);
+  if (next === '/cart' || next.startsWith('/checkout')) {
+    return homePath(me) === '/user' ? next : homePath(me);
+  }
   if (next.startsWith('/user') && homePath(me) !== '/user') return homePath(me);
   return next;
 }

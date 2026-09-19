@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { BRAND, PALETTE, RETURN_POSTAGE_NOTICE } from '@motive-fashion/config';
+import { BRAND, PALETTE, RETURN_POSTAGE_NOTICE, legalDisplayName, pricesIncludeVatCopy, totalIncLabel, vatNumberDisplay } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
 import { brandMarkPng } from './brand-assets';
 import {
@@ -14,7 +14,7 @@ import {
 
 export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 56, info: { Title: `Receipt ${order.id}`, Author: BRAND.legalName } });
+    const doc = new PDFDocument({ size: 'A4', margin: 56, info: { Title: `Receipt ${order.id}`, Author: legalDisplayName() } });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -33,7 +33,7 @@ export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
     doc.font('Helvetica').fontSize(9).fillColor('#8a8178').text('ORDER CONFIRMED', 56, 108);
     doc.font('Times-Bold').fontSize(26).fillColor(PALETTE.ink).text('Thank you', 56, 122);
     doc.font('Helvetica').fontSize(11).fillColor('#4a453f')
-      .text(`Assalamu alaikum ${order.name}. This is your VAT-inclusive receipt.`, 56, 156, { width: 480 });
+      .text(`Assalamu alaikum ${order.name}. This is your receipt.`, 56, 156, { width: 480 });
 
     doc.roundedRect(56, 186, 90, 18, 9).fill(PALETTE.cream);
     doc.fillColor(PALETTE.ink).fontSize(8).text('PAID', 56, 191, { width: 90, align: 'center' });
@@ -58,7 +58,7 @@ export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
       ['Subtotal', formatEur(order.subtotalCents)],
       ...(order.discountCents > 0 ? [[discountLabel(order), `−${formatEur(order.discountCents)}`] as [string, string]] : []),
       [shippingLabel(order), shippingAmount(order)],
-      ['Total inc. VAT', formatEur(order.totalCents)],
+      [totalIncLabel(), formatEur(order.totalCents)],
     ];
     for (const row of totals) {
       const label = row[0];
@@ -70,7 +70,8 @@ export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
       doc.text(value, 340, y, { width: 199, align: 'right' });
       y += last ? 22 : 16;
     }
-    doc.font('Helvetica').fontSize(9).fillColor('#8a8178').text(`Prices include VAT at ${(BRAND.vatRate * 100).toFixed(0)}%.`, 56, y);
+    const vatLine = vatNumberDisplay() ? ` ${vatNumberDisplay()}` : '';
+    doc.font('Helvetica').fontSize(9).fillColor('#8a8178').text(`${pricesIncludeVatCopy()}${vatLine}`, 56, y);
     y += 28;
 
     doc.fontSize(8).fillColor('#8a8178').text('FULFILMENT', 56, y);
@@ -93,7 +94,7 @@ export function buildReceiptPdf(order: ReceiptOrder): Promise<Buffer> {
     doc.fontSize(10).fillColor(PALETTE.clay).text('Track your order', 56, y, { link: trackUrl(order), underline: true });
 
     const support = BRAND.supportEmail;
-    const footer = `${BRAND.legalName}  ·  ${BRAND.city}, ${BRAND.country}  ·  ${support}`;
+    const footer = `${legalDisplayName()}  ·  ${BRAND.city}, ${BRAND.country}  ·  ${support}`;
     const footerY = doc.page.height - doc.page.margins.bottom - 10;
     doc.fontSize(8).fillColor('#8a8178').text(footer, 56, footerY, {
       width: 480,

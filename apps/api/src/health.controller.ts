@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
+import { httpSnapshot } from './common/http-metrics';
 import { emitLog } from './common/log';
 import { withRedis } from './common/redis';
 
@@ -38,6 +39,7 @@ export class HealthController {
       rssBytes: mem.rss,
       heapUsedBytes: mem.heapUsed,
       node: process.version,
+      ...httpSnapshot(),
     };
   }
 }

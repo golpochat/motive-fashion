@@ -1,27 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminPathForStaffRoute } from '@/lib/rbac';
+import { canAccessWorkspaceKeys, isMfaSetupPath, mfaSetupPath, principalWorkspace, workspaceHome } from '@motive-fashion/utils';
 
 type Me = { permissions?: string[]; mfaRequired?: boolean };
 
-function has(keys: string[] | undefined, needed: string) {
-  return Boolean(keys?.includes('*') || keys?.includes(needed));
-}
-
-function isCommerceAdmin(permissions: string[] | undefined) {
-  return has(permissions, 'dashboard.admin') && !has(permissions, 'dashboard.super');
-}
-
-function allowedFor(pathname: string, permissions: string[] | undefined) {
-  if (pathname.startsWith('/super-admin')) {
-    return has(permissions, 'dashboard.super') || has(permissions, 'rbac.roles.write');
-  }
-  if (pathname.startsWith('/admin')) return has(permissions, 'dashboard.admin');
-  if (pathname.startsWith('/staff')) {
-    return has(permissions, 'dashboard.staff') || has(permissions, 'pos.sale');
-  }
-  if (pathname.startsWith('/user')) return true;
-  return false;
+function workspaceOf(pathname: string) {
+  if (pathname.startsWith('/super-admin')) return 'super-admin' as const;
+  if (pathname.startsWith('/admin')) return 'admin' as const;
+  if (pathname.startsWith('/staff')) return 'staff' as const;
+  if (pathname.startsWith('/user')) return 'customer' as const;
+  return null;
 }
 
 function redirectLegacyAccount(request: NextRequest) {
@@ -54,12 +43,13 @@ export async function middleware(request: NextRequest) {
     return redirectLegacyAccount(request);
   }
 
-  const isProtected =
+  const isWorkspace =
     pathname.startsWith('/super-admin') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/staff') ||
     pathname.startsWith('/user');
-  if (!isProtected) return NextResponse.next();
+  const isShop = pathname === '/cart' || pathname.startsWith('/checkout');
+  if (!isWorkspace && !isShop) return NextResponse.next();
 
   const apiOrigin = process.env.API_ORIGIN ?? 'http://localhost:4000';
   const cookie = request.headers.get('cookie') ?? '';
@@ -70,24 +60,42 @@ export async function middleware(request: NextRequest) {
     });
     if (res.ok) {
       const me = (await res.json()) as Me;
-      if (me.mfaRequired && !pathname.startsWith('/user/profile') && !pathname.startsWith('/user/privacy')) {
-        const setup = new URL('/user/profile', request.url);
+      const home = workspaceHome(principalWorkspace(me.permissions));
+      if (isShop) {
+        if (principalWorkspace(me.permissions) !== 'customer') {
+          const url = request.nextUrl.clone();
+          url.pathname = home;
+          url.search = '';
+          return NextResponse.redirect(url);
+        }
+        return NextResponse.next();
+      }
+      if (me.mfaRequired && !isMfaSetupPath(pathname, me.permissions)) {
+        const setup = new URL(mfaSetupPath(me.permissions), request.url);
         setup.searchParams.set('mfa', '1');
         setup.searchParams.set('next', pathname);
         return NextResponse.redirect(setup);
       }
-      if (pathname.startsWith('/staff') && isCommerceAdmin(me.permissions)) {
+      if (pathname.startsWith('/staff') && principalWorkspace(me.permissions) === 'admin') {
         const url = request.nextUrl.clone();
         url.pathname = adminPathForStaffRoute(pathname);
         return NextResponse.redirect(url);
       }
-      if (allowedFor(pathname, me.permissions)) {
+      const needed = workspaceOf(pathname);
+      if (needed && (canAccessWorkspaceKeys(me.permissions, needed) || (me.mfaRequired && isMfaSetupPath(pathname, me.permissions)))) {
         return NextResponse.next();
+      }
+      if (needed) {
+        const url = request.nextUrl.clone();
+        url.pathname = home;
+        url.search = '';
+        return NextResponse.redirect(url);
       }
     }
   } catch {
-    /* fail closed */
+    /* fail closed for workspaces; guests may still shop */
   }
+  if (isShop) return NextResponse.next();
   const login = new URL('/auth/login', request.url);
   login.searchParams.set('next', pathname);
   return NextResponse.redirect(login);
@@ -104,5 +112,8 @@ export const config = {
     '/staff/:path*',
     '/user',
     '/user/:path*',
+    '/cart',
+    '/checkout',
+    '/checkout/:path*',
   ],
 };
