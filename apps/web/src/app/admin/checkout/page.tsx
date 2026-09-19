@@ -118,84 +118,72 @@ export default function AdminCheckout() {
 
       {tab === 'fulfilment' ? (
       <Panel title="Fulfilment">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wider text-ink/55">
-              <tr>
-                <th className="py-2">Method</th>
-                <th className="py-2">Published</th>
-                <th className="py-2">Default</th>
-                <th className="py-2">Fee / free over</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.fulfilment.map((row) => (
-                <tr key={row.id} className="border-t border-ink/10">
-                  <td className="py-3">
-                    {row.name}
-                    <span className="ml-2 text-xs text-ink/45">{row.code}</span>
-                    {row.code === 'COLLECTION' ? (
-                      <span className="mt-1 block text-xs text-ink/45">Shown at web checkout when published. Same Dublin collection as till and WhatsApp.</span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <Toggle
-                      checked={row.published}
-                      onChange={(next) => void patch(`/admin/commerce/fulfilment/${row.id}`, { published: next })}
-                      label={row.published ? 'Unpublish fulfilment' : 'Publish fulfilment'}
-                      showLabel={false}
+        <DataTable headers={['Method', 'Published', 'Default', 'Fee / free over']}>
+          {data.fulfilment.map((row) => (
+            <tr key={row.id} className="hover:bg-ink/[0.02]">
+              <Td>
+                {row.name}
+                <span className="ml-2 text-xs text-ink/45">{row.code}</span>
+                {row.code === 'COLLECTION' ? (
+                  <span className="mt-1 block text-xs text-ink/45">Shown at web checkout when published. Same Dublin collection as till and WhatsApp.</span>
+                ) : null}
+              </Td>
+              <Td>
+                <Toggle
+                  checked={row.published}
+                  onChange={(next) => void patch(`/admin/commerce/fulfilment/${row.id}`, { published: next })}
+                  label={row.published ? 'Unpublish fulfilment' : 'Publish fulfilment'}
+                  showLabel={false}
+                />
+              </Td>
+              <Td>
+                <Toggle
+                  checked={row.isDefault}
+                  onChange={() => void patch(`/admin/commerce/fulfilment/${row.id}`, { isDefault: true })}
+                  label="Set as default fulfilment"
+                  showLabel={false}
+                />
+              </Td>
+              <Td>
+                {row.code === 'COLLECTION' ? (
+                  <label className="flex items-center gap-2 text-xs text-ink/60">
+                    Fee €
+                    <input
+                      key={`${row.id}-fee-${row.feeCents}`}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
+                      defaultValue={euroInput(row.feeCents ?? 0)}
+                      onBlur={(e) =>
+                        void patch(`/admin/commerce/fulfilment/${row.id}`, {
+                          feeCents: Math.round(Number(e.target.value) * 100),
+                        })
+                      }
                     />
-                  </td>
-                  <td>
-                    <Toggle
-                      checked={row.isDefault}
-                      onChange={() => void patch(`/admin/commerce/fulfilment/${row.id}`, { isDefault: true })}
-                      label="Set as default fulfilment"
-                      showLabel={false}
+                  </label>
+                ) : (
+                  <label className="flex items-center gap-2 text-xs text-ink/60">
+                    Free over €
+                    <input
+                      key={`${row.id}-free-${row.freeOverCents}`}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
+                      defaultValue={euroInput(row.freeOverCents ?? 0)}
+                      onBlur={(e) =>
+                        void patch(`/admin/commerce/fulfilment/${row.id}`, {
+                          freeOverCents: Math.round(Number(e.target.value) * 100),
+                        })
+                      }
                     />
-                  </td>
-                  <td>
-                    {row.code === 'COLLECTION' ? (
-                      <label className="flex items-center gap-2 text-xs text-ink/60">
-                        Fee €
-                        <input
-                          key={`${row.id}-fee-${row.feeCents}`}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
-                          defaultValue={euroInput(row.feeCents ?? 0)}
-                          onBlur={(e) =>
-                            void patch(`/admin/commerce/fulfilment/${row.id}`, {
-                              feeCents: Math.round(Number(e.target.value) * 100),
-                            })
-                          }
-                        />
-                      </label>
-                    ) : (
-                      <label className="flex items-center gap-2 text-xs text-ink/60">
-                        Free over €
-                        <input
-                          key={`${row.id}-free-${row.freeOverCents}`}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 min-h-11 rounded-lg border border-ink/15 px-2 py-2.5"
-                          defaultValue={euroInput(row.freeOverCents ?? 0)}
-                          onBlur={(e) =>
-                            void patch(`/admin/commerce/fulfilment/${row.id}`, {
-                              freeOverCents: Math.round(Number(e.target.value) * 100),
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </label>
+                )}
+              </Td>
+            </tr>
+          ))}
+        </DataTable>
       </Panel>
       ) : null}
 

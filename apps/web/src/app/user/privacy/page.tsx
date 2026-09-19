@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/page-header';
-import { Modal, SecondaryButton } from '@/components/dashboard-ui';
+import { DataTable, Modal, PrimaryButton, SecondaryButton, Td } from '@/components/dashboard-ui';
 import { useSession } from '@/components/session-provider';
 
 export default function UserPrivacy() {
@@ -12,6 +12,27 @@ export default function UserPrivacy() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function exportData() {
+    setError('');
+    setNotice('');
+    setBusy('export');
+    const res = await fetch(`${API}/account/gdpr-export`, { credentials: 'include' });
+    const data = await res.json().catch(() => null);
+    setBusy('');
+    if (!res.ok) {
+      setError(apiErrorMessage(data, 'Could not export your data.'));
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'motive-fashion-data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    setNotice('Export downloaded.');
+  }
 
   return (
     <div>
@@ -29,44 +50,33 @@ export default function UserPrivacy() {
           {notice}
         </p>
       ) : null}
-      <div className="flex max-w-lg flex-col gap-3">
-        <SecondaryButton
-          type="button"
-          disabled={busy === 'export'}
-          onClick={async () => {
-            setError('');
-            setNotice('');
-            setBusy('export');
-            const res = await fetch(`${API}/account/gdpr-export`, { credentials: 'include' });
-            const data = await res.json().catch(() => null);
-            setBusy('');
-            if (!res.ok) {
-              setError(apiErrorMessage(data, 'Could not export your data.'));
-              return;
-            }
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'motive-fashion-data.json';
-            a.click();
-            URL.revokeObjectURL(url);
-            setNotice('Export downloaded.');
-          }}
-        >
-          {busy === 'export' ? 'Exporting…' : 'Export my data'}
-        </SecondaryButton>
-        <SecondaryButton type="button" disabled={busy === 'delete'} onClick={() => setConfirmDelete(true)}>
-          Delete account
-        </SecondaryButton>
-      </div>
+      <DataTable headers={['Request', 'What happens', 'Action']}>
+        <tr className="hover:bg-ink/5">
+          <Td>Export my data</Td>
+          <Td muted>Download a JSON copy of this account, addresses, wishlist, and orders.</Td>
+          <Td nowrap>
+            <SecondaryButton type="button" disabled={busy === 'export'} onClick={() => void exportData()}>
+              {busy === 'export' ? 'Exporting…' : 'Export'}
+            </SecondaryButton>
+          </Td>
+        </tr>
+        <tr className="hover:bg-ink/5">
+          <Td>Delete account</Td>
+          <Td muted>Removes sign-in, wishlist, and addresses. Orders stay on file where Irish law requires.</Td>
+          <Td nowrap>
+            <SecondaryButton type="button" disabled={busy === 'delete'} onClick={() => setConfirmDelete(true)}>
+              Delete
+            </SecondaryButton>
+          </Td>
+        </tr>
+      </DataTable>
       {confirmDelete ? (
         <Modal title="Delete this account?" onClose={() => setConfirmDelete(false)}>
           <p className="text-sm text-ink/70">
             Orders stay on file where Irish law requires. Wishlist, addresses, and sign-in will be removed.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <SecondaryButton
+            <PrimaryButton
               type="button"
               disabled={busy === 'delete'}
               onClick={async () => {
@@ -86,7 +96,7 @@ export default function UserPrivacy() {
               }}
             >
               {busy === 'delete' ? 'Deleting…' : 'Delete account'}
-            </SecondaryButton>
+            </PrimaryButton>
             <SecondaryButton type="button" onClick={() => setConfirmDelete(false)}>
               Keep account
             </SecondaryButton>

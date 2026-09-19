@@ -4,7 +4,19 @@ import { FormEvent, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { PageHeader } from '@/components/page-header';
-import { Field, JobCard, Modal, Panel, PrimaryButton, SecondaryButton, fieldClass } from '@/components/dashboard-ui';
+import {
+  DataTable,
+  Field,
+  IconButton,
+  JobCard,
+  Modal,
+  Panel,
+  PrimaryButton,
+  RowActions,
+  SecondaryButton,
+  Td,
+  fieldClass,
+} from '@/components/dashboard-ui';
 
 type SessionRow = {
   id: string;
@@ -27,6 +39,7 @@ export default function AdminWhatsapp() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [open, setOpen] = useState<SessionRow | null>(null);
   const sessions = data?.sessions ?? [];
   const optedIn = data?.optedIn ?? 0;
 
@@ -63,26 +76,51 @@ export default function AdminWhatsapp() {
       ) : null}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section>
-          <h2 className="font-serif text-2xl">Inbox</h2>
-          {loading && !data ? <p className="mt-3 text-sm text-ink/70">Loading threads…</p> : null}
+          <h2 className="mb-3 font-serif text-2xl [[data-theme=admin]_&]:font-sans">Inbox</h2>
+          {loading && !data ? <p className="text-sm text-ink/70">Loading threads…</p> : null}
           {!loading && sessions.length === 0 ? (
-            <p className="mt-3 text-sm text-ink/70">No sessions yet. Customers who write to the shop number appear here.</p>
-          ) : (
-            <div className="mt-4 grid gap-3">
-              {sessions.map((row) => {
+            <p className="text-sm text-ink/70">No sessions yet. Customers who write to the shop number appear here.</p>
+          ) : sessions.length ? (
+            <DataTable
+              headers={['Number', 'State', 'Last message', 'Updated', 'Action']}
+              cards={sessions.map((row) => {
                 const last = row.messages[0];
                 return (
                   <JobCard
                     key={row.id}
                     title={row.waId}
                     meta={`${row.state} · ${new Date(row.updatedAt).toLocaleString('en-IE', { hour12: false })}`}
+                    actions={
+                      <RowActions>
+                        <IconButton label="View thread" icon="open" onClick={() => setOpen(row)} />
+                      </RowActions>
+                    }
                   >
                     <p className="mt-2 text-sm">{last?.body ?? row.lastMessage ?? 'No outbound yet.'}</p>
                   </JobCard>
                 );
               })}
-            </div>
-          )}
+            >
+              {sessions.map((row) => {
+                const last = row.messages[0];
+                return (
+                  <tr key={row.id} className="hover:bg-ink/5">
+                    <Td>
+                      <span className="font-mono text-xs">{row.waId}</span>
+                    </Td>
+                    <Td muted>{row.state}</Td>
+                    <Td>{last?.body ?? row.lastMessage ?? 'No outbound yet.'}</Td>
+                    <Td muted>{new Date(row.updatedAt).toLocaleString('en-IE', { hour12: false })}</Td>
+                    <Td nowrap>
+                      <RowActions>
+                        <IconButton label="View thread" icon="open" onClick={() => setOpen(row)} />
+                      </RowActions>
+                    </Td>
+                  </tr>
+                );
+              })}
+            </DataTable>
+          ) : null}
         </section>
         <div>
           <Panel title="Broadcast">
@@ -133,6 +171,27 @@ export default function AdminWhatsapp() {
               Cancel
             </SecondaryButton>
           </div>
+        </Modal>
+      ) : null}
+      {open ? (
+        <Modal title={open.waId} onClose={() => setOpen(null)} wide>
+          <p className="text-sm text-ink/70">
+            {open.state} · {new Date(open.updatedAt).toLocaleString('en-IE', { hour12: false })}
+          </p>
+          {open.messages.length === 0 && !open.lastMessage ? (
+            <p className="mt-3 text-sm text-ink/70">No messages on this thread yet.</p>
+          ) : (
+            <DataTable headers={['When', 'Message']}>
+              {(open.messages.length ? open.messages : [{ id: 'last', body: open.lastMessage ?? '', createdAt: open.updatedAt }]).map(
+                (message) => (
+                  <tr key={message.id} className="hover:bg-ink/5">
+                    <Td muted>{new Date(message.createdAt).toLocaleString('en-IE', { hour12: false })}</Td>
+                    <Td>{message.body}</Td>
+                  </tr>
+                ),
+              )}
+            </DataTable>
+          )}
         </Modal>
       ) : null}
     </div>

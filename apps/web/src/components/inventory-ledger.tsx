@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API, apiErrorMessage } from '@/lib/api';
 import { ConsoleSection, EmptyState, PageHeader } from '@/components/page-header';
-import { DataTable, Field, FilterTabs, PrimaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
+import { DataTable, Field, FilterTabs, IconButton, JobCard, Modal, PrimaryButton, RowActions, SecondaryButton, Td, fieldClass, Select } from '@/components/dashboard-ui';
 import { useSession } from '@/components/session-provider';
 import { hasPerm } from '@/lib/rbac';
 import { scanMatchesVariant } from '@motive-fashion/utils';
@@ -20,7 +20,7 @@ type Level = {
 };
 
 type LocationRow = { id: string; code: string; name: string };
-type TabId = 'stock' | 'adjust' | 'transfer';
+type LedgerModal = 'adjust' | 'transfer' | null;
 
 function freeOf(row: Level) {
   return Math.max(0, row.onHand - row.reserved);
@@ -104,7 +104,7 @@ export function InventoryLedger({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [tab, setTab] = useState<TabId>('stock');
+  const [modal, setModal] = useState<LedgerModal>(null);
   const [query, setQuery] = useState('');
   const [locationId, setLocationId] = useState('');
   const [highlighted, setHighlighted] = useState('');
@@ -225,6 +225,7 @@ export function InventoryLedger({
     setNotice('On-hand updated.');
     setDelta('');
     setReason('');
+    setModal(null);
     reload();
   }
 
@@ -250,22 +251,45 @@ export function InventoryLedger({
     }
     setNotice('Stock moved.');
     setQuantity('1');
+    setModal(null);
     reload();
   }
 
-  const tabs = [
-    { id: 'stock', label: `Stock (${rows.length})` },
-    ...(canAdjust
-      ? [
-          { id: 'adjust', label: 'Adjust' },
-          { id: 'transfer', label: 'Transfer' },
-        ]
-      : []),
-  ];
+  function openAdjust(row?: Level) {
+    setError('');
+    setNotice('');
+    if (row) setLevelKey(`${row.variantId}|${row.locationId}`);
+    setModal('adjust');
+  }
+
+  function openTransfer(row?: Level) {
+    setError('');
+    setNotice('');
+    if (row) {
+      setVariantId(row.variantId);
+      setFromLocationId(row.locationId);
+    }
+    setModal('transfer');
+  }
 
   return (
     <div>
-      <PageHeader title="Inventory" description={description} />
+      <PageHeader
+        title="Inventory"
+        description={description}
+        actions={
+          canAdjust ? (
+            <div className="flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => openAdjust()}>
+                Adjust
+              </SecondaryButton>
+              <SecondaryButton type="button" onClick={() => openTransfer()}>
+                Transfer
+              </SecondaryButton>
+            </div>
+          ) : undefined
+        }
+      />
       {error ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
       {notice ? <p className="mb-4 text-sm text-moss">{notice}</p> : null}
 
@@ -285,173 +309,199 @@ export function InventoryLedger({
         />
       </form>
 
-      <div className="mb-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <FilterTabs
-          ariaLabel="Inventory"
-          items={tabs}
-          current={tab}
-          onChange={(id) => {
-            setTab(id as TabId);
-            setError('');
-            setNotice('');
-            queueMicrotask(() => scanRef.current?.focus());
-          }}
+          ariaLabel="Location"
+          items={[
+            { id: '', label: 'All locations' },
+            ...locations.map((location) => ({ id: location.id, label: location.code })),
+          ]}
+          current={locationId}
+          onChange={setLocationId}
         />
+        {low ? <p className="text-xs text-ink/55">{low} row{low === 1 ? '' : 's'} with free ≤ 5</p> : null}
       </div>
-
-      {tab === 'stock' ? (
-        <div>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <FilterTabs
-              ariaLabel="Location"
-              items={[
-                { id: '', label: 'All locations' },
-                ...locations.map((location) => ({ id: location.id, label: location.code })),
-              ]}
-              current={locationId}
-              onChange={setLocationId}
-            />
-            {low ? <p className="text-xs text-ink/55">{low} row{low === 1 ? '' : 's'} with free ≤ 5</p> : null}
-          </div>
-          {visible.length === 0 ? (
-            <EmptyState title="No rows" body="Scan a SKU or clear the search." />
-          ) : (
-            <DataTable headers={['SKU', 'Location', 'Bin', 'On hand', 'Reserved', 'Free']}>
-              {visible.map((row) => {
-                const free = freeOf(row);
-                const active = highlighted.toLowerCase() === row.variant.sku.toLowerCase();
-                return (
-                  <tr
-                    key={row.id}
-                    className={`hover:bg-ink/[0.02] ${active ? 'bg-accent/10' : ''} ${free <= 5 ? 'text-ink' : ''}`}
+      {visible.length === 0 ? (
+        <EmptyState title="No rows" body="Scan a SKU or clear the search." />
+      ) : (
+        <DataTable
+          headers={canAdjust ? ['SKU', 'Location', 'Bin', 'On hand', 'Reserved', 'Free', 'Action'] : ['SKU', 'Location', 'Bin', 'On hand', 'Reserved', 'Free']}
+          cards={visible.map((row) => {
+            const free = freeOf(row);
+            return (
+              <JobCard
+                key={row.id}
+                title={row.variant.sku}
+                meta={`${row.location.code}${row.binCode ? ` · ${row.binCode}` : ''} · free ${free}`}
+                actions={
+                  canAdjust ? (
+                    <RowActions>
+                      <IconButton label="Adjust stock" icon="edit" onClick={() => openAdjust(row)} />
+                      <IconButton label="Transfer stock" icon="truck" onClick={() => openTransfer(row)} />
+                    </RowActions>
+                  ) : undefined
+                }
+              >
+                <p className="mt-2 text-sm">{row.variant.product.title}</p>
+              </JobCard>
+            );
+          })}
+        >
+          {visible.map((row) => {
+            const free = freeOf(row);
+            const active = highlighted.toLowerCase() === row.variant.sku.toLowerCase();
+            return (
+              <tr
+                key={row.id}
+                className={`hover:bg-ink/[0.02] ${active ? 'bg-accent/10' : ''} ${free <= 5 ? 'text-ink' : ''}`}
+              >
+                <Td>
+                  <button
+                    type="button"
+                    className="text-left"
+                    onClick={() => applySku(row.variant.sku)}
                   >
-                    <Td>
-                      <button
-                        type="button"
-                        className="text-left"
-                        onClick={() => applySku(row.variant.sku)}
-                      >
-                        <span className="block font-medium">{row.variant.sku}</span>
-                        <span className="text-ink/55">{row.variant.product.title}</span>
-                      </button>
-                    </Td>
-                    <Td muted>{row.location.code}</Td>
-                    <Td>
-                      <BinField
-                        row={row}
-                        canAdjust={canAdjust}
-                        onError={setError}
-                        onSaved={() => {
-                          setNotice('Bin saved.');
-                          setError('');
-                          reload();
-                        }}
-                      />
-                    </Td>
-                    <Td>{row.onHand}</Td>
-                    <Td>{row.reserved}</Td>
-                    <Td>
-                      <span className={free <= 5 ? 'text-red-700' : ''}>{free}</span>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </DataTable>
-          )}
-        </div>
-      ) : null}
-
-      {tab === 'adjust' && canAdjust ? (
-        <form onSubmit={onAdjust} className="max-w-lg space-y-3 rounded-2xl border border-ink/10 bg-white p-5">
-          <Field label="SKU at location">
-            <Select
-              name="level"
-              value={levelKey}
-              onChange={setLevelKey}
-              required
-              className={fieldClass}
-              placeholder="Scan or select"
-              options={rows.map((row) => ({
-                value: `${row.variantId}|${row.locationId}`,
-                label: `${row.variant.sku} · ${row.location.code}`,
-              }))}
-            />
-          </Field>
-          <Field label="Delta">
-            <input
-              type="number"
-              required
-              placeholder="e.g. -2 or 5"
-              className={fieldClass}
-              value={delta}
-              onChange={(e) => setDelta(e.target.value)}
-            />
-          </Field>
-          <Field label="Reason">
-            <input
-              required
-              minLength={3}
-              className={fieldClass}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </Field>
-          <PrimaryButton type="submit">Apply</PrimaryButton>
-        </form>
-      ) : null}
-
-      {tab === 'transfer' && canAdjust ? (
-        <form onSubmit={onTransfer} className="max-w-lg space-y-3 rounded-2xl border border-ink/10 bg-white p-5">
-          <Field label="SKU">
-            <Select
-              name="variantId"
-              value={variantId}
-              onChange={setVariantId}
-              required
-              className={fieldClass}
-              placeholder="Scan or select"
-              options={variants.map((row) => ({
-                value: row.variantId,
-                label: `${row.variant.sku} · ${row.variant.product.title}`,
-              }))}
-            />
-          </Field>
-          <Field label="From">
-            <Select
-              name="fromLocationId"
-              value={fromLocationId}
-              onChange={setFromLocationId}
-              required
-              className={fieldClass}
-              placeholder="Select"
-              options={locations.map((location) => ({ value: location.id, label: location.code }))}
-            />
-          </Field>
-          <Field label="To">
-            <Select
-              name="toLocationId"
-              value={toLocationId}
-              onChange={setToLocationId}
-              required
-              className={fieldClass}
-              placeholder="Select"
-              options={locations.map((location) => ({ value: location.id, label: location.code }))}
-            />
-          </Field>
-          <Field label="Quantity">
-            <input
-              type="number"
-              min={1}
-              required
-              className={fieldClass}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-          </Field>
-          <PrimaryButton type="submit">Move stock</PrimaryButton>
-        </form>
-      ) : null}
+                    <span className="block font-medium">{row.variant.sku}</span>
+                    <span className="text-ink/55">{row.variant.product.title}</span>
+                  </button>
+                </Td>
+                <Td muted>{row.location.code}</Td>
+                <Td>
+                  <BinField
+                    row={row}
+                    canAdjust={canAdjust}
+                    onError={setError}
+                    onSaved={() => {
+                      setNotice('Bin saved.');
+                      setError('');
+                      reload();
+                    }}
+                  />
+                </Td>
+                <Td>{row.onHand}</Td>
+                <Td>{row.reserved}</Td>
+                <Td>
+                  <span className={free <= 5 ? 'text-red-700' : ''}>{free}</span>
+                </Td>
+                {canAdjust ? (
+                  <Td nowrap>
+                    <RowActions>
+                      <IconButton label="Adjust stock" icon="edit" onClick={() => openAdjust(row)} />
+                      <IconButton label="Transfer stock" icon="truck" onClick={() => openTransfer(row)} />
+                    </RowActions>
+                  </Td>
+                ) : null}
+              </tr>
+            );
+          })}
+        </DataTable>
+      )}
       </ConsoleSection>
+
+      {modal === 'adjust' && canAdjust ? (
+        <Modal title="Adjust on-hand" onClose={() => setModal(null)}>
+          <form onSubmit={onAdjust} className="space-y-3">
+            <Field label="SKU at location">
+              <Select
+                name="level"
+                value={levelKey}
+                onChange={setLevelKey}
+                required
+                className={fieldClass}
+                placeholder="Scan or select"
+                options={rows.map((row) => ({
+                  value: `${row.variantId}|${row.locationId}`,
+                  label: `${row.variant.sku} · ${row.location.code}`,
+                }))}
+              />
+            </Field>
+            <Field label="Delta">
+              <input
+                type="number"
+                required
+                placeholder="e.g. -2 or 5"
+                className={fieldClass}
+                value={delta}
+                onChange={(e) => setDelta(e.target.value)}
+              />
+            </Field>
+            <Field label="Reason">
+              <input
+                required
+                minLength={3}
+                className={fieldClass}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <PrimaryButton type="submit">Apply</PrimaryButton>
+              <SecondaryButton type="button" onClick={() => setModal(null)}>
+                Cancel
+              </SecondaryButton>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {modal === 'transfer' && canAdjust ? (
+        <Modal title="Transfer stock" onClose={() => setModal(null)}>
+          <form onSubmit={onTransfer} className="space-y-3">
+            <Field label="SKU">
+              <Select
+                name="variantId"
+                value={variantId}
+                onChange={setVariantId}
+                required
+                className={fieldClass}
+                placeholder="Scan or select"
+                options={variants.map((row) => ({
+                  value: row.variantId,
+                  label: `${row.variant.sku} · ${row.variant.product.title}`,
+                }))}
+              />
+            </Field>
+            <Field label="From">
+              <Select
+                name="fromLocationId"
+                value={fromLocationId}
+                onChange={setFromLocationId}
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={locations.map((location) => ({ value: location.id, label: location.code }))}
+              />
+            </Field>
+            <Field label="To">
+              <Select
+                name="toLocationId"
+                value={toLocationId}
+                onChange={setToLocationId}
+                required
+                className={fieldClass}
+                placeholder="Select"
+                options={locations.map((location) => ({ value: location.id, label: location.code }))}
+              />
+            </Field>
+            <Field label="Quantity">
+              <input
+                type="number"
+                min={1}
+                required
+                className={fieldClass}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <PrimaryButton type="submit">Move stock</PrimaryButton>
+              <SecondaryButton type="button" onClick={() => setModal(null)}>
+                Cancel
+              </SecondaryButton>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

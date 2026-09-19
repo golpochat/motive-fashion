@@ -13,7 +13,7 @@ export function PageHeader({
   return (
     <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="font-serif text-3xl tracking-tight [[data-theme=admin]_&]:font-sans [[data-theme=super-admin]_&]:font-sans">
+        <h1 className="font-serif text-3xl tracking-tight [[data-theme=admin]_&]:font-sans [[data-theme=super-admin]_&]:font-sans [[data-theme=staff]_&]:font-sans">
           {title}
         </h1>
         {description ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink/70">{description}</p> : null}
@@ -27,7 +27,7 @@ export function StatCard({ label, value, hint }: { label: string; value: string;
   return (
     <div className="rounded-2xl border border-ink/10 border-t-2 border-t-accent bg-white p-5">
       <p className="text-xs uppercase tracking-widest text-ink/55">{label}</p>
-      <p className="mt-2 truncate font-serif text-3xl [[data-theme=admin]_&]:font-sans [[data-theme=super-admin]_&]:font-sans">{value}</p>
+      <p className="mt-2 truncate font-serif text-3xl [[data-theme=admin]_&]:font-sans [[data-theme=super-admin]_&]:font-sans [[data-theme=staff]_&]:font-sans">{value}</p>
       {hint ? <p className="mt-1 truncate text-sm text-ink/55">{hint}</p> : null}
     </div>
   );

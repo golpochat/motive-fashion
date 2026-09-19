@@ -6,7 +6,7 @@ import { API, apiErrorMessage } from '@/lib/api';
 import { addCartItem } from '@/lib/cart-store';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { PrimaryButton, SecondaryButton } from '@/components/dashboard-ui';
+import { DataTable, IconButton, JobCard, RowActions, Td } from '@/components/dashboard-ui';
 import { StorefrontImage } from '@/components/storefront-image';
 
 type Wish = {
@@ -58,41 +58,81 @@ export default function UserWishlist() {
         emptyTitle="Nothing saved"
         emptyBody="Tap the heart on a product to keep it here."
       >
-        <ul className="grid gap-4 sm:grid-cols-2">
+        <DataTable
+          headers={['Piece', 'Stock', 'Action']}
+          cards={items.map((item) => {
+            const image = item.product.images[0];
+            const inStock = Boolean(firstInStock(item));
+            return (
+              <JobCard
+                key={item.productId}
+                href={`/product/${item.product.slug}`}
+                title={item.product.title}
+                meta={inStock ? 'In Dublin' : 'Sold out'}
+                actions={<WishActions item={item} inStock={inStock} onAdd={addToBag} onRemove={remove} onFail={reload} />}
+              >
+                {image ? (
+                  <div className="relative mt-3 h-24 w-20 overflow-hidden rounded-lg bg-ink/5">
+                    <StorefrontImage src={image.url} alt={image.alt || item.product.title} sizes="80px" />
+                  </div>
+                ) : null}
+              </JobCard>
+            );
+          })}
+        >
           {items.map((item) => {
             const image = item.product.images[0];
             const inStock = Boolean(firstInStock(item));
             return (
-              <li key={item.productId} className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
-                <Link href={`/product/${item.product.slug}`} className="block no-underline">
-                  <div className="relative aspect-[4/5] bg-ink/5">
-                    {image ? <StorefrontImage src={image.url} alt={image.alt || item.product.title} sizes="320px" /> : null}
-                    {!inStock ? (
-                      <span className="absolute left-3 top-3 rounded-full bg-primary/90 px-3 py-1 text-xs text-cream">
-                        Sold out
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="px-4 pt-3 font-medium">{item.product.title}</p>
-                </Link>
-                <div className="flex gap-2 p-4">
-                  <PrimaryButton
-                    type="button"
-                    className="flex-1"
-                    disabled={!inStock}
-                    onClick={() => void addToBag(item).catch(() => reload())}
-                  >
-                    {inStock ? 'Add to bag' : 'Sold out'}
-                  </PrimaryButton>
-                  <SecondaryButton type="button" onClick={() => void remove(item.productId).catch(() => reload())}>
-                    Remove
-                  </SecondaryButton>
-                </div>
-              </li>
+              <tr key={item.productId} className="hover:bg-ink/5">
+                <Td>
+                  <Link href={`/product/${item.product.slug}`} className="flex items-center gap-3 no-underline">
+                    <span className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-ink/5">
+                      {image ? <StorefrontImage src={image.url} alt={image.alt || item.product.title} sizes="44px" /> : null}
+                    </span>
+                    <span className="font-medium">{item.product.title}</span>
+                  </Link>
+                </Td>
+                <Td muted>{inStock ? 'In Dublin' : 'Sold out'}</Td>
+                <Td nowrap>
+                  <WishActions item={item} inStock={inStock} onAdd={addToBag} onRemove={remove} onFail={reload} />
+                </Td>
+              </tr>
             );
           })}
-        </ul>
+        </DataTable>
       </ConsoleSection>
     </div>
+  );
+}
+
+function WishActions({
+  item,
+  inStock,
+  onAdd,
+  onRemove,
+  onFail,
+}: {
+  item: Wish;
+  inStock: boolean;
+  onAdd: (item: Wish) => Promise<void>;
+  onRemove: (productId: string) => Promise<void>;
+  onFail: () => void;
+}) {
+  return (
+    <RowActions>
+      <IconButton
+        label={inStock ? 'Add to bag' : 'Sold out'}
+        icon="cart"
+        disabled={!inStock}
+        onClick={() => void onAdd(item).catch(onFail)}
+      />
+      <IconButton
+        label="Remove from wishlist"
+        icon="trash"
+        tone="danger"
+        onClick={() => void onRemove(item.productId).catch(onFail)}
+      />
+    </RowActions>
   );
 }

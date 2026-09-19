@@ -3,10 +3,16 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { formatEur } from '@motive-fashion/utils';
-import { CHANNEL_LABEL, ORDER_STATUS_LABEL, type SalesChannel } from '@motive-fashion/config';
+import {
+  CHANNEL_LABEL,
+  ORDER_STATUS_LABEL,
+  addressLabelName,
+  formatIrelandAddress,
+  type SalesChannel,
+} from '@motive-fashion/config';
 import { useConsoleQuery } from '@/lib/console-query';
-import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, JobCard, Td } from '@/components/dashboard-ui';
+import { ConsoleSection, PageHeader, StatCard } from '@/components/page-header';
+import { DataTable, IconButton, JobCard, RowActions, Td } from '@/components/dashboard-ui';
 
 type CustomerHub = {
   id: string;
@@ -58,27 +64,18 @@ export default function AdminCustomerHub() {
       <ConsoleSection loading={loading} error={error} onRetry={reload}>
         {data ? (
           <div className="space-y-8">
-            <section className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-ink/10 bg-white p-4">
-                <p className="text-xs uppercase tracking-wider text-ink/45">Orders</p>
-                <p className="mt-1 font-serif text-2xl">{data._count?.orders ?? data.orders.length}</p>
-              </div>
-              <div className="rounded-2xl border border-ink/10 bg-white p-4">
-                <p className="text-xs uppercase tracking-wider text-ink/45">Email</p>
-                <p className="mt-1 text-sm">{data.marketingOptIn ? 'Opted in' : 'Off'}</p>
-              </div>
-              <div className="rounded-2xl border border-ink/10 bg-white p-4">
-                <p className="text-xs uppercase tracking-wider text-ink/45">WhatsApp</p>
-                <p className="mt-1 text-sm">{data.whatsappOptIn ? 'Opted in' : 'Off'}</p>
-              </div>
+            <section className="grid gap-4 sm:grid-cols-3">
+              <StatCard label="Orders" value={String(data._count?.orders ?? data.orders.length)} />
+              <StatCard label="Email" value={data.marketingOptIn ? 'Opted in' : 'Off'} />
+              <StatCard label="WhatsApp" value={data.whatsappOptIn ? 'Opted in' : 'Off'} />
             </section>
             <section>
-              <h2 className="mb-3 font-serif text-2xl">Recent orders</h2>
+              <h2 className="mb-3 font-serif text-2xl [[data-theme=admin]_&]:font-sans">Recent orders</h2>
               {data.orders.length === 0 ? (
                 <p className="text-sm text-ink/70">No orders on this account yet.</p>
               ) : (
                 <DataTable
-                  headers={['Order', 'When', 'Channel', 'Status', 'Total']}
+                  headers={['Order', 'When', 'Channel', 'Status', 'Total', 'Action']}
                   cards={data.orders.map((order) => (
                     <JobCard
                       key={order.id}
@@ -109,30 +106,38 @@ export default function AdminCustomerHub() {
                       </Td>
                       <Td>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Td>
                       <Td>{formatEur(order.totalCents)}</Td>
+                      <Td nowrap>
+                        <RowActions>
+                          <IconButton label="Open order" icon="open" href={`/admin/pack/${order.id}`} />
+                        </RowActions>
+                      </Td>
                     </tr>
                   ))}
                 </DataTable>
               )}
             </section>
             <section>
-              <h2 className="mb-3 font-serif text-2xl">Addresses</h2>
+              <h2 className="mb-3 font-serif text-2xl [[data-theme=admin]_&]:font-sans">Addresses</h2>
               {data.addresses.length === 0 ? (
                 <p className="text-sm text-ink/70">No saved addresses.</p>
               ) : (
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {data.addresses.map((address) => (
-                    <li key={address.id} className="rounded-2xl border border-ink/10 bg-white p-4 text-sm">
-                      {address.label ? <p className="text-xs uppercase tracking-wider text-ink/45">{address.label}</p> : null}
-                      <p className="mt-1">{address.line1}</p>
-                      {address.line2 ? <p>{address.line2}</p> : null}
-                      <p>
-                        {address.city}
-                        {address.county ? `, ${address.county}` : ''}
-                      </p>
-                      {address.eircode ? <p className="font-mono text-xs">{address.eircode}</p> : null}
-                    </li>
+                <DataTable
+                  headers={['Label', 'Address']}
+                  cards={data.addresses.map((address) => (
+                    <JobCard
+                      key={address.id}
+                      title={addressLabelName(address.label) || 'Address'}
+                      meta={formatIrelandAddress(address)}
+                    />
                   ))}
-                </ul>
+                >
+                  {data.addresses.map((address) => (
+                    <tr key={address.id} className="hover:bg-ink/5">
+                      <Td muted>{addressLabelName(address.label) || '—'}</Td>
+                      <Td>{formatIrelandAddress(address)}</Td>
+                    </tr>
+                  ))}
+                </DataTable>
               )}
             </section>
           </div>

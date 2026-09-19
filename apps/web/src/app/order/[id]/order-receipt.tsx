@@ -2,12 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatEur } from '@motive-fashion/utils';
-import { BRAND, countyLabel, ORDER_STATUS_LABEL, RETURN_POSTAGE_NOTICE, formatIrelandAddress, fulfilmentSteps, carrierLabel, carrierTrackUrl, pricesIncludeVatCopy, totalIncLabel } from '@motive-fashion/config';
+import { catalogSizeLabel, formatEur } from '@motive-fashion/utils';
+import {
+  CHANNEL_LABEL,
+  countyLabel,
+  ORDER_STATUS_LABEL,
+  RETURN_POSTAGE_NOTICE,
+  formatIrelandAddress,
+  fulfilmentSteps,
+  carrierLabel,
+  carrierTrackUrl,
+  pricesIncludeVatCopy,
+  totalIncLabel,
+  type SalesChannel,
+} from '@motive-fashion/config';
 import { API } from '@/lib/api';
 import { releasePaidCart } from '@/lib/cart-store';
 import { useSession } from '@/components/session-provider';
 import { hasPerm } from '@/lib/rbac';
+import { DataTable, Field, JobCard, Modal, PrimaryButton, Td, fieldClass } from '@/components/dashboard-ui';
 
 export type TrackedOrder = {
   id: string;
@@ -220,6 +233,19 @@ export function OrderReceipt({
   const placed = formatWhen(order.payments?.[0]?.createdAt);
   const account = tone === 'account';
 
+  if (account) {
+    return (
+      <AccountOrderView
+        order={order}
+        token={token}
+        error={error}
+        busy={busy}
+        onResumePay={() => void resumePay()}
+        onSetOrder={setOrder}
+      />
+    );
+  }
+
   return (
     <div className={account ? 'max-w-3xl' : 'mx-auto max-w-lg'}>
       <p className="text-xs uppercase tracking-widest text-ink/45">{account ? 'Order' : paid ? 'Order confirmed' : 'Payment'}</p>
@@ -353,6 +379,174 @@ export function OrderReceipt({
   );
 }
 
+function AccountOrderView({
+  order,
+  token,
+  error,
+  busy,
+  onResumePay,
+  onSetOrder,
+}: {
+  order: TrackedOrder;
+  token: string;
+  error: string;
+  busy: boolean;
+  onResumePay: () => void;
+  onSetOrder: (order: TrackedOrder) => void;
+}) {
+  const [returnOpen, setReturnOpen] = useState(false);
+  const paid = isPaid(order.status);
+  const collecting = order.fulfillment === 'COLLECTION';
+  const county = countyLabel(order.shippingCounty);
+  const status = ORDER_STATUS_LABEL[order.status] ?? order.status.replaceAll('_', ' ');
+  const placed = formatWhen(order.payments?.[0]?.createdAt);
+  const channel =
+    order.channel && order.channel in CHANNEL_LABEL
+      ? CHANNEL_LABEL[order.channel as SalesChannel]
+      : (order.channel ?? '—');
+  const eligible = order.status === 'DELIVERED' || order.status === 'COLLECTED';
+  const returnPending = order.returns?.some(
+    (row) => row.status === 'REQUESTED' || row.status === 'APPROVED' || row.status === 'RECEIVED',
+  );
+  const returnClosed = order.returns?.some((row) => row.status === 'REFUNDED' || row.status === 'REJECTED');
+
+  return (
+    <div className="space-y-8">
+      {error ? (
+        <p className="text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {busy && order.status === 'PENDING_PAYMENT' ? (
+        <p className="text-sm text-ink/70">If the card payment succeeded, this page will update in a few seconds.</p>
+      ) : null}
+
+      <DataTable headers={['Status', 'Placed', 'Channel', 'Fulfilment', 'Email']}>
+        <tr className="hover:bg-ink/5">
+          <Td>{status}</Td>
+          <Td muted>{placed ?? '—'}</Td>
+          <Td muted>{channel}</Td>
+          <Td muted>{collecting ? 'Collection' : `Delivery${county ? ` · ${county}` : ''}`}</Td>
+          <Td muted>{order.email}</Td>
+        </tr>
+      </DataTable>
+
+      {paid ? <OrderTimeline order={order} /> : null}
+
+      <section>
+        <h2 className="mb-3 font-serif text-2xl">Items</h2>
+        <DataTable
+          headers={['Item', 'Size / colour', 'Qty', 'Each', 'Line']}
+          cards={order.items.map((item) => (
+            <JobCard
+              key={item.id}
+              title={`${item.title} × ${item.quantity}`}
+              meta={`${catalogSizeLabel(item.size)} / ${item.color}`}
+            >
+              <p className="mt-2 text-sm">{formatEur(item.unitPriceCents * item.quantity)}</p>
+            </JobCard>
+          ))}
+        >
+          {order.items.map((item) => (
+            <tr key={item.id} className="hover:bg-ink/5">
+              <Td>{item.title}</Td>
+              <Td muted>
+                {catalogSizeLabel(item.size)} / {item.color}
+              </Td>
+              <Td>{item.quantity}</Td>
+              <Td muted>{formatEur(item.unitPriceCents)}</Td>
+              <Td>{formatEur(item.unitPriceCents * item.quantity)}</Td>
+            </tr>
+          ))}
+        </DataTable>
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-serif text-2xl">Totals</h2>
+        <DataTable headers={['Line', 'Amount']}>
+          <tr className="hover:bg-ink/5">
+            <Td muted>Subtotal</Td>
+            <Td>{formatEur(order.subtotalCents)}</Td>
+          </tr>
+          {order.discountCents > 0 ? (
+            <tr className="hover:bg-ink/5">
+              <Td muted>{order.promo?.code ? `Discount (${order.promo.code})` : 'Discount'}</Td>
+              <Td>−{formatEur(order.discountCents)}</Td>
+            </tr>
+          ) : null}
+          <tr className="hover:bg-ink/5">
+            <Td muted>{collecting ? 'Collection' : 'Delivery'}</Td>
+            <Td>{order.shippingCents === 0 ? 'Free' : formatEur(order.shippingCents)}</Td>
+          </tr>
+          <tr className="hover:bg-ink/5">
+            <Td>{totalIncLabel()}</Td>
+            <Td>{formatEur(order.totalCents)}</Td>
+          </tr>
+        </DataTable>
+        <p className="mt-2 text-xs text-ink/45">{pricesIncludeVatCopy()}</p>
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-serif text-2xl">Fulfilment</h2>
+        <DataTable headers={['Field', 'Detail']}>
+          <tr className="hover:bg-ink/5">
+            <Td muted>Method</Td>
+            <Td>{collecting ? 'Collect in Dublin' : `Ireland delivery${county ? ` · ${county}` : ''}`}</Td>
+          </tr>
+          <tr className="hover:bg-ink/5">
+            <Td muted>Address</Td>
+            <Td>{order.address ? formatIrelandAddress(order.address) : '—'}</Td>
+          </tr>
+          <tr className="hover:bg-ink/5">
+            <Td muted>Tracking</Td>
+            <Td>
+              {order.shipments?.[0]?.trackingNo ? <CourierLine order={order} /> : '—'}
+            </Td>
+          </tr>
+          {order.giftNote ? (
+            <tr className="hover:bg-ink/5">
+              <Td muted>Gift note</Td>
+              <Td>{order.giftNote}</Td>
+            </tr>
+          ) : null}
+        </DataTable>
+      </section>
+
+      {eligible && returnPending ? (
+        <p className="text-sm text-ink/70">A return is already open on this order. We will email you when it is reviewed.</p>
+      ) : null}
+      {eligible && returnClosed ? <p className="text-sm text-ink/70">This order already has a closed return.</p> : null}
+      {eligible && !returnPending && !returnClosed ? (
+        <PrimaryButton type="button" onClick={() => setReturnOpen(true)}>
+          Start a return
+        </PrimaryButton>
+      ) : null}
+
+      <p className="text-sm leading-relaxed text-ink/70">{RETURN_POSTAGE_NOTICE}</p>
+
+      {order.status === 'PENDING_PAYMENT' && !busy ? (
+        <PrimaryButton type="button" onClick={onResumePay}>
+          Complete payment
+        </PrimaryButton>
+      ) : null}
+
+      {returnOpen ? (
+        <Modal title="Start a return" onClose={() => setReturnOpen(false)}>
+          <ReturnForm
+            order={order}
+            token={token}
+            compact
+            onDone={(next) => {
+              onSetOrder(next);
+              setReturnOpen(false);
+            }}
+          />
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
 function OrderTimeline({ order }: { order: TrackedOrder }) {
   const steps = fulfilmentSteps(order.fulfillment);
   const current = (steps as readonly string[]).indexOf(order.status);
@@ -402,10 +596,12 @@ function ReturnForm({
   order,
   token,
   onDone,
+  compact,
 }: {
   order: TrackedOrder;
   token: string;
   onDone: (order: TrackedOrder) => void;
+  compact?: boolean;
 }) {
   const eligible = order.status === 'DELIVERED' || order.status === 'COLLECTED';
   const open = order.returns?.some((row) => row.status === 'REQUESTED' || row.status === 'APPROVED' || row.status === 'RECEIVED');
@@ -414,12 +610,14 @@ function ReturnForm({
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  if (!eligible) return null;
-  if (open) {
-    return <p className="mt-4 text-sm text-ink/70">A return is already open on this order. We will email you when it is reviewed.</p>;
-  }
-  if (done) {
-    return <p className="mt-4 text-sm text-ink/70">This order already has a closed return.</p>;
+  if (!compact) {
+    if (!eligible) return null;
+    if (open) {
+      return <p className="mt-4 text-sm text-ink/70">A return is already open on this order. We will email you when it is reviewed.</p>;
+    }
+    if (done) {
+      return <p className="mt-4 text-sm text-ink/70">This order already has a closed return.</p>;
+    }
   }
 
   async function submit() {
@@ -451,10 +649,9 @@ function ReturnForm({
     onDone({ ...order, returns: [...(order.returns ?? []), { id: String(payload?.id ?? 'new'), status: 'REQUESTED' }] });
   }
 
-  return (
-    <section className="mt-6 rounded-2xl border border-ink/10 bg-white p-5">
-      <h2 className="font-serif text-2xl">Start a return</h2>
-      <p className="mt-2 text-sm text-ink/70">{RETURN_POSTAGE_NOTICE}</p>
+  const fields = (
+    <>
+      <p className="text-sm text-ink/70">{RETURN_POSTAGE_NOTICE}</p>
       <ul className="mt-4 space-y-2 text-sm">
         {order.items.map((item) => (
           <li key={item.id}>
@@ -467,30 +664,45 @@ function ReturnForm({
               <span>
                 {item.title} × {item.quantity}
                 <span className="block text-ink/50">
-                  {item.size} / {item.color}
+                  {catalogSizeLabel(item.size)} / {item.color}
                 </span>
               </span>
             </label>
           </li>
         ))}
       </ul>
-      <label className="mt-4 block text-sm">
-        <span className="mb-1.5 block text-xs uppercase tracking-wider text-ink/55">Reason</span>
-        <textarea className="w-full rounded-xl border border-ink/15 px-3 py-2" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
-      </label>
+      <div className="mt-4">
+        <Field label="Reason">
+          <textarea className={fieldClass} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+      </div>
       {error ? (
         <p className="mt-3 text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
-      <button
-        type="button"
-        className="mt-4 rounded-full bg-primary px-6 py-3 text-sm text-cream"
-        disabled={busy}
-        onClick={() => void submit()}
-      >
-        {busy ? 'Sending…' : 'Request return'}
-      </button>
+      {compact ? (
+        <PrimaryButton type="button" className="mt-4" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Sending…' : 'Request return'}
+        </PrimaryButton>
+      ) : (
+        <button
+          type="button"
+          className="mt-4 rounded-full bg-primary px-6 py-3 text-sm text-cream"
+          disabled={busy}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Sending…' : 'Request return'}
+        </button>
+      )}
+    </>
+  );
+
+  if (compact) return fields;
+  return (
+    <section className="mt-6 rounded-2xl border border-ink/10 bg-white p-5">
+      <h2 className="font-serif text-2xl">Start a return</h2>
+      <div className="mt-2">{fields}</div>
     </section>
   );
 }

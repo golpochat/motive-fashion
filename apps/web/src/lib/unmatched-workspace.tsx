@@ -1,5 +1,8 @@
-import { notFound } from 'next/navigation';
+import { WorkspaceNotFound } from '@/components/not-found-view';
+import type { WorkspaceId } from '@/lib/workspaces';
 
-export default function UnmatchedWorkspacePage() {
-  notFound();
+export function unmatchedPage(workspace: WorkspaceId) {
+  return function UnmatchedWorkspacePage() {
+    return <WorkspaceNotFound workspace={workspace} />;
+  };
 }

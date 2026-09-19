@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Field, JobCard, Td, fieldClass } from '@/components/dashboard-ui';
+import { DataTable, Field, JobCard, IconButton, RowActions, Td, fieldClass } from '@/components/dashboard-ui';
 
 type Customer = {
   id: string;
@@ -58,7 +58,7 @@ export default function AdminCustomers() {
         emptyBody={q.trim() ? 'Try another name or email.' : 'Accounts will appear here when people register.'}
       >
         <DataTable
-          headers={['Name', 'Email', 'Phone', 'Orders', 'Opt-in']}
+          headers={['Name', 'Email', 'Phone', 'Orders', 'Opt-in', 'Action']}
           cards={visible.map((c) => (
             <JobCard
               key={c.id}
@@ -92,6 +92,11 @@ export default function AdminCustomers() {
               <Td muted>
                 {c.marketingOptIn ? 'Email' : '—'}
                 {c.whatsappOptIn ? `${c.marketingOptIn ? ' · ' : ''}WhatsApp` : ''}
+              </Td>
+              <Td nowrap>
+                <RowActions>
+                  <IconButton label="Open customer" icon="open" href={`/admin/customers/${c.id}`} />
+                </RowActions>
               </Td>
             </tr>
           ))}

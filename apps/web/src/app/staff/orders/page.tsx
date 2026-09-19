@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader } from '@/components/page-header';
-import { DataTable, Td } from '@/components/dashboard-ui';
+import { DataTable, IconButton, JobCard, Td } from '@/components/dashboard-ui';
 import { StaffOrderActions } from '@/components/staff-order-actions';
 import { ORDER_STATUS_LABEL } from '@motive-fashion/config';
 import { formatEur } from '@motive-fashion/utils';
@@ -53,7 +53,37 @@ export default function StaffOrders() {
         emptyTitle="No till sales yet"
         emptyBody={storeWide ? 'POS sales from any staff member will appear here.' : 'Sales you take on POS will appear here.'}
       >
-        <DataTable headers={storeWide ? ['Ticket', 'When', 'Staff', 'Customer', 'Pay', 'Total', 'Status', 'Action'] : ['Ticket', 'When', 'Customer', 'Pay', 'Total', 'Status', 'Action']}>
+        <DataTable
+          headers={
+            storeWide
+              ? ['Ticket', 'When', 'Staff', 'Customer', 'Pay', 'Total', 'Status', 'Action']
+              : ['Ticket', 'When', 'Customer', 'Pay', 'Total', 'Status', 'Action']
+          }
+          cards={rows.map((order) => (
+            <JobCard
+              key={order.id}
+              href={`/staff/orders/${order.id}`}
+              title={order.ticket}
+              meta={`${new Date(order.createdAt).toLocaleString('en-IE', { hour12: false })} · ${formatEur(order.totalCents)}`}
+              actions={
+                <StaffOrderActions
+                  orderId={order.id}
+                  email={order.email}
+                  paymentMethod={order.paymentMethod}
+                  remainingCents={order.totalCents - (order.refundedCents ?? 0)}
+                  onDone={reload}
+                />
+              }
+            >
+              <p className="mt-2 text-sm">{order.name}</p>
+              <p className="text-xs text-ink/45">
+                {order.email ?? 'Walk-in'}
+                {storeWide && order.cashierName ? ` · ${order.cashierName}` : ''}
+                {` · ${ORDER_STATUS_LABEL[order.status] ?? order.status}`}
+              </p>
+            </JobCard>
+          ))}
+        >
           {rows.map((order) => (
             <tr key={order.id} className="hover:bg-ink/5">
               <Td>
@@ -70,14 +100,17 @@ export default function StaffOrders() {
               <Td muted>{order.paymentMethod === 'CASH' ? 'Cash' : 'Card'}</Td>
               <Td>{formatEur(order.totalCents)}</Td>
               <Td muted>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Td>
-              <Td>
-                <StaffOrderActions
-                  orderId={order.id}
-                  email={order.email}
-                  paymentMethod={order.paymentMethod}
-                  remainingCents={order.totalCents - (order.refundedCents ?? 0)}
-                  onDone={reload}
-                />
+              <Td nowrap>
+                <div className="flex items-start justify-end gap-0.5">
+                  <IconButton label="View ticket" icon="open" href={`/staff/orders/${order.id}`} />
+                  <StaffOrderActions
+                    orderId={order.id}
+                    email={order.email}
+                    paymentMethod={order.paymentMethod}
+                    remainingCents={order.totalCents - (order.refundedCents ?? 0)}
+                    onDone={reload}
+                  />
+                </div>
               </Td>
             </tr>
           ))}

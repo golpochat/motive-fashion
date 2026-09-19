@@ -2,6 +2,7 @@
 
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader, StatCard } from '@/components/page-header';
+import { DataTable, Td } from '@/components/dashboard-ui';
 
 type Metrics = {
   ok: boolean;
@@ -58,14 +59,23 @@ export default function AdminHealth() {
               <StatCard label="p95" value={`${data.p95Ms} ms`} hint={`p50 ${data.p50Ms} ms`} />
               <StatCard label="5xx" value={String(data.http5xx)} hint={`${data.http4xx} client errors`} />
             </div>
-            {data.lastError ? (
-              <p className="mt-6 text-sm text-red-700" role="status">
-                Last 5xx: {data.lastError.status} {data.lastError.method} {data.lastError.path} at{' '}
-                {new Date(data.lastError.at).toLocaleString('en-IE', { hour12: false })}
-              </p>
-            ) : (
-              <p className="mt-6 text-sm text-ink/55">No 5xx recorded in this process yet.</p>
-            )}
+            <h2 className="mt-10 font-serif text-2xl [[data-theme=admin]_&]:font-sans">Last 5xx</h2>
+            <div className="mt-3">
+              {data.lastError ? (
+                <DataTable headers={['When', 'Method', 'Path', 'Status']}>
+                  <tr className="hover:bg-ink/5">
+                    <Td muted>{new Date(data.lastError.at).toLocaleString('en-IE', { hour12: false })}</Td>
+                    <Td>{data.lastError.method}</Td>
+                    <Td>
+                      <span className="font-mono text-xs">{data.lastError.path}</span>
+                    </Td>
+                    <Td>{data.lastError.status}</Td>
+                  </tr>
+                </DataTable>
+              ) : (
+                <p className="text-sm text-ink/55">No 5xx recorded in this process yet.</p>
+              )}
+            </div>
           </>
         ) : null}
       </ConsoleSection>

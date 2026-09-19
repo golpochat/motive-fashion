@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { API } from '@/lib/api';
 import { useConsoleQuery } from '@/lib/console-query';
 import { ConsoleSection, PageHeader, StatCard } from '@/components/page-header';
-import { Field, SecondaryButton, fieldClass } from '@/components/dashboard-ui';
+import { Field, DataTable, IconButton, JobCard, RowActions, SecondaryButton, Td, fieldClass } from '@/components/dashboard-ui';
 import { formatEur } from '@motive-fashion/utils';
+import { CHANNEL_LABEL, type SalesChannel } from '@motive-fashion/config';
 
 type Analytics = {
   revenueCents: number;
@@ -62,10 +62,6 @@ export default function AdminHome() {
   const jobs = next
     ? JOBS.map((job) => ({ ...job, count: next[job.key] })).filter((job) => job.count > 0)
     : [];
-  const seriesMax = useMemo(
-    () => Math.max(1, ...(data?.series.map((row) => row.revenueCents) ?? [1])),
-    [data?.series],
-  );
 
   function preset(kind: '7d' | '30d' | 'month') {
     const today = dublinDay();
@@ -135,23 +131,33 @@ export default function AdminHome() {
                 {error}
               </p>
             ) : null}
-            <section className="rounded-2xl border border-ink/10 bg-white p-5">
-              <h2 className="font-serif text-xl">Do these next</h2>
+            <section>
+              <h2 className="mb-3 font-serif text-xl [[data-theme=admin]_&]:font-sans">Do these next</h2>
               {jobs.length === 0 ? (
-                <p className="mt-3 text-sm text-ink/70">Caught up. No pack queue, unpublished styles, missing photos, returns, or low stock.</p>
+                <p className="text-sm text-ink/70">Caught up. No pack queue, unpublished styles, missing photos, returns, or low stock.</p>
               ) : (
-                <ul className="mt-3 space-y-1">
-                  {jobs.map((job) => (
-                    <li key={job.key}>
-                      <Link href={job.href} className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 py-2 no-underline hover:bg-ink/5">
-                        <span>
-                          {job.count} {job.count === 1 ? job.one : job.many}
-                        </span>
-                        <span className="text-xs uppercase tracking-wider text-ink/45">Open</span>
-                      </Link>
-                    </li>
+                <DataTable
+                  headers={['Job', 'Count', 'Action']}
+                  cards={jobs.map((job) => (
+                    <JobCard
+                      key={job.key}
+                      href={job.href}
+                      title={`${job.count} ${job.count === 1 ? job.one : job.many}`}
+                    />
                   ))}
-                </ul>
+                >
+                  {jobs.map((job) => (
+                    <tr key={job.key} className="hover:bg-ink/5">
+                      <Td>{job.count === 1 ? job.one : job.many}</Td>
+                      <Td>{job.count}</Td>
+                      <Td nowrap>
+                        <RowActions>
+                          <IconButton label="Open" icon="open" href={job.href} />
+                        </RowActions>
+                      </Td>
+                    </tr>
+                  ))}
+                </DataTable>
               )}
             </section>
             <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -160,111 +166,79 @@ export default function AdminHome() {
               <StatCard label="Average order" value={formatEur(data.aovCents)} hint="Revenue ÷ paid orders" />
               <StatCard label="Low stock rows" value={String(data.stockouts)} hint="On hand ≤ 5" />
             </div>
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
-              <section className="rounded-2xl border border-ink/10 bg-white p-5">
-                <h2 className="font-serif text-xl">Channels</h2>
+            <div className="mt-8 grid gap-8 lg:grid-cols-2">
+              <section>
+                <h2 className="mb-3 font-serif text-xl [[data-theme=admin]_&]:font-sans">Channels</h2>
                 {data.byChannel.length === 0 ? (
-                  <p className="mt-3 text-sm text-ink/70">No paid orders yet.</p>
+                  <p className="text-sm text-ink/70">No paid orders yet.</p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-sm">
+                  <DataTable headers={['Channel', 'Orders', 'Revenue']}>
                     {data.byChannel.map((c) => (
-                      <li key={c.channel} className="flex justify-between border-b border-ink/10 py-2">
-                        <span className="uppercase tracking-wider text-ink/55">{c.channel}</span>
-                        <span>
-                          {c._count} · {formatEur(c._sum.totalCents ?? 0)}
-                        </span>
-                      </li>
+                      <tr key={c.channel} className="hover:bg-ink/5">
+                        <Td>
+                          {c.channel in CHANNEL_LABEL
+                            ? CHANNEL_LABEL[c.channel as SalesChannel]
+                            : c.channel}
+                        </Td>
+                        <Td>{c._count}</Td>
+                        <Td>{formatEur(c._sum.totalCents ?? 0)}</Td>
+                      </tr>
                     ))}
-                  </ul>
+                  </DataTable>
                 )}
               </section>
-              <section className="rounded-2xl border border-ink/10 bg-white p-5">
-                <h2 className="font-serif text-xl">Collection vs delivery</h2>
+              <section>
+                <h2 className="mb-3 font-serif text-xl [[data-theme=admin]_&]:font-sans">Collection vs delivery</h2>
                 {data.byFulfilment.length === 0 ? (
-                  <p className="mt-3 text-sm text-ink/70">No paid orders yet.</p>
+                  <p className="text-sm text-ink/70">No paid orders yet.</p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-sm">
+                  <DataTable headers={['Fulfilment', 'Orders', 'Revenue']}>
                     {data.byFulfilment.map((row) => (
-                      <li key={row.fulfillment} className="flex justify-between border-b border-ink/10 py-2">
-                        <span>{FULFILMENT_LABEL[row.fulfillment] ?? row.fulfillment}</span>
-                        <span>
-                          {row._count} · {formatEur(row._sum.totalCents ?? 0)}
-                        </span>
-                      </li>
+                      <tr key={row.fulfillment} className="hover:bg-ink/5">
+                        <Td>{FULFILMENT_LABEL[row.fulfillment] ?? row.fulfillment}</Td>
+                        <Td>{row._count}</Td>
+                        <Td>{formatEur(row._sum.totalCents ?? 0)}</Td>
+                      </tr>
                     ))}
-                  </ul>
+                  </DataTable>
                 )}
               </section>
             </div>
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
-              <section className="rounded-2xl border border-ink/10 bg-white p-5">
-                <h2 className="font-serif text-xl">Daily paid orders</h2>
+            <div className="mt-8 grid gap-8 lg:grid-cols-2">
+              <section>
+                <h2 className="mb-3 font-serif text-xl [[data-theme=admin]_&]:font-sans">Daily paid orders</h2>
                 {data.series.every((row) => row.orders === 0) ? (
-                  <p className="mt-3 text-sm text-ink/70">No paid orders in this window.</p>
+                  <p className="text-sm text-ink/70">No paid orders in this window.</p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-sm">
+                  <DataTable headers={['Date', 'Orders', 'Revenue']}>
                     {data.series.map((row) => (
-                      <li key={row.date}>
-                        <div className="flex justify-between gap-3">
-                          <span className="text-ink/55">{row.date}</span>
-                          <span>
-                            {row.orders} · {formatEur(row.revenueCents)}
-                          </span>
-                        </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink/10">
-                          <div
-                            className={`h-full bg-accent ${row.revenueCents === 0 ? 'w-0' : row.revenueCents >= seriesMax * 0.75 ? 'w-full' : row.revenueCents >= seriesMax * 0.5 ? 'w-3/4' : row.revenueCents >= seriesMax * 0.25 ? 'w-1/2' : 'w-1/4'}`}
-                          />
-                        </div>
-                      </li>
+                      <tr key={row.date} className="hover:bg-ink/5">
+                        <Td muted>{row.date}</Td>
+                        <Td>{row.orders}</Td>
+                        <Td>{formatEur(row.revenueCents)}</Td>
+                      </tr>
                     ))}
-                  </ul>
+                  </DataTable>
                 )}
               </section>
-              <section className="rounded-2xl border border-ink/10 bg-white p-5">
-                <h2 className="font-serif text-xl">Top SKUs</h2>
+              <section>
+                <h2 className="mb-3 font-serif text-xl [[data-theme=admin]_&]:font-sans">Top SKUs</h2>
                 {data.topSkus.length === 0 ? (
-                  <p className="mt-3 text-sm text-ink/70">No SKU sales yet.</p>
+                  <p className="text-sm text-ink/70">No SKU sales yet.</p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-sm">
+                  <DataTable headers={['SKU', 'Style', 'Qty']}>
                     {data.topSkus.map((s) => (
-                      <li key={s.sku} className="flex justify-between border-b border-ink/10 py-2">
-                        <span>
-                          {s.title}
-                          <span className="block text-ink/45">{s.sku}</span>
-                        </span>
-                        <span>{s._sum.quantity ?? 0}</span>
-                      </li>
+                      <tr key={s.sku} className="hover:bg-ink/5">
+                        <Td>
+                          <span className="font-mono text-xs">{s.sku}</span>
+                        </Td>
+                        <Td>{s.title}</Td>
+                        <Td>{s._sum.quantity ?? 0}</Td>
+                      </tr>
                     ))}
-                  </ul>
+                  </DataTable>
                 )}
               </section>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3 text-sm">
-              <Link href="/admin/pack" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Pack
-              </Link>
-              <Link href="/admin/orders" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Orders
-              </Link>
-              <Link href="/admin/inventory" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Inventory
-              </Link>
-              <Link href="/admin/products" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Products
-              </Link>
-              <Link href="/admin/marketing" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Marketing
-              </Link>
-              <Link href="/admin/coupons" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Coupons
-              </Link>
-              <Link href="/admin/pos" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                POS
-              </Link>
-              <Link href="/admin/customers" className="min-h-11 rounded-lg border border-ink/15 px-4 py-2.5 no-underline hover:border-accent">
-                Customers
-              </Link>
             </div>
           </>
         ) : null}

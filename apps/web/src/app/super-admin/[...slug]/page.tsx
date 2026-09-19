@@ -1,1 +1,3 @@
-export { default } from '@/lib/unmatched-workspace';
+import { unmatchedPage } from '@/lib/unmatched-workspace';
+
+export default unmatchedPage('super-admin');
